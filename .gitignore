@@ -1,6 +1,8 @@
 bin/
 obj/
 publish/
+*.lscache
+/package-lock.json
 
 .vs/
 .vscode/*
