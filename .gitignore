@@ -1,0 +1,12 @@
+bin/
+obj/
+publish/
+
+.vs/
+.vscode/*
+!.vscode/extensions.json
+
+*.user
+*.suo
+
+appsettings.Development.local.json
