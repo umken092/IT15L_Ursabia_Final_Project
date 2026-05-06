@@ -1,0 +1,1 @@
+import{t as e}from"./vendor-react-Ct8YZsmo.js";import{i as t,r as n,s as r}from"./vendor-router-BEQ4oK7w.js";import{i,t as a}from"./authStore-DNsN13Qq.js";var o=e(),s=()=>{let e=r(),s=a(e=>e.isAuthenticated),c=a(e=>e.token);return!s||!i(c)?(0,o.jsx)(n,{to:`/login`,replace:!0,state:{from:e.pathname}}):(0,o.jsx)(t,{})};export{s as PrivateRoute};

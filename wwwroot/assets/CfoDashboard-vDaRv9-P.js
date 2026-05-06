@@ -1,0 +1,1 @@
+import{t as e}from"./vendor-react-Ct8YZsmo.js";import{t}from"./GenericRoleDashboard-D88dQMXY.js";var n=e(),r=()=>(0,n.jsx)(t,{fallbackRole:`cfo`});export{r as CfoDashboard};
