@@ -1,0 +1,46 @@
+# CMNetwork Code Owners
+# Each line maps a path pattern to the GitHub user(s) who must review PRs touching it.
+# Syntax: <pattern>  @<user> [@<user2> ...]
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# ── Default: all changes require at least one team member ──────────────────────
+*                                   @kennu
+
+# ── Financial core — stricter review required ──────────────────────────────────
+# AP / AR invoices
+src/CMNetwork.WebApi/Controllers/APInvoicesController.cs    @kennu
+src/CMNetwork.WebApi/Controllers/ARInvoicesController.cs    @kennu
+
+# Payroll
+src/CMNetwork.WebApi/Controllers/PayrollController.cs       @kennu
+src/CMNetwork.Infrastructure/Services/PayrollService.cs     @kennu
+
+# General Ledger / Journal entries
+src/CMNetwork.WebApi/Controllers/JournalEntriesController.cs @kennu
+
+# Budgets
+src/CMNetwork.WebApi/Controllers/BudgetsController.cs       @kennu
+
+# Expense Claims
+src/CMNetwork.WebApi/Controllers/ExpenseClaimsController.cs @kennu
+
+# ── Database & migrations ──────────────────────────────────────────────────────
+src/CMNetwork.Infrastructure/Persistence/                   @kennu
+src/CMNetwork.Infrastructure/Persistence/Migrations/        @kennu
+
+# ── Auth & Identity ───────────────────────────────────────────────────────────
+src/CMNetwork.Infrastructure/Identity/                      @kennu
+src/CMNetwork.WebApi/Controllers/AuthController.cs          @kennu
+
+# ── Middleware & global error handling ────────────────────────────────────────
+src/CMNetwork.WebApi/Middleware/                             @kennu
+
+# ── Deployment ────────────────────────────────────────────────────────────────
+deploy-monsterasp.ps1                                       @kennu
+Dockerfile                                                  @kennu
+render.yaml                                                 @kennu
+src/CMNetwork.WebApi/CMNetwork.WebApi.csproj                @kennu
+
+# ── Governance ────────────────────────────────────────────────────────────────
+.github/                                                    @kennu
+CONTRIBUTING.md                                             @kennu
