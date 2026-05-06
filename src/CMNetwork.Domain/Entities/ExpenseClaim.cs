@@ -18,6 +18,8 @@ public class ExpenseClaim
     public string Category { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public decimal Amount { get; set; }
+    public string? MerchantName { get; set; }
+    public string? ProjectCode { get; set; }
     public string? ReceiptUrl { get; set; }
     public ExpenseClaimStatus Status { get; set; } = ExpenseClaimStatus.Draft;
     public string? ReviewedBy { get; set; }

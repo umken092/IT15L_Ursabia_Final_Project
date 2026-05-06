@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using CMNetwork.Models;
 
 namespace CMNetwork.Middleware;
 
@@ -51,12 +52,9 @@ public class GlobalExceptionMiddleware
         context.Response.ContentType = "application/json";
         context.Response.StatusCode  = (int)code;
 
-        var payload = JsonSerializer.Serialize(new
-        {
-            status  = (int)code,
-            message,
-            traceId = context.TraceIdentifier
-        });
+        var payload = JsonSerializer.Serialize(
+            ApiError.From((int)code, message, context.TraceIdentifier),
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
         return context.Response.WriteAsync(payload);
     }

@@ -81,7 +81,7 @@ public class APInvoicesController : ControllerBase
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
         if (invoice == null)
-            return NotFound();
+            return NotFound(new { message = "AP invoice not found." });
 
         var result = new
         {
@@ -121,17 +121,17 @@ public class APInvoicesController : ControllerBase
         // Validate vendor exists
         var vendor = await _dbContext.Vendors.FirstOrDefaultAsync(x => x.Id == request.VendorId && x.IsActive);
         if (vendor == null)
-            return BadRequest("Vendor not found or inactive");
+            return BadRequest(new { message = "Vendor not found or inactive." });
 
         // Validate lines not empty
         if (request.Lines == null || request.Lines.Count == 0)
-            return BadRequest("At least one invoice line is required");
+            return BadRequest(new { message = "At least one invoice line is required." });
 
         // Validate invoice number is unique
         var existingInvoice = await _dbContext.APInvoices
             .FirstOrDefaultAsync(x => x.InvoiceNumber == request.InvoiceNumber && !x.IsDeleted);
         if (existingInvoice != null)
-            return BadRequest("Invoice number already exists");
+            return Conflict(new { message = "Invoice number already exists." });
 
         // Validate all accounts exist
         var accountIds = request.Lines.Select(x => x.ChartOfAccountId).Distinct().ToList();
@@ -140,7 +140,7 @@ public class APInvoicesController : ControllerBase
             .ToListAsync();
 
         if (accounts.Count != accountIds.Count)
-            return BadRequest("One or more accounts not found or inactive");
+            return BadRequest(new { message = "One or more accounts not found or inactive." });
 
         // Calculate total
         decimal totalAmount = request.Lines.Sum(x => x.Amount + (x.TaxAmount ?? 0));
@@ -191,11 +191,11 @@ public class APInvoicesController : ControllerBase
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
         if (invoice == null)
-            return NotFound();
+            return NotFound(new { message = "AP invoice not found." });
 
         // Only allow updating Draft or Submitted invoices
         if (invoice.Status != APInvoiceStatus.Draft && invoice.Status != APInvoiceStatus.Submitted)
-            return BadRequest($"Cannot update invoice in {invoice.Status} status");
+            return BadRequest(new { message = $"Cannot update invoice in {invoice.Status} status." });
 
         // Update header
         invoice.InvoiceDate = request.InvoiceDate;
@@ -216,7 +216,7 @@ public class APInvoicesController : ControllerBase
                 .ToListAsync();
 
             if (accounts.Count != accountIds.Count)
-                return BadRequest("One or more accounts not found or inactive");
+                return BadRequest(new { message = "One or more accounts not found or inactive." });
 
             // Add new lines
             decimal totalAmount = 0;
@@ -255,10 +255,10 @@ public class APInvoicesController : ControllerBase
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
         if (invoice == null)
-            return NotFound();
+            return NotFound(new { message = "AP invoice not found." });
 
         if (invoice.Status != APInvoiceStatus.Submitted && invoice.Status != APInvoiceStatus.Draft)
-            return BadRequest($"Cannot approve invoice in {invoice.Status} status");
+            return BadRequest(new { message = $"Cannot approve invoice in {invoice.Status} status." });
 
         invoice.Status = APInvoiceStatus.Approved;
         invoice.LastModifiedByUserId = User.FindFirst("sub")?.Value ?? "system";
@@ -290,10 +290,10 @@ public class APInvoicesController : ControllerBase
         var invoice = await _dbContext.APInvoices.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
         if (invoice == null)
-            return NotFound();
+            return NotFound(new { message = "AP invoice not found." });
 
         if (invoice.Status == APInvoiceStatus.Paid)
-            return BadRequest("Cannot void a paid invoice");
+            return BadRequest(new { message = "Cannot void a paid invoice." });
 
         invoice.Status = APInvoiceStatus.Void;
         invoice.IsDeleted = true;

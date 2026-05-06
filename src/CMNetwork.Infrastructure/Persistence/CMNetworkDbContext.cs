@@ -369,10 +369,13 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
             entity.Property(x => x.Category).HasMaxLength(64).IsRequired();
             entity.Property(x => x.Description).HasMaxLength(512).IsRequired();
             entity.Property(x => x.Amount).HasPrecision(18, 2);
+            entity.Property(x => x.MerchantName).HasMaxLength(256);
+            entity.Property(x => x.ProjectCode).HasMaxLength(64);
             entity.Property(x => x.ReceiptUrl).HasMaxLength(1024);
             entity.Property(x => x.ReviewedBy).HasMaxLength(256);
             entity.Property(x => x.ReviewNotes).HasMaxLength(512);
             entity.HasIndex(x => x.ClaimNumber).IsUnique();
+            entity.HasIndex(x => x.EmployeeId);
         });
 
         // ── ApprovalQueue ─────────────────────────────────────────────────────

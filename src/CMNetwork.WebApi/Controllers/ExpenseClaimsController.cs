@@ -145,6 +145,8 @@ public class ExpenseClaimsController : ControllerBase
             Category = request.Category.Trim(),
             Description = request.Description.Trim(),
             Amount = decimal.Round(request.Amount, 2),
+            MerchantName = request.MerchantName?.Trim(),
+            ProjectCode = request.ProjectCode?.Trim(),
             Status = ExpenseClaimStatus.Draft,
             CreatedAtUtc = DateTime.UtcNow,
             SubmittedAtUtc = DateTime.UtcNow
@@ -255,8 +257,20 @@ public class ExpenseClaimsController : ControllerBase
 
     private async Task<string> GenerateClaimNumberAsync()
     {
-        var count = await _db.ExpenseClaims.CountAsync();
-        return $"EC-{DateTime.UtcNow:yyyyMM}-{count + 1:D4}";
+        // Use a timestamp + random hex suffix to avoid COUNT-based race conditions.
+        // Tiny collision probability; the unique index on ClaimNumber catches any duplicate.
+        var datePart  = DateTime.UtcNow.ToString("yyyyMM");
+        var randomPart = Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
+        var candidate  = $"EC-{datePart}-{randomPart}";
+
+        // Guarantee uniqueness (loop at most 3 times in the astronomically unlikely collision)
+        for (var i = 0; i < 3; i++)
+        {
+            if (!await _db.ExpenseClaims.AnyAsync(x => x.ClaimNumber == candidate))
+                return candidate;
+            candidate = $"EC-{datePart}-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}";
+        }
+        return candidate;
     }
 }
 
@@ -267,6 +281,8 @@ public record CreateExpenseClaimRequest
     public string Category { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
     public decimal Amount { get; init; }
+    public string? MerchantName { get; init; }
+    public string? ProjectCode { get; init; }
 }
 
 public record ReviewClaimRequest

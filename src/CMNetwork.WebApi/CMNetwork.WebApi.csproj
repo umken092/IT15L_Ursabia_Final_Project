@@ -5,6 +5,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>c1fd1a7d-5ee0-4e91-b53a-0d8334dbb1d4</UserSecretsId>
+    <SpaRoot>..\CMNetwork.ClientApp\</SpaRoot>
+    <SpaDist>$(SpaRoot)dist\</SpaDist>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,5 +27,30 @@
     <PackageReference Include="QuestPDF" Version="2026.2.4" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.17.0" />
   </ItemGroup>
+
+  <!-- Build the SPA and copy its dist output into wwwroot before publish -->
+  <Target Name="BuildSpa" BeforeTargets="ComputeFilesToPublish" Condition="'$(SkipSpaBuild)' != 'true'">
+    <Message Importance="high" Text="Installing SPA dependencies (npm ci)..." />
+    <Exec WorkingDirectory="$(SpaRoot)" Command="npm ci" />
+    <Message Importance="high" Text="Building SPA (npm run build)..." />
+    <Exec WorkingDirectory="$(SpaRoot)" Command="npm run build" />
+
+    <Message Importance="high" Text="Cleaning wwwroot before copying SPA dist..." />
+    <RemoveDir Directories="$(MSBuildProjectDirectory)\wwwroot" />
+
+    <ItemGroup>
+      <SpaDistFiles Include="$(SpaDist)**\*" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(SpaDistFiles)"
+          DestinationFiles="@(SpaDistFiles->'$(MSBuildProjectDirectory)\wwwroot\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="false" />
+
+    <ItemGroup>
+      <Content Include="wwwroot\**\*" Exclude="@(Content)">
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </Content>
+    </ItemGroup>
+  </Target>
 
 </Project>
