@@ -134,6 +134,14 @@ export const EmployeeWorkspaceModule = ({ moduleKey }: EmployeeWorkspaceModulePr
   const [claimDateFilter, setClaimDateFilter] = useState<'all' | '30' | '90'>('all')
   const [profileEditing, setProfileEditing] = useState(false)
   const [notificationPrefs, setNotificationPrefs] = useState({ email: true, sms: false, inApp: true })
+  const [newClaimDialogOpen, setNewClaimDialogOpen] = useState(false)
+  const [newClaimSubmitting, setNewClaimSubmitting] = useState(false)
+  const [newClaimForm, setNewClaimForm] = useState({
+    date: new Date().toISOString().split('T')[0],
+    category: 'Travel' as const,
+    amount: '',
+    description: '',
+  })
   const [profileForm, setProfileForm] = useState({
     fullName: user?.fullName ?? 'Employee User',
     email: user?.email ?? 'employee@cmnetwork.com',
@@ -303,7 +311,56 @@ export const EmployeeWorkspaceModule = ({ moduleKey }: EmployeeWorkspaceModulePr
   }
 
   const handleClaimAction = () => {
-    pushToast('info', 'New claim dialog can be connected here next.')
+    setNewClaimDialogOpen(true)
+  }
+
+  const handleCreateNewClaim = async () => {
+    if (!newClaimForm.description.trim() || !newClaimForm.amount) {
+      pushToast('warning', 'Please fill in all required fields.')
+      return
+    }
+
+    try {
+      setNewClaimSubmitting(true)
+      await expenseClaimsService.createClaim({
+        date: newClaimForm.date,
+        category: newClaimForm.category,
+        amount: Number.parseFloat(newClaimForm.amount),
+        description: newClaimForm.description.trim(),
+      })
+      pushToast('success', 'Expense claim created successfully!')
+      setNewClaimDialogOpen(false)
+      setNewClaimForm({
+        date: new Date().toISOString().split('T')[0],
+        category: 'Travel',
+        amount: '',
+        description: '',
+      })
+      // Reload claims
+      const response = await expenseClaimsService.getClaims()
+      const items = (response.data as ApiExpenseClaim[]) ?? []
+      const statusMap: Record<number, ExpenseClaim['status']> = {
+        1: 'Draft',
+        2: 'Submitted',
+        3: 'Approved',
+        4: 'Rejected',
+      }
+      if (items.length > 0) {
+        setClaims(items.map((item) => ({
+          id: item.id,
+          claimNumber: item.claimNumber,
+          date: item.claimDate,
+          category: item.category,
+          amount: item.amount,
+          status: statusMap[item.status] ?? 'Draft',
+        })))
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Failed to create expense claim'
+      pushToast('error', msg)
+    } finally {
+      setNewClaimSubmitting(false)
+    }
   }
 
   if (moduleKey === 'expense-claims') {
@@ -399,6 +456,175 @@ export const EmployeeWorkspaceModule = ({ moduleKey }: EmployeeWorkspaceModulePr
             </table>
           </div>
         </div>
+
+        {newClaimDialogOpen && (
+          <dialog
+            open
+            style={{
+              position: 'fixed',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: 'none',
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              padding: 0,
+              zIndex: 1000,
+            }}
+          >
+            <form
+              method="dialog"
+              style={{
+                backgroundColor: '#fff',
+                borderRadius: 12,
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+                padding: 24,
+                maxWidth: 500,
+                width: '90%',
+              }}
+            >
+              <h2 id="claim-dialog-title" style={{ margin: '0 0 20px', fontSize: 24, fontWeight: 700, color: '#0f172a' }}>Create Expense Claim</h2>
+
+              <div style={{ marginBottom: 16 }}>
+                <label htmlFor="claim-date" style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 600, color: '#0f172a' }}>
+                  Claim Date <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <input
+                  id="claim-date"
+                  type="date"
+                  value={newClaimForm.date}
+                  onChange={(e) => setNewClaimForm({ ...newClaimForm, date: e.target.value })}
+                  disabled={newClaimSubmitting}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: 6,
+                    fontSize: 14,
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label htmlFor="claim-category" style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 600, color: '#0f172a' }}>
+                  Category <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <select
+                  id="claim-category"
+                  value={newClaimForm.category}
+                  onChange={(e) => setNewClaimForm({ ...newClaimForm, category: e.target.value as any })}
+                  disabled={newClaimSubmitting}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: 6,
+                    fontSize: 14,
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <option value="Travel">Travel</option>
+                  <option value="Meals">Meals</option>
+                  <option value="Equipment">Equipment</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label htmlFor="claim-amount" style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 600, color: '#0f172a' }}>
+                  Amount (₱) <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <input
+                  id="claim-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={newClaimForm.amount}
+                  onChange={(e) => setNewClaimForm({ ...newClaimForm, amount: e.target.value })}
+                  disabled={newClaimSubmitting}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: 6,
+                    fontSize: 14,
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <label htmlFor="claim-description" style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 600, color: '#0f172a' }}>
+                  Description <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <textarea
+                  id="claim-description"
+                  placeholder="Describe the expense (e.g., Conference attendance, Hotel stay)"
+                  value={newClaimForm.description}
+                  onChange={(e) => setNewClaimForm({ ...newClaimForm, description: e.target.value })}
+                  disabled={newClaimSubmitting}
+                  maxLength={500}
+                  rows={4}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: 6,
+                    fontSize: 14,
+                    boxSizing: 'border-box',
+                    fontFamily: 'inherit',
+                  }}
+                />
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 4, textAlign: 'right' }}>
+                  {newClaimForm.description.length}/500
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => !newClaimSubmitting && setNewClaimDialogOpen(false)}
+                  disabled={newClaimSubmitting}
+                  style={{
+                    padding: '10px 16px',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: 6,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: newClaimSubmitting ? 'not-allowed' : 'pointer',
+                    color: '#0f172a',
+                    background: '#fff',
+                    opacity: newClaimSubmitting ? 0.5 : 1,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateNewClaim}
+                  disabled={newClaimSubmitting}
+                  style={{
+                    padding: '10px 16px',
+                    border: 'none',
+                    borderRadius: 6,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: newClaimSubmitting ? 'not-allowed' : 'pointer',
+                    color: '#fff',
+                    background: '#1d63c1',
+                    opacity: newClaimSubmitting ? 0.7 : 1,
+                  }}
+                >
+                  {newClaimSubmitting ? 'Creating...' : 'Create Claim'}
+                </button>
+              </div>
+            </form>
+          </dialog>
+        )}
       </section>
     )
   }
