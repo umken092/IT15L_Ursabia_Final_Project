@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from 'react'
+import type { AxiosError } from 'axios'
 import { Button } from '@progress/kendo-react-buttons'
 import { expenseClaimsService, payslipsService } from '../../services/extendedOperationsService'
 import { useAuthStore } from '../../store/authStore'
@@ -358,8 +359,10 @@ export const EmployeeWorkspaceModule = ({ moduleKey }: EmployeeWorkspaceModulePr
         })))
       }
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Failed to create expense claim'
-      pushToast('error', msg)
+      const axiosError = error as AxiosError<{ message?: string }>
+      const serverMessage = axiosError.response?.data?.message
+      const fallbackMessage = error instanceof Error ? error.message : 'Failed to create expense claim'
+      pushToast('error', serverMessage || fallbackMessage)
     } finally {
       setNewClaimSubmitting(false)
     }

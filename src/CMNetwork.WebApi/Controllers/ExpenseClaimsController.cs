@@ -121,6 +121,9 @@ public class ExpenseClaimsController : ControllerBase
             return BadRequest(ModelState);
 
         var userId = GetCurrentUserId();
+        if (!Guid.TryParse(userId, out var employeeId))
+            return Unauthorized(new { message = "Token is missing a valid user id claim." });
+
         var userName = GetCurrentUser();
 
         var claimNumber = await GenerateClaimNumberAsync();
@@ -129,7 +132,7 @@ public class ExpenseClaimsController : ControllerBase
         {
             Id = Guid.NewGuid(),
             ClaimNumber = claimNumber,
-            EmployeeId = Guid.TryParse(userId, out var empId) ? empId : Guid.Empty,
+            EmployeeId = employeeId,
             EmployeeName = userName,
             ClaimDate = request.ClaimDate,
             Category = request.Category.Trim(),
@@ -235,7 +238,9 @@ public class ExpenseClaimsController : ControllerBase
         User.FindFirstValue(ClaimTypes.Email) ?? User.FindFirstValue(ClaimTypes.Name) ?? "system";
 
     private string GetCurrentUserId() =>
-        User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        User.FindFirstValue(ClaimTypes.NameIdentifier)
+        ?? User.FindFirstValue("sub")
+        ?? string.Empty;
 
     private bool CanApproveExpenseClaims() =>
         User.IsInRole("faculty-admin") || User.IsInRole("cfo") ||

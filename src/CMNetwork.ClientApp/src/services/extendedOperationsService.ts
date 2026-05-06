@@ -78,7 +78,14 @@ export const budgetService = {
  */
 export const expenseClaimsService = {
   createClaim: async (data: CreateExpenseClaimInput) => {
-    return apiClient.post('/expense-claims', data)
+    return apiClient.post('/expense-claims', {
+      claimDate: data.date,
+      category: data.category,
+      amount: data.amount,
+      description: data.description,
+      merchantName: data.merchantName,
+      projectCode: data.projectCode,
+    })
   },
 
   uploadReceipt: async (data: UploadReceiptInput) => {
