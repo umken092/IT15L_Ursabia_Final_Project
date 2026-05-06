@@ -23,7 +23,7 @@ public class ExpenseClaimsController : ControllerBase
     public async Task<IActionResult> GetClaims([FromQuery] string? status = null)
     {
         var userId = GetCurrentUserId();
-        var isApprover = User.IsInRole("faculty-admin") || User.IsInRole("cfo") || User.IsInRole("super-admin") || User.IsInRole("accountant");
+        var isApprover = CanApproveExpenseClaims();
 
         var query = _db.ExpenseClaims.AsQueryable();
 
@@ -58,6 +58,47 @@ public class ExpenseClaimsController : ControllerBase
         return Ok(items);
     }
 
+    [HttpGet("monitoring-summary")]
+    [Authorize(Roles = "faculty-admin,cfo,super-admin,accountant")]
+    public async Task<IActionResult> GetMonitoringSummary()
+    {
+        var claims = await _db.ExpenseClaims
+            .AsNoTracking()
+            .OrderByDescending(x => x.ClaimDate)
+            .ToListAsync();
+
+        var monthly = claims
+            .GroupBy(x => new { x.ClaimDate.Year, x.ClaimDate.Month })
+            .OrderBy(g => g.Key.Year)
+            .ThenBy(g => g.Key.Month)
+            .Select(g => new
+            {
+                month = $"{g.Key.Year:D4}-{g.Key.Month:D2}",
+                totalAmount = decimal.Round(g.Sum(x => x.Amount), 2),
+                totalCount = g.Count(),
+                submittedCount = g.Count(x => x.Status == ExpenseClaimStatus.Submitted),
+                approvedCount = g.Count(x => x.Status == ExpenseClaimStatus.Approved),
+                rejectedCount = g.Count(x => x.Status == ExpenseClaimStatus.Rejected)
+            })
+            .ToList();
+
+        var response = new
+        {
+            overall = new
+            {
+                totalAmount = decimal.Round(claims.Sum(x => x.Amount), 2),
+                totalCount = claims.Count,
+                submittedAmount = decimal.Round(claims.Where(x => x.Status == ExpenseClaimStatus.Submitted).Sum(x => x.Amount), 2),
+                approvedAmount = decimal.Round(claims.Where(x => x.Status == ExpenseClaimStatus.Approved).Sum(x => x.Amount), 2),
+                rejectedAmount = decimal.Round(claims.Where(x => x.Status == ExpenseClaimStatus.Rejected).Sum(x => x.Amount), 2),
+                draftAmount = decimal.Round(claims.Where(x => x.Status == ExpenseClaimStatus.Draft).Sum(x => x.Amount), 2)
+            },
+            monthly
+        };
+
+        return Ok(response);
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetClaim(Guid id)
     {
@@ -66,7 +107,7 @@ public class ExpenseClaimsController : ControllerBase
             return NotFound(new { message = "Expense claim not found." });
 
         var userId = GetCurrentUserId();
-        var isApprover = User.IsInRole("faculty-admin") || User.IsInRole("cfo") || User.IsInRole("super-admin") || User.IsInRole("accountant");
+        var isApprover = CanApproveExpenseClaims();
         if (!isApprover && claim.EmployeeId.ToString() != userId)
             return Forbid();
 
@@ -195,6 +236,10 @@ public class ExpenseClaimsController : ControllerBase
 
     private string GetCurrentUserId() =>
         User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+
+    private bool CanApproveExpenseClaims() =>
+        User.IsInRole("faculty-admin") || User.IsInRole("cfo") ||
+        User.IsInRole("super-admin") || User.IsInRole("accountant");
 
     private async Task<string> GenerateClaimNumberAsync()
     {

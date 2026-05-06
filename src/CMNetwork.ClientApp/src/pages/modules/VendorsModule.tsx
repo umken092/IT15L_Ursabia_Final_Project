@@ -72,7 +72,7 @@ export function VendorsModule() {
       setLoading(true)
       const response = await vendorService.getVendors()
       setVendors(response.data)
-    } catch (error) {
+    } catch {
       push('error', 'Failed to load vendors')
     } finally {
       setLoading(false)
@@ -80,6 +80,7 @@ export function VendorsModule() {
   }, [push])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadVendors()
   }, [loadVendors])
 
@@ -161,7 +162,7 @@ export function VendorsModule() {
         await vendorService.deleteVendor(vendor.id)
         push('success', 'Vendor deleted successfully')
         await loadVendors()
-      } catch (error) {
+      } catch {
         push('error', 'Failed to delete vendor')
       }
     }
@@ -207,6 +208,7 @@ export function VendorsModule() {
     const result = schema.safeParse(submitData)
 
     if (!result.success) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       result.error.issues.forEach((err: any) => {
         if (err.path[0]) {
           errors[err.path[0].toString()] = err.message
@@ -255,7 +257,7 @@ export function VendorsModule() {
 
       setShowDialog(false)
       await loadVendors()
-    } catch (error) {
+    } catch {
       push('error', editingId ? 'Failed to update vendor' : 'Failed to create vendor')
     }
   }

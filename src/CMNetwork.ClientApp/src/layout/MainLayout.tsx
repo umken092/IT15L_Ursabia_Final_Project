@@ -223,7 +223,7 @@ export const MainLayout = () => {
                 </Link>
                 {expanded ? (
                   <div className="sidebar-subnav">
-                    {item.children.map((child) => {
+                    {item.children?.map((child) => {
                       const childIcon = getSidebarIcon(currentRole, child.path)
 
                       return (

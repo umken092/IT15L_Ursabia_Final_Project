@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from 'react'
 import type { AxiosError } from 'axios'
 import { Button } from '@progress/kendo-react-buttons'
@@ -130,10 +131,11 @@ interface UserDirectoryRowProps {
   employee: Employee
   onEdit: (employee: Employee) => void
   onPassword: (employee: Employee) => void
+  onUnlock: (employee: Employee) => void
   onDelete: (employee: Employee) => void
 }
 
-const UserDirectoryRow = ({ employee, onEdit, onPassword, onDelete }: UserDirectoryRowProps) => {
+const UserDirectoryRow = ({ employee, onEdit, onPassword, onUnlock, onDelete }: UserDirectoryRowProps) => {
   const roleLabel = getRoleLabel(employee.role)
   const passwordChangeDisabled = isSuperAdminRole(employee.role)
   const passwordActionTitle = passwordChangeDisabled
@@ -179,6 +181,14 @@ const UserDirectoryRow = ({ employee, onEdit, onPassword, onDelete }: UserDirect
           disabled={passwordChangeDisabled}
         >
           Change Password
+        </Button>
+        <Button
+          size="small"
+          fillMode="flat"
+          onClick={() => onUnlock(employee)}
+          title="Unlock account (clear lockout)"
+        >
+          Unlock
         </Button>
         <Button size="small" fillMode="flat" onClick={() => onDelete(employee)} title="Delete">
           Delete
@@ -548,6 +558,15 @@ export const UserManagementModule = () => {
     setShowPasswordDialog(true)
   }
 
+  const handleUnlockClick = async (emp: Employee) => {
+    try {
+      await adminService.unlockUser(emp.id)
+      pushToast('success', `Account unlocked for ${emp.fullName}.`)
+    } catch {
+      pushToast('error', `Failed to unlock account for ${emp.fullName}.`)
+    }
+  }
+
   const validateCreateForm = (): boolean => {
     const validationError = getCreateFormValidationError(formData)
     if (validationError) {
@@ -799,6 +818,7 @@ export const UserManagementModule = () => {
                   employee={emp}
                   onEdit={handleEditClick}
                   onPassword={handlePasswordClick}
+                  onUnlock={handleUnlockClick}
                   onDelete={handleDeleteClick}
                 />
               ))}

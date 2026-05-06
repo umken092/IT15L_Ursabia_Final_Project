@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@progress/kendo-react-buttons'
 import { Dialog, DialogActionsBar } from '@progress/kendo-react-dialogs'
@@ -202,6 +203,7 @@ const getFileNameFromDisposition = (disposition: string | undefined, fallback: s
   if (!disposition) return fallback
   const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
   if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1])
+  // eslint-disable-next-line no-useless-escape
   const asciiMatch = disposition.match(/filename="?([^\";]+)"?/i)
   return asciiMatch?.[1] ?? fallback
 }

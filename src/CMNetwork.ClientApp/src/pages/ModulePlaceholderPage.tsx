@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react'
 import { Button } from '@progress/kendo-react-buttons'
 import { ProgressBar } from '@progress/kendo-react-progressbars'
 import { Card, CardBody, CardHeader, CardTitle } from '@progress/kendo-react-layout'
@@ -96,7 +97,7 @@ interface ModuleDefinition {
   records: ModuleRecord[]
 }
 
-const moduleDefinitions: Record<ModuleKey, ModuleDefinition> = {
+const moduleDefinitions: Partial<Record<ModuleKey, ModuleDefinition>> = {
   'user-management': {
     title: 'User Management',
     subtitle: 'Provision users, assign roles, and review access requests.',
@@ -870,7 +871,7 @@ const renderStatValue = (stat: ModuleStat) => {
   return <strong className="metric">{convertCurrencyText(stat.value, 'PHP')}</strong>
 }
 
-const SIMPLE_MODULE_MAP: Partial<Record<string, () => JSX.Element>> = {
+const SIMPLE_MODULE_MAP: Partial<Record<string, () => ReactElement>> = {
   'user-management':      () => <UserManagementModule />,
   'roles-permissions':    () => <RolesPermissionsModule />,
   'job-queue':            () => <JobQueueModule />,
@@ -884,7 +885,7 @@ const SIMPLE_MODULE_MAP: Partial<Record<string, () => JSX.Element>> = {
   'accounts-receivable':  () => <ARInvoicesModule />,
 }
 
-function renderSpecialModule(moduleKey: string): JSX.Element | null {
+function renderSpecialModule(moduleKey: string): ReactElement | null {
   const simpleRender = SIMPLE_MODULE_MAP[moduleKey]
   if (simpleRender) {
     return <RoleGuard allowedRoles={moduleRoleMap[moduleKey]}>{simpleRender()}</RoleGuard>

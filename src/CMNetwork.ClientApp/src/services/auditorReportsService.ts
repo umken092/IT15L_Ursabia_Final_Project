@@ -116,19 +116,19 @@ export const auditorReportsService = {
   },
 
   async vendorHistory(id: string): Promise<{ items: EntityHistoryItem[] }> {
-    const res = await apiClient.get(`/auditor/vendor-history/${id}`)
+    const res = await apiClient.get<{ items: EntityHistoryItem[] }>(`/auditor/vendor-history/${id}`)
     return res.data
   },
 
   async customerHistory(id: string): Promise<{ items: EntityHistoryItem[] }> {
-    const res = await apiClient.get(`/auditor/customer-history/${id}`)
+    const res = await apiClient.get<{ items: EntityHistoryItem[] }>(`/auditor/customer-history/${id}`)
     return res.data
   },
 }
 
 export const evidenceArchiveService = {
   async list(take = 100): Promise<{ items: EvidenceArchiveItem[] }> {
-    const res = await apiClient.get('/auditor/evidence-archives', { params: { take } })
+    const res = await apiClient.get<{ items: EvidenceArchiveItem[] }>('/auditor/evidence-archives', { params: { take } })
     return res.data
   },
 

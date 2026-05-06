@@ -304,38 +304,45 @@ public class ReportsController : ControllerBase
     [HttpGet("department-budget")]
     public async Task<IActionResult> GetDepartmentBudget([FromQuery] Guid? periodId = null)
     {
-        var departments = await _db.Departments.ToListAsync();
-
-        // Get actual expenses per department from expense claims
-        var claimsQuery = _db.ExpenseClaims
-            .Where(x => x.Status == ExpenseClaimStatus.Approved);
-
-        var actualByDept = await claimsQuery
-            .GroupBy(x => x.Category)
-            .Select(g => new { dept = g.Key, actual = g.Sum(x => x.Amount) })
-            .ToListAsync();
-
-        var rows = departments.Select(dept =>
+        try
         {
-            var actual = actualByDept
-                .Where(x => x.dept.Contains(dept.Name, StringComparison.OrdinalIgnoreCase))
-                .Sum(x => x.actual);
+            var departments = await _db.Departments.ToListAsync();
 
-            return new
+            // Get actual expenses per department from expense claims
+            var claimsQuery = _db.ExpenseClaims
+                .Where(x => x.Status == ExpenseClaimStatus.Approved);
+
+            var actualByDept = await claimsQuery
+                .GroupBy(x => x.Category)
+                .Select(g => new { dept = g.Key, actual = g.Sum(x => x.Amount) })
+                .ToListAsync();
+
+            var rows = departments.Select(dept =>
             {
-                dept.Id,
-                dept.Code,
-                dept.Name,
-                budget = dept.BudgetAmount,
-                actual = decimal.Round(actual, 2),
-                remaining = decimal.Round(dept.BudgetAmount - actual, 2),
-                utilizationPct = dept.BudgetAmount > 0
-                    ? decimal.Round(actual / dept.BudgetAmount * 100, 1)
-                    : 0m
-            };
-        }).ToList();
+                var actual = actualByDept
+                    .Where(x => x.dept.Contains(dept.Name, StringComparison.OrdinalIgnoreCase))
+                    .Sum(x => x.actual);
 
-        return Ok(new { items = rows, totalBudget = rows.Sum(x => x.budget), totalActual = rows.Sum(x => x.actual) });
+                return new
+                {
+                    dept.Id,
+                    dept.Code,
+                    dept.Name,
+                    budget = dept.BudgetAmount,
+                    actual = decimal.Round(actual, 2),
+                    remaining = decimal.Round(dept.BudgetAmount - actual, 2),
+                    utilizationPct = dept.BudgetAmount > 0
+                        ? decimal.Round(actual / dept.BudgetAmount * 100, 1)
+                        : 0m
+                };
+            }).ToList();
+
+            return Ok(new { items = rows, totalBudget = rows.Sum(x => x.budget), totalActual = rows.Sum(x => x.actual) });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "An error occurred while retrieving department budget data.", detail = ex.Message });
+        }
     }
 
     // ── Export ────────────────────────────────────────────────────────────────

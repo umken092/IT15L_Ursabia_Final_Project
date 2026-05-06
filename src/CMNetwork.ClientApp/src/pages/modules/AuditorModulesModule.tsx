@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect, @typescript-eslint/no-explicit-any */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Card, CardBody, CardHeader, CardTitle } from '@progress/kendo-react-layout'
 import { Button } from '@progress/kendo-react-buttons'
@@ -364,7 +365,6 @@ const GeneralLedgerInquiryView: React.FC = () => {
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', fontSize: '0.8rem' }}>
           Status
-          {/* eslint-disable-next-line jsx-a11y/no-onchange */}
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}

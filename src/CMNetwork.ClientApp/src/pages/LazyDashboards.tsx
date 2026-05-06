@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { lazy, Suspense } from 'react'
 import { Loader } from '@progress/kendo-react-indicators'
 

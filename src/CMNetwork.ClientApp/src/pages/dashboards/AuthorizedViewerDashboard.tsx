@@ -201,10 +201,13 @@ export const AuthorizedViewerDashboard = () => {
   )
 
   const tooltipValueFormatter = useMemo(
-    () => (value: number, name: string) => [
-      formatMoney(value, 'PHP', { maximumFractionDigits: 0 }),
-      name,
-    ],
+    () => (value: unknown, name: unknown) => {
+      const numericValue = Array.isArray(value) ? Number(value[0]) || 0 : Number(value) || 0
+      return [
+        formatMoney(numericValue, 'PHP', { maximumFractionDigits: 0 }),
+        String(name ?? ''),
+      ] as [string, string]
+    },
     [displayCurrency],
   )
 

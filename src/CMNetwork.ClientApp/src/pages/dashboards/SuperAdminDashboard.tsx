@@ -166,7 +166,6 @@ const IconLog = () => (
 )
 
 // NOSONAR - Dashboard composition intentionally keeps sections inline for maintainability.
-// eslint-disable-next-line sonarjs/cognitive-complexity
 export const SuperAdminDashboard = () => {
   const user = useAuthStore((state) => state.user)
   const navigate = useNavigate()

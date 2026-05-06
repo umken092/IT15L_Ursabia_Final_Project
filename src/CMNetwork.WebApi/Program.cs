@@ -12,6 +12,7 @@ using CMNetwork.Middleware;
 using CMNetwork.Services;
 using CMNetwork.Infrastructure.Services;
 using Hangfire;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
@@ -38,6 +39,10 @@ builder.Services.AddHangfireServer();
 
 // JWT token service (used by IdentityAuthService)
 builder.Services.AddScoped<JwtTokenService>();
+
+// Normalize PascalCase roles (e.g. "FacultyAdmin") to lowercase-hyphen ("faculty-admin")
+// so all [Authorize(Roles = ...)] attributes work regardless of how the role was assigned.
+builder.Services.AddScoped<IClaimsTransformation, RoleNormalizationTransformation>();
 
 // Replace mock auth with Identity-backed implementation
 builder.Services.AddScoped<IAuthService, IdentityAuthService>();

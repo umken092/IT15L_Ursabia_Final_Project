@@ -211,7 +211,10 @@ export const FacultyAdminDashboard = () => {
                       width={72}
                     />
                     <Tooltip
-                      formatter={(v: number, name: string) => [formatMoney(v, 'PHP'), name]}
+                      formatter={(v: unknown, name: unknown) => {
+                        const numericValue = Array.isArray(v) ? Number(v[0]) || 0 : Number(v) || 0
+                        return [formatMoney(numericValue, 'PHP'), String(name ?? '')] as [string, string]
+                      }}
                     />
                     <Area
                       type="monotone"

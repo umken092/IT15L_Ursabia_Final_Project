@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import type { ReactNode } from 'react'
 import { useAuthStore } from '../store/authStore'
 import type { Role } from '../types/auth'

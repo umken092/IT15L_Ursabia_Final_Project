@@ -97,6 +97,10 @@ export const expenseClaimsService = {
     return apiClient.get('/expense-claims', { params })
   },
 
+  getMonitoringSummary: async () => {
+    return apiClient.get('/expense-claims/monitoring-summary')
+  },
+
   submitClaim: async (claimId: string) => {
     return apiClient.post(`/expense-claims/${claimId}/submit`)
   },

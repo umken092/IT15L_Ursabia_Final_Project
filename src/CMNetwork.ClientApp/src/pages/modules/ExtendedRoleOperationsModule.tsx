@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/purity */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -10,7 +11,6 @@ import { DataTable } from '../../components/ui/data-table'
 import { SkeletonCard } from '../../components/SkeletonCard'
 import { useAuthStore } from '../../store/authStore'
 import { useNotificationStore } from '../../store/notificationStore'
-import { roleLabels } from '../../types/auth'
 import { auditLogsService, budgetService, expenseClaimsService, approvalsService, payslipsService } from '../../services/extendedOperationsService'
 import { dashboardService, type BudgetControlResponse } from '../../services/dashboardService'
 import { convertAmount, formatMoney, useCurrencyStore, useDisplayCurrency } from '../../store/currencyStore'
@@ -351,9 +351,7 @@ const moduleMeta: Record<ExtendedModuleKey, { title: string; subtitle: string }>
 export const ExtendedRoleOperationsModule = ({ moduleKey }: ExtendedRoleOperationsModuleProps) => {
   useDisplayCurrency()
   const user = useAuthStore((state) => state.user)
-  const selectedRole = useAuthStore((state) => state.selectedRole)
   const pushToast = useNotificationStore((state) => state.push)
-  const activeRole = selectedRole || user?.role || 'employee'
 
   const [queueItems, setQueueItems] = useState<QueueItem[]>([])
   const [queueLoading, setQueueLoading] = useState(false)

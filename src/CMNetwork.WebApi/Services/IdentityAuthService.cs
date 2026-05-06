@@ -244,13 +244,16 @@ public class IdentityAuthService : IAuthService
     private async Task<UserDto> BuildUserDtoAsync(ApplicationUser user)
     {
         var roles = await _userManager.GetRolesAsync(user);
+        var normalizedRoles = roles
+            .Select(RoleNormalizationTransformation.Normalize)
+            .ToList();
         return new UserDto
         {
             Id               = user.Id.ToString(),
             Email            = user.Email!,
             FullName         = user.FullName,
-            Role             = roles.FirstOrDefault() ?? "employee",
-            Roles            = roles.ToList(),
+            Role             = normalizedRoles.FirstOrDefault() ?? "employee",
+            Roles            = normalizedRoles,
             DepartmentId     = user.DepartmentId?.ToString(),
             TwoFactorEnabled = user.TwoFactorEnabled,
         };

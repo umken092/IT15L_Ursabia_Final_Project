@@ -19,14 +19,19 @@ import { SkeletonCard } from '../../components/SkeletonCard'
 import type { ColumnDef } from '@tanstack/react-table'
 import { useNotificationStore } from '../../store/notificationStore'
 import { formatMoney, useDisplayCurrency } from '../../store/currencyStore'
-import { dashboardService, type BudgetMonthPoint, type DepartmentBudgetItem } from '../../services/dashboardService'
-import { approvalsService } from '../../services/extendedOperationsService'
+import { dashboardService, type BudgetMonthPoint } from '../../services/dashboardService'
+import { approvalsService, expenseClaimsService } from '../../services/extendedOperationsService'
 import { reportsService } from '../../services/accountantService'
 
 export type FacultyAdminModuleKey = 'dept-reports' | 'fa-approvals' | 'fa-reports'
 
 interface FacultyAdminModuleProps {
   moduleKey: FacultyAdminModuleKey
+}
+
+interface NotificationPayload {
+  type: 'success' | 'error' | 'warning' | 'info'
+  message: string
 }
 
 // ─── Shared helpers ────────────────────────────────────────────────────────────
@@ -57,6 +62,38 @@ interface ApprovalItem {
   wouldExceedBudget?: boolean
 }
 
+type ExpenseClaimStatus = 'Draft' | 'Submitted' | 'Approved' | 'Rejected'
+
+interface FacultyExpenseClaim {
+  id: string
+  claimNumber: string
+  employeeName: string
+  claimDate: string
+  category: string
+  description: string
+  amount: number
+  status: ExpenseClaimStatus
+}
+
+interface ExpenseClaimsMonitoringSummary {
+  overall: {
+    totalAmount: number
+    totalCount: number
+    submittedAmount: number
+    approvedAmount: number
+    rejectedAmount: number
+    draftAmount: number
+  }
+  monthly: Array<{
+    month: string
+    totalAmount: number
+    totalCount: number
+    submittedCount: number
+    approvedCount: number
+    rejectedCount: number
+  }>
+}
+
 // ─── No mock seed data — all data must come from live API ─────────────────────
 
 
@@ -74,11 +111,6 @@ interface IncomeStatementResponse {
   netIncome: number
   revenue: IncomeStatementLine[]
   expenses: IncomeStatementLine[]
-}
-
-const PL_SOURCE_LABEL: Record<'live' | 'unavailable', string> = {
-  live: 'Live data from posted journal entries',
-  unavailable: 'Live data unavailable — no fallback data shown',
 }
 
 interface BudgetLineItem {
@@ -105,7 +137,6 @@ const formatPeriodLabel = (from: string, to: string) => {
 
 // ─── Sub-section tabs ──────────────────────────────────────────────────────────
 
-type DeptReportTab = 'budget-status' | 'variance-analysis' | 'export-pdf'
 type ApprovalsTab = 'expense-claims' | 'purchase-requisitions' | 'budget-transfers'
 
 // ─── Department Reports ────────────────────────────────────────────────────────
@@ -128,7 +159,10 @@ const HEALTH_STYLE: Record<BudgetHealthStatus, { color: string; bg: string; dot:
 function DeptReportsSection() {
   useDisplayCurrency()
   const location = useLocation()
-  const notify = useNotificationStore((s) => s.addNotification)
+  const pushToast = useNotificationStore((s) => s.push)
+  const notify = useCallback((payload: NotificationPayload) => {
+    pushToast(payload.type, payload.message)
+  }, [pushToast])
   const [budgetData, setBudgetData] = useState<{ months: BudgetMonthPoint[]; totalAllocated: number; totalActual: number; remainingForecast: number; varianceRequestCount: number } | null>(null)
   const [liveBudgetLines, setLiveBudgetLines] = useState<BudgetLineItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -142,7 +176,6 @@ function DeptReportsSection() {
   }, [location.hash])
 
   useEffect(() => {
-    setLoading(true)
     Promise.allSettled([
       dashboardService.getBudgetControl(),
       dashboardService.getDepartmentBudget(),
@@ -152,7 +185,7 @@ function DeptReportsSection() {
         else notify({ type: 'warning', message: 'Could not load live budget summary.' })
         if (budgetRes.status === 'fulfilled') {
           setLiveBudgetLines(
-            (budgetRes.value.items as DepartmentBudgetItem[]).map((item) => ({
+            budgetRes.value.items.map((item) => ({
               account: item.name,
               budget: item.budget,
               actual: item.actual,
@@ -269,7 +302,7 @@ function DeptReportsSection() {
               <DataTable
                 columns={varianceColumns as ColumnDef<object>[]}
                 data={liveBudgetLines}
-                pageSize={10}
+                initialPageSize={10}
               />
             )}
           </DashboardCard>
@@ -314,7 +347,7 @@ function DeptReportsSection() {
                   <XAxis dataKey="month" stroke="var(--muted)" />
                   <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} stroke="var(--muted)" />
                   <Tooltip
-                    formatter={(v: number, name: string) => [fmtMoney(v), name]}
+                    formatter={(value, name) => [fmtMoney(typeof value === 'number' ? value : Number(value ?? 0)), String(name)]}
                     labelFormatter={(label) => `Month: ${label}`}
                   />
                   <Legend />
@@ -331,7 +364,7 @@ function DeptReportsSection() {
                 <DataTable
                   columns={varianceColumns as ColumnDef<object>[]}
                   data={liveBudgetLines}
-                  pageSize={10}
+                  initialPageSize={10}
                 />
               )}
             </DashboardCard>
@@ -391,18 +424,24 @@ function PriorityPill({ priority }: Readonly<{ priority: Priority }>) {
 
 function ApprovalsInboxSection() {
   useDisplayCurrency()
-  const notify = useNotificationStore((s) => s.addNotification)
+  const pushToast = useNotificationStore((s) => s.push)
+  const notify = useCallback((payload: NotificationPayload) => {
+    pushToast(payload.type, payload.message)
+  }, [pushToast])
   const [tab, setTab] = useState<ApprovalsTab>('expense-claims')
   const [items, setItems] = useState<ApprovalItem[]>([])
+  const [expenseClaims, setExpenseClaims] = useState<FacultyExpenseClaim[]>([])
+  const [expenseSummary, setExpenseSummary] = useState<ExpenseClaimsMonitoringSummary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [expenseLoading, setExpenseLoading] = useState(true)
   const [pendingAction, setPendingAction] = useState<ApprovalAction | null>(null)
+  const [pendingExpenseAction, setPendingExpenseAction] = useState<{ claim: FacultyExpenseClaim; action: 'Approve' | 'Reject' } | null>(null)
   const [actionNote, setActionNote] = useState('')
   const [processing, setProcessing] = useState(false)
   const [detailItem, setDetailItem] = useState<ApprovalItem | null>(null)
   const [search, setSearch] = useState('')
 
   useEffect(() => {
-    setLoading(true)
     approvalsService
       .getApprovalQueue()
       .then((res) => {
@@ -436,7 +475,49 @@ function ApprovalsInboxSection() {
         notify({ type: 'error', message: 'Could not load approval queue. Please refresh to try again.' })
       })
       .finally(() => setLoading(false))
-  }, [])
+  }, [notify])
+
+  useEffect(() => {
+    Promise.all([
+      expenseClaimsService.getClaims(),
+      expenseClaimsService.getMonitoringSummary(),
+    ])
+      .then(([claimsRes, summaryRes]) => {
+        const apiClaims = (claimsRes.data ?? []) as Array<{
+          id: string
+          claimNumber: string
+          employeeName: string
+          claimDate: string
+          category: string
+          description: string
+          amount: number
+          status: number
+        }>
+        const statusMap: Record<number, ExpenseClaimStatus> = {
+          1: 'Draft',
+          2: 'Submitted',
+          3: 'Approved',
+          4: 'Rejected',
+        }
+        setExpenseClaims(
+          apiClaims.map((c) => ({
+            id: c.id,
+            claimNumber: c.claimNumber,
+            employeeName: c.employeeName,
+            claimDate: c.claimDate,
+            category: c.category,
+            description: c.description,
+            amount: c.amount,
+            status: statusMap[c.status] ?? 'Draft',
+          })),
+        )
+        setExpenseSummary((summaryRes.data ?? null) as ExpenseClaimsMonitoringSummary | null)
+      })
+      .catch(() => {
+        notify({ type: 'error', message: 'Could not load expense claims monitoring data.' })
+      })
+      .finally(() => setExpenseLoading(false))
+  }, [notify])
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -447,6 +528,81 @@ function ApprovalsInboxSection() {
         (!q || i.title.toLowerCase().includes(q) || i.requestedBy.toLowerCase().includes(q) || i.id.toLowerCase().includes(q)),
     )
   }, [items, tab, search])
+
+  const filteredExpenseClaims = useMemo(() => {
+    const q = search.toLowerCase()
+    return expenseClaims.filter((claim) => {
+      if (!q) return true
+      return (
+        claim.claimNumber.toLowerCase().includes(q)
+        || claim.employeeName.toLowerCase().includes(q)
+        || claim.category.toLowerCase().includes(q)
+      )
+    })
+  }, [expenseClaims, search])
+
+  const refreshExpenseClaims = useCallback(async () => {
+    const [claimsRes, summaryRes] = await Promise.all([
+      expenseClaimsService.getClaims(),
+      expenseClaimsService.getMonitoringSummary(),
+    ])
+
+    const apiClaims = (claimsRes.data ?? []) as Array<{
+      id: string
+      claimNumber: string
+      employeeName: string
+      claimDate: string
+      category: string
+      description: string
+      amount: number
+      status: number
+    }>
+    const statusMap: Record<number, ExpenseClaimStatus> = {
+      1: 'Draft',
+      2: 'Submitted',
+      3: 'Approved',
+      4: 'Rejected',
+    }
+
+    setExpenseClaims(
+      apiClaims.map((c) => ({
+        id: c.id,
+        claimNumber: c.claimNumber,
+        employeeName: c.employeeName,
+        claimDate: c.claimDate,
+        category: c.category,
+        description: c.description,
+        amount: c.amount,
+        status: statusMap[c.status] ?? 'Draft',
+      })),
+    )
+    setExpenseSummary((summaryRes.data ?? null) as ExpenseClaimsMonitoringSummary | null)
+  }, [])
+
+  const handleExpenseAction = useCallback(async () => {
+    if (!pendingExpenseAction) return
+
+    setProcessing(true)
+    try {
+      if (pendingExpenseAction.action === 'Approve') {
+        await expenseClaimsService.approveClaim(pendingExpenseAction.claim.id, actionNote.trim() || undefined)
+      } else {
+        await expenseClaimsService.rejectClaim(pendingExpenseAction.claim.id, actionNote.trim() || undefined)
+      }
+
+      await refreshExpenseClaims()
+      notify({
+        type: 'success',
+        message: `Expense claim ${pendingExpenseAction.claim.claimNumber} ${pendingExpenseAction.action.toLowerCase()}d successfully.`,
+      })
+    } catch {
+      notify({ type: 'error', message: 'Failed to process expense claim action. Please try again.' })
+    } finally {
+      setProcessing(false)
+      setPendingExpenseAction(null)
+      setActionNote('')
+    }
+  }, [actionNote, notify, pendingExpenseAction, refreshExpenseClaims])
 
   const handleAction = useCallback(async () => {
     if (!pendingAction) return
@@ -460,7 +616,13 @@ function ApprovalsInboxSection() {
           comments: actionNote,
         })
       } else if (action === 'Escalate') {
-        await approvalsService.escalateRequest({ itemId: item.id, notes: actionNote })
+        await approvalsService.escalateRequest({
+          itemId: item.id,
+          reason: 'Other',
+          escalateTo: 'cfo',
+          priority: 'High',
+          notes: actionNote,
+        })
       }
       setItems((prev) =>
         prev.map((i) =>
@@ -489,11 +651,37 @@ function ApprovalsInboxSection() {
     'budget-transfers': 'Budget Transfers',
   }
 
-  const pendingCount = (t: ApprovalsTab) => items.filter((i) => i.type === t && i.status === 'Pending').length
-  const highPriorityCount = items.filter((i) => i.priority === 'High' && i.status === 'Pending').length
-  const totalPendingCount = items.filter((i) => i.status === 'Pending').length
-  const budgetWarningsCount = items.filter((i) => i.wouldExceedBudget && i.status === 'Pending').length
-  const approvedTodayCount = items.filter((i) => i.status === 'Approved').length
+  const pendingCount = (t: ApprovalsTab) => {
+    if (t === 'expense-claims') {
+      return expenseClaims.filter((c) => c.status === 'Submitted').length
+    }
+    return items.filter((i) => i.type === t && i.status === 'Pending').length
+  }
+
+  const highPriorityCount = tab === 'expense-claims'
+    ? expenseClaims.filter((c) => c.status === 'Submitted' && c.amount >= 10000).length
+    : items.filter((i) => i.priority === 'High' && i.status === 'Pending').length
+
+  const totalPendingCount = tab === 'expense-claims'
+    ? expenseClaims.filter((c) => c.status === 'Submitted').length
+    : items.filter((i) => i.status === 'Pending').length
+
+  const budgetWarningsCount = tab === 'expense-claims'
+    ? expenseClaims.filter((c) => c.status === 'Submitted' && c.amount >= 20000).length
+    : items.filter((i) => i.wouldExceedBudget && i.status === 'Pending').length
+
+  const approvedTodayCount = tab === 'expense-claims'
+    ? expenseClaims.filter((c) => c.status === 'Approved').length
+    : items.filter((i) => i.status === 'Approved').length
+
+  const monthlyExpenseTrend = useMemo(() => {
+    return (expenseSummary?.monthly ?? []).map((m) => ({
+      month: toMonthYear(`${m.month}-01`),
+      Total: m.totalAmount,
+      Approved: m.approvedCount,
+      Submitted: m.submittedCount,
+    }))
+  }, [expenseSummary])
 
   const commonColumns: ColumnDef<ApprovalItem>[] = [
     { accessorKey: 'id', header: 'Ref #', size: 140 },
@@ -648,16 +836,124 @@ function ApprovalsInboxSection() {
 
       {/* ── Table ── */}
       <div className="ai-table-section">
-        {loading && <SkeletonCard />}
-        {!loading && filtered.length === 0 && (
-          <div className="fa-empty-state">
-            <p>{search ? 'No results match your search.' : `No pending ${tabLabels[tab].toLowerCase()} — you are all caught up.`}</p>
-          </div>
-        )}
-        {!loading && filtered.length > 0 && (
-          <DashboardCard title={`Pending ${tabLabels[tab]}`} className="fa-table-card">
-            <DataTable columns={commonColumns as ColumnDef<object>[]} data={filtered} pageSize={8} />
-          </DashboardCard>
+        {tab === 'expense-claims' ? (
+          <>
+            {expenseLoading && <SkeletonCard />}
+            {!expenseLoading && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12, marginBottom: 12 }}>
+                <DashboardCard title="Overall Claims Total" className="fa-table-card">
+                  <div style={{ fontSize: '1.6rem', fontWeight: 700 }}>{fmtMoney(expenseSummary?.overall.totalAmount ?? 0)}</div>
+                  <div style={{ color: 'var(--muted)' }}>{expenseSummary?.overall.totalCount ?? 0} total claims</div>
+                </DashboardCard>
+                <DashboardCard title="Approved (Past & Present)" className="fa-table-card">
+                  <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#166534' }}>{fmtMoney(expenseSummary?.overall.approvedAmount ?? 0)}</div>
+                </DashboardCard>
+                <DashboardCard title="Submitted (For Review)" className="fa-table-card">
+                  <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#1d4ed8' }}>{fmtMoney(expenseSummary?.overall.submittedAmount ?? 0)}</div>
+                </DashboardCard>
+                <DashboardCard title="Rejected" className="fa-table-card">
+                  <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#b91c1c' }}>{fmtMoney(expenseSummary?.overall.rejectedAmount ?? 0)}</div>
+                </DashboardCard>
+              </div>
+            )}
+
+            {!expenseLoading && monthlyExpenseTrend.length > 0 && (
+              <DashboardCard title="Monthly Expense Claims Monitoring" className="fa-chart-card">
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={monthlyExpenseTrend} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="month" stroke="var(--muted)" />
+                    <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} stroke="var(--muted)" />
+                    <Tooltip formatter={(value, name) => [name === 'Total' ? fmtMoney(typeof value === 'number' ? value : Number(value ?? 0)) : String(value ?? 0), String(name)]} />
+                    <Legend />
+                    <Bar dataKey="Total" fill="#2563EB" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Submitted" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Approved" fill="#16a34a" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </DashboardCard>
+            )}
+
+            {!expenseLoading && filteredExpenseClaims.length === 0 && (
+              <div className="fa-empty-state">
+                <p>{search ? 'No expense claims match your search.' : 'No expense claims found yet.'}</p>
+              </div>
+            )}
+
+            {!expenseLoading && filteredExpenseClaims.length > 0 && (
+              <DashboardCard title="Employee Expense Claims" className="fa-table-card">
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="fa-approvals-table">
+                    <thead>
+                      <tr>
+                        <th>Claim #</th>
+                        <th>Employee</th>
+                        <th>Date</th>
+                        <th>Category</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredExpenseClaims.map((claim) => (
+                        <tr key={claim.id}>
+                          <td>{claim.claimNumber}</td>
+                          <td>{claim.employeeName}</td>
+                          <td>{claim.claimDate}</td>
+                          <td>{claim.category}</td>
+                          <td>{fmtMoney(claim.amount)}</td>
+                          <td>{claim.status}</td>
+                          <td>
+                            {claim.status === 'Submitted' ? (
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <Button
+                                  size="small"
+                                  themeColor="primary"
+                                  onClick={() => {
+                                    setPendingExpenseAction({ claim, action: 'Approve' })
+                                    setActionNote('')
+                                  }}
+                                >
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="small"
+                                  themeColor="error"
+                                  onClick={() => {
+                                    setPendingExpenseAction({ claim, action: 'Reject' })
+                                    setActionNote('')
+                                  }}
+                                >
+                                  Reject
+                                </Button>
+                              </div>
+                            ) : (
+                              <span style={{ color: '#64748b' }}>No action</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </DashboardCard>
+            )}
+          </>
+        ) : (
+          <>
+            {loading && <SkeletonCard />}
+            {!loading && filtered.length === 0 && (
+              <div className="fa-empty-state">
+                <p>{search ? 'No results match your search.' : `No pending ${tabLabels[tab].toLowerCase()} — you are all caught up.`}</p>
+              </div>
+            )}
+            {!loading && filtered.length > 0 && (
+              <DashboardCard title={`Pending ${tabLabels[tab]}`} className="fa-table-card">
+                <DataTable columns={commonColumns as ColumnDef<object>[]} data={filtered} initialPageSize={8} />
+              </DashboardCard>
+            )}
+          </>
         )}
       </div>
 
@@ -738,6 +1034,42 @@ function ApprovalsInboxSection() {
           </DialogActionsBar>
         </Dialog>
       )}
+
+      {pendingExpenseAction && (
+        <Dialog
+          title={`${pendingExpenseAction.action} Expense Claim ${pendingExpenseAction.claim.claimNumber}`}
+          onClose={() => { setPendingExpenseAction(null); setActionNote('') }}
+          width={500}
+        >
+          <div className="fa-action-dialog-body">
+            <p>
+              {pendingExpenseAction.action === 'Approve'
+                ? 'This will mark the expense claim as approved.'
+                : 'This will mark the expense claim as rejected.'}
+            </p>
+            <label className="fa-note-label">
+              {pendingExpenseAction.action === 'Reject' ? 'Rejection reason (required)' : 'Notes (optional)'}
+            </label>
+            <TextArea
+              value={actionNote}
+              onChange={(e) => setActionNote(String(e.value ?? ''))}
+              rows={3}
+              placeholder={pendingExpenseAction.action === 'Reject' ? 'Explain why this claim is rejected…' : 'Add notes…'}
+              style={{ width: '100%', marginTop: 4 }}
+            />
+          </div>
+          <DialogActionsBar>
+            <Button
+              themeColor={pendingExpenseAction.action === 'Approve' ? 'primary' : 'error'}
+              onClick={handleExpenseAction}
+              disabled={processing || (pendingExpenseAction.action === 'Reject' && !actionNote.trim())}
+            >
+              {processing ? 'Processing…' : `Confirm ${pendingExpenseAction.action}`}
+            </Button>
+            <Button onClick={() => { setPendingExpenseAction(null); setActionNote('') }} disabled={processing}>Cancel</Button>
+          </DialogActionsBar>
+        </Dialog>
+      )}
     </section>
   )
 }
@@ -746,7 +1078,10 @@ function ApprovalsInboxSection() {
 
 function DeptReportsModule() {
   useDisplayCurrency()
-  const notify = useNotificationStore((s) => s.addNotification)
+  const pushToast = useNotificationStore((s) => s.push)
+  const notify = useCallback((payload: NotificationPayload) => {
+    pushToast(payload.type, payload.message)
+  }, [pushToast])
   const [exporting, setExporting] = useState(false)
   const [drillAccount, setDrillAccount] = useState<string | null>(null)
   const [statement, setStatement] = useState<IncomeStatementResponse | null>(null)
@@ -764,7 +1099,6 @@ function DeptReportsModule() {
 
   useEffect(() => {
     let active = true
-    setLoadingStatement(true)
 
     reportsService
       .getIncomeStatement(periodRange)
@@ -810,7 +1144,6 @@ function DeptReportsModule() {
   const netMargin = totalRevenue > 0 ? ((netIncome / totalRevenue) * 100).toFixed(1) : '0.0'
   const periodLabel = formatPeriodLabel(statement?.from ?? periodRange.startDate, statement?.to ?? periodRange.endDate)
   const resultPeriodLabel = toMonthYear(statement?.to ?? periodRange.endDate)
-  const dataSourceLabel = loadingStatement ? 'Loading live data...' : PL_SOURCE_LABEL[dataSource]
   let sourceBadgeLabel = 'Unavailable'
   if (loadingStatement) {
     sourceBadgeLabel = 'Syncing'
@@ -826,7 +1159,9 @@ function DeptReportsModule() {
         endDate: statement?.to ?? periodRange.endDate,
       })
 
-      const blob = new Blob([response.data], { type: 'application/pdf' })
+      const blob = response.data instanceof Blob
+        ? response.data
+        : new Blob([response.data as BlobPart], { type: 'application/pdf' })
       const url = globalThis.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url

@@ -337,6 +337,10 @@ export const adminService = {
     await apiClient.post(`/admin/users/${userId}/password`, payload)
   },
 
+  async unlockUser(userId: string): Promise<void> {
+    await apiClient.post(`/admin/users/${userId}/unlock`)
+  },
+
   async getSecurityPolicies(): Promise<SecurityPolicy[]> {
     const response = await apiClient.get<SecurityPolicy[]>('/admin/security-policies')
     return response.data

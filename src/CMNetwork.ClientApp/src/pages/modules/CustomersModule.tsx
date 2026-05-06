@@ -72,7 +72,7 @@ export function CustomersModule() {
       setLoading(true)
       const response = await customerService.getCustomers()
       setCustomers(response.data)
-    } catch (error) {
+    } catch {
       push('error', 'Failed to load customers')
     } finally {
       setLoading(false)
@@ -80,6 +80,7 @@ export function CustomersModule() {
   }, [push])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadCustomers()
   }, [loadCustomers])
 
@@ -161,7 +162,7 @@ export function CustomersModule() {
         await customerService.deleteCustomer(customer.id)
         push('success', 'Customer deleted successfully')
         await loadCustomers()
-      } catch (error) {
+      } catch {
         push('error', 'Failed to delete customer')
       }
     }
@@ -207,6 +208,7 @@ export function CustomersModule() {
     const result = schema.safeParse(submitData)
 
     if (!result.success) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       result.error.issues.forEach((err: any) => {
         if (err.path[0]) {
           errors[err.path[0].toString()] = err.message
@@ -255,7 +257,7 @@ export function CustomersModule() {
 
       setShowDialog(false)
       await loadCustomers()
-    } catch (error) {
+    } catch {
       push('error', editingId ? 'Failed to update customer' : 'Failed to create customer')
     }
   }

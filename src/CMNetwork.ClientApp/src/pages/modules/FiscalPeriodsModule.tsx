@@ -148,7 +148,6 @@ export const FiscalPeriodsModule = () => {
   const pushToast = useNotificationStore((state) => state.push)
 
   const [years, setYears] = useState<FiscalYear[]>([])
-  const [loading, setLoading] = useState(false)
   const [expandedYear, setExpandedYear] = useState<string | null>(null)
 
   // Create fiscal year dialog
@@ -161,7 +160,6 @@ export const FiscalPeriodsModule = () => {
   // ── Load live data ─────────────────────────────────────────────────────
 
   const loadFiscalData = useCallback(async () => {
-    setLoading(true)
     try {
       const res = await generalLedgerService.getFiscalPeriods()
       const apiPeriods = (res.data ?? []) as ApiFiscalPeriod[]
@@ -171,12 +169,11 @@ export const FiscalPeriodsModule = () => {
       if (first) setExpandedYear((prev) => prev ?? first.id)
     } catch {
       pushToast('error', 'Failed to load fiscal periods from the server.')
-    } finally {
-      setLoading(false)
     }
   }, [pushToast])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadFiscalData()
   }, [loadFiscalData])
 

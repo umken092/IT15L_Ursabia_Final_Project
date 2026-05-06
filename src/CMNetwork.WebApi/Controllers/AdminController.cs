@@ -289,6 +289,25 @@ public class AdminController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("users/{id:guid}/unlock")]
+    public async Task<IActionResult> UnlockUser(Guid id)
+    {
+        var user = await _userManager.FindByIdAsync(id.ToString());
+        if (user is null) return NotFound();
+
+        await _userManager.ResetAccessFailedCountAsync(user);
+        await _userManager.SetLockoutEndDateAsync(user, null);
+
+        await _audit.LogAsync(
+            entityName: ApplicationUserEntity,
+            action: "UserUnlocked",
+            category: AuditCategories.Security,
+            recordId: user.Id.ToString(),
+            details: new { email = user.Email });
+
+        return NoContent();
+    }
+
     [HttpPost("users/{id:guid}/password")]
     public async Task<IActionResult> ResetUserPassword(Guid id, [FromBody] ResetAdminUserPasswordRequest request)
     {

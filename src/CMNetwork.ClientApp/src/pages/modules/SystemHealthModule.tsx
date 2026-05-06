@@ -95,6 +95,7 @@ export const SystemHealthModule = () => {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadHealth()
   }, [loadHealth])
 

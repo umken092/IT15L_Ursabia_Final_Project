@@ -12,6 +12,7 @@ import {
   type SecurityPolicy,
 } from '../../services/adminService'
 import { auditLogsService } from '../../services/extendedOperationsService'
+import { useAuthStore } from '../../store/authStore'
 import { useNotificationStore } from '../../store/notificationStore'
 
 type SettingsView = 'overview' | 'security' | 'backup' | 'integrations' | 'audit'
@@ -331,6 +332,7 @@ const extractAuditChanges = (detailsJson: string | null | undefined): AuditChang
 export const SystemSettingsModule = () => {
   const location = useLocation()
   const pushToast = useNotificationStore((state) => state.push)
+  const user = useAuthStore((state) => state.user)
 
   const [policies, setPolicies] = useState<SecurityPolicy[]>([])
   const [policyDraft, setPolicyDraft] = useState<Record<string, boolean>>({})
@@ -363,6 +365,11 @@ export const SystemSettingsModule = () => {
     () => filteredAuditLogs.filter((item) => !item.reviewed).map((item) => item.id),
     [filteredAuditLogs],
   )
+
+  function retainSelectableAuditIds(items: AuditLogItem[]) {
+    const allowedIds = new Set(items.filter((item) => !item.reviewed).map((item) => item.id))
+    setSelectedAuditIds((current) => current.filter((id) => allowedIds.has(id)))
+  }
 
   const loadSettingsData = async () => {
     try {
@@ -407,6 +414,7 @@ export const SystemSettingsModule = () => {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadSettingsData()
   }, [])
 
@@ -479,11 +487,6 @@ export const SystemSettingsModule = () => {
     }))
   }
 
-  const retainSelectableAuditIds = (items: AuditLogItem[]) => {
-    const allowedIds = new Set(items.filter((item) => !item.reviewed).map((item) => item.id))
-    setSelectedAuditIds((current) => current.filter((id) => allowedIds.has(id)))
-  }
-
   const toggleAuditSelection = (auditId: string) => {
     setSelectedAuditIds((current) => {
       if (current.includes(auditId)) {
@@ -501,7 +504,10 @@ export const SystemSettingsModule = () => {
     }
 
     try {
-      await auditLogsService.markReviewed({ auditLogIds: selectedAuditIds })
+      await auditLogsService.markReviewed({
+        auditLogIds: selectedAuditIds,
+        reviewedBy: user?.fullName || user?.email || 'System Settings',
+      })
       pushToast('success', `${selectedAuditIds.length} audit log entries marked reviewed.`)
       setSelectedAuditIds([])
       await loadSettingsData()

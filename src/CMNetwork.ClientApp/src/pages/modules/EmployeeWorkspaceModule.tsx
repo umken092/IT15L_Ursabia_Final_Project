@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@progress/kendo-react-buttons'
 import { expenseClaimsService, payslipsService } from '../../services/extendedOperationsService'
@@ -225,6 +226,7 @@ export const EmployeeWorkspaceModule = ({ moduleKey }: EmployeeWorkspaceModulePr
   }, [moduleKey])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProfileForm({
       fullName: user?.fullName ?? 'Employee User',
       email: user?.email ?? 'employee@cmnetwork.com',
