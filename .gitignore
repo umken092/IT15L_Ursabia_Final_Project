@@ -19,3 +19,6 @@ appsettings.Development.local.json
 # Prevent churn from legacy/static vendor assets in WebApi
 /src/CMNetwork.WebApi/wwwroot/lib/
 /wwwroot/lib/
+
+# Local agent-skills directory (external template clone, not part of source)
+/agent-skills/
