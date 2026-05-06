@@ -1,1 +1,0 @@
-import{t as e}from"./vendor-react-Ct8YZsmo.js";import{t}from"./GenericRoleDashboard-D6n6Kz5y.js";var n=e(),r=()=>(0,n.jsx)(t,{fallbackRole:`auditor`});export{r as AuditorDashboard};
