@@ -106,8 +106,12 @@ public class ApprovalsController : ControllerBase
         if (item.Status != ApprovalItemStatus.Pending)
             return BadRequest(new { message = "This approval item has already been processed." });
 
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (newStatus == ApprovalItemStatus.Approved && item.RequestedByUserId == currentUserId)
+            return BadRequest(new { message = "You cannot approve your own submission." });
+
         item.Status = newStatus;
-        item.ProcessedByUserId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        item.ProcessedByUserId = currentUserId ?? string.Empty;
         item.ProcessedByName = User.FindFirstValue(ClaimTypes.Email) ?? User.FindFirstValue(ClaimTypes.Name) ?? "system";
         item.Notes = notes?.Trim();
         item.ProcessedAtUtc = DateTime.UtcNow;
