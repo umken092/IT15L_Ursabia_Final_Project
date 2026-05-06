@@ -8,8 +8,9 @@ Write-Host "================================================" -ForegroundColor C
 Write-Host ""
 
 $rootDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$backendDir = $rootDir
-$frontendDir = Join-Path $rootDir "cmnetwork-erp"
+$backendProject = Join-Path $rootDir "src\CMNetwork.WebApi\CMNetwork.WebApi.csproj"
+$frontendDir = Join-Path $rootDir "src\CMNetwork.ClientApp"
+$backendJob = $null
 
 # Check if npm is installed
 $npmPath = Get-Command npm -ErrorAction SilentlyContinue
@@ -27,26 +28,33 @@ if (-not $dotnetPath) {
     exit 1
 }
 
-Write-Host "[1/2] Starting Backend (.NET API)..." -ForegroundColor Green
-Write-Host "        URL: https://localhost:7288/api" -ForegroundColor Yellow
-Write-Host ""
+$backendRunning = $null -ne (netstat -ano | Select-String ':5128\s+.*LISTENING')
 
-# Start backend in a new PowerShell window
-$backendScript = @"
+if ($backendRunning) {
+    Write-Host "[1/2] Backend already running on port 5128. Skipping backend startup." -ForegroundColor Yellow
+    Write-Host "        URL: http://localhost:5128/api" -ForegroundColor Yellow
+    Write-Host ""
+} else {
+    Write-Host "[1/2] Starting Backend (.NET API)..." -ForegroundColor Green
+    Write-Host "        URL: http://localhost:5128/api" -ForegroundColor Yellow
+    Write-Host ""
+
+    # Start backend in a new PowerShell window
+    $backendScript = @"
 try {
-    Set-Location "$backendDir"
+    Set-Location "$rootDir"
     Write-Host "Backend server starting..." -ForegroundColor Green
-    dotnet run
+    dotnet run --launch-profile http --project "$backendProject"
 } catch {
     Write-Host "Error starting backend: `$_" -ForegroundColor Red
 }
 "@
 
-$backendJob = Start-Process PowerShell -ArgumentList "-NoExit", "-Command", $backendScript -PassThru
-$backendWindowHandle = $backendJob.Handle
+    $backendJob = Start-Process PowerShell -ArgumentList "-NoExit", "-Command", $backendScript -PassThru
 
-# Wait for backend to start
-Start-Sleep -Seconds 3
+    # Wait for backend to start
+    Start-Sleep -Seconds 3
+}
 
 Write-Host "[2/2] Starting Frontend (React + Vite)..." -ForegroundColor Green
 Write-Host "        URL: http://localhost:5173/" -ForegroundColor Yellow
@@ -68,7 +76,7 @@ $frontendJob = Start-Process PowerShell -ArgumentList "-NoExit", "-Command", $fr
 Write-Host ""
 Write-Host "================================================" -ForegroundColor Cyan
 Write-Host "   Both services are starting..." -ForegroundColor Cyan
-Write-Host "   Backend:  https://localhost:7288/api" -ForegroundColor Yellow
+Write-Host "   Backend:  http://localhost:5128/api" -ForegroundColor Yellow
 Write-Host "   Frontend: http://localhost:5173/" -ForegroundColor Yellow
 Write-Host "================================================" -ForegroundColor Cyan
 Write-Host ""
@@ -81,7 +89,7 @@ Write-Host ""
 # Keep main window open and handle cleanup
 try {
     while ($true) {
-        if (-not (Get-Process -Id $backendJob.Id -ErrorAction SilentlyContinue)) {
+        if ($backendJob -and -not (Get-Process -Id $backendJob.Id -ErrorAction SilentlyContinue)) {
             Write-Host "Backend process has stopped." -ForegroundColor Yellow
         }
         if (-not (Get-Process -Id $frontendJob.Id -ErrorAction SilentlyContinue)) {
@@ -91,6 +99,8 @@ try {
     }
 } catch {
     # Cleanup on exit
-    Stop-Process -Id $backendJob.Id -Force -ErrorAction SilentlyContinue
+    if ($backendJob) {
+        Stop-Process -Id $backendJob.Id -Force -ErrorAction SilentlyContinue
+    }
     Stop-Process -Id $frontendJob.Id -Force -ErrorAction SilentlyContinue
 }

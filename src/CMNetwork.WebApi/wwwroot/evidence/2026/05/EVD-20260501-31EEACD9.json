@@ -1,0 +1,59 @@
+{
+  "archiveNumber": "EVD-20260501-31EEACD9",
+  "title": "Smoke Test Archive",
+  "description": "Auto-created during smoke test",
+  "generatedUtc": "2026-05-01T07:43:38.6264507Z",
+  "generatedBy": "tonyo.gaho@cmnetwork.com",
+  "generatedByEmail": "tonyo.gaho@cmnetwork.com",
+  "entryCount": 3,
+  "entries": [
+    {
+      "id": "9693c99b-e701-40b8-bf93-942d9b382777",
+      "createdUtc": "2026-05-01T07:43:28.7737473",
+      "category": "ApiRequest",
+      "entityName": "GET /api/auditor/evidence-archives",
+      "action": "GET",
+      "recordId": "200",
+      "performedBy": "b1d794e2-5673-4b6b-8049-a53b7881bd5b",
+      "userEmail": "tonyo.gaho@cmnetwork.com",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Microsoft Windows 10.0.26200; en-PH) PowerShell/7.6.1",
+      "isReviewed": false,
+      "reviewedBy": null,
+      "reviewedDate": null,
+      "details": "{\u0022path\u0022:\u0022/api/auditor/evidence-archives\u0022,\u0022method\u0022:\u0022GET\u0022,\u0022statusCode\u0022:200,\u0022durationMs\u0022:1}"
+    },
+    {
+      "id": "c5e878f5-ed2b-48f8-bc4d-bbbae57581de",
+      "createdUtc": "2026-05-01T07:43:38.2534154",
+      "category": "Login",
+      "entityName": "Auth",
+      "action": "LoginSucceeded",
+      "recordId": "b1d794e2-5673-4b6b-8049-a53b7881bd5b",
+      "performedBy": "b1d794e2-5673-4b6b-8049-a53b7881bd5b",
+      "userEmail": "tonyo.gaho@cmnetwork.com",
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Microsoft Windows 10.0.26200; en-PH) PowerShell/7.6.1",
+      "isReviewed": false,
+      "reviewedBy": null,
+      "reviewedDate": null,
+      "details": "{\u0022email\u0022:\u0022tonyo.gaho@cmnetwork.com\u0022,\u0022role\u0022:\u0022auditor\u0022}"
+    },
+    {
+      "id": "a11e57bd-67b3-4d0a-b92d-0b5125c8f405",
+      "createdUtc": "2026-05-01T07:43:38.2561017",
+      "category": "ApiRequest",
+      "entityName": "POST /api/auth/login",
+      "action": "POST",
+      "recordId": "200",
+      "performedBy": "system",
+      "userEmail": null,
+      "ipAddress": "::1",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Microsoft Windows 10.0.26200; en-PH) PowerShell/7.6.1",
+      "isReviewed": false,
+      "reviewedBy": null,
+      "reviewedDate": null,
+      "details": "{\u0022path\u0022:\u0022/api/auth/login\u0022,\u0022method\u0022:\u0022POST\u0022,\u0022statusCode\u0022:200,\u0022durationMs\u0022:72}"
+    }
+  ]
+}

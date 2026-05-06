@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: cmnetwork-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    healthCheckPath: /api/auth/health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: CMNETWORK_DB_MODE
+        value: MonsterAsp
+      - key: Database__UseMonsterAsp
+        value: "true"
+      - key: ConnectionStrings__MonsterAspConnection
+        sync: false
+      - key: Jwt__Secret
+        sync: false
+      - key: Jwt__Issuer
+        value: cmnetwork
+      - key: Jwt__Audience
+        value: cmnetwork-client
+      - key: Cors__AllowedOrigins__0
+        sync: false

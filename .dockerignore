@@ -1,0 +1,24 @@
+# Git
+.git
+.gitignore
+
+# Build outputs
+**/bin
+**/obj
+artifacts
+
+# Node
+**/node_modules
+
+# Editor/OS
+.vscode
+.idea
+.DS_Store
+
+# Local env/secrets
+**/.env
+**/.env.*
+**/appsettings.Development.json
+
+# Existing docs/output not needed for image
+dataabsestructure.md

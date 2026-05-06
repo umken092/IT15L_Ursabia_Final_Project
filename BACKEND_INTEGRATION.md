@@ -8,27 +8,30 @@
 
 ### Project Structure
 ```
-c:\Users\kennu\CMNetwork\
+c:\Users\kennu\CMNetwork\src\CMNetwork.WebApi\
 ├── Controllers/
 │   ├── AuthController.cs       # Authentication endpoints
 │   ├── DashboardController.cs  # Dashboard data endpoints
+│   ├── AdminController.cs      # Super admin system endpoints
 │   └── HomeController.cs       # Legacy MVC controller
 ├── Models/
 │   ├── AuthModels.cs           # Login request/response DTOs
 │   ├── DashboardModels.cs      # Dashboard metric DTOs
+│   ├── AdminModels.cs          # Admin DTOs
 │   └── ErrorViewModel.cs       # Error model
 ├── Services/
 │   ├── IAuthService.cs         # Auth service interface
-│   ├── AuthService.cs          # JWT authentication implementation
+│   ├── IdentityAuthService.cs  # Identity-based auth implementation
 │   ├── IDashboardService.cs    # Dashboard service interface
-│   └── DashboardService.cs     # Mock dashboard data service
+│   └── DashboardService.cs     # Database-backed dashboard service
 ├── Properties/
 │   └── launchSettings.json     # API port configuration
-├── appsettings.json            # Production settings (JWT secret, etc.)
+├── appsettings.json            # Production settings
 ├── appsettings.Development.json # Development settings
 ├── Program.cs                  # App configuration (CORS, JWT, services)
-└── CMNetwork.csproj           # Project file
+└── CMNetwork.WebApi.csproj     # Project file
 ```
+am
 
 ### API Endpoints
 
@@ -85,17 +88,17 @@ c:\Users\kennu\CMNetwork\
 #### Option 1: Visual Studio 2022
 1. Open `c:\Users\kennu\CMNetwork\CMNetwork.sln` (if exists) or the folder in VS 2022
 2. Press `Ctrl+F5` to run without debugging (or `F5` with debugging)
-3. App will run on `https://localhost:7288` (default HTTPS port)
+3. App will run on `https://localhost:7210` (https launch profile)
 
 #### Option 2: Command Line (PowerShell)
 ```powershell
 cd c:\Users\kennu\CMNetwork
-dotnet run
+dotnet run --launch-profile https --project .\src\CMNetwork.WebApi\CMNetwork.WebApi.csproj
 ```
 
 The API will be available at:
-- HTTPS: `https://localhost:7288/api`
-- HTTP: `http://localhost:5244/api` (if HTTP is enabled)
+- HTTPS: `https://localhost:7210/api`
+- HTTP: `http://localhost:5128/api`
 
 ### Testing the Backend
 
@@ -103,12 +106,12 @@ Use Postman or similar tool:
 
 1. **Health Check:**
    ```
-   GET https://localhost:7288/api/auth/health
+  GET https://localhost:7210/api/auth/health
    ```
 
 2. **Login:**
    ```
-   POST https://localhost:7288/api/auth/login
+  POST https://localhost:7210/api/auth/login
    Body: { "email": "accountant@cmnetwork.com", "password": "test" }
    ```
    Copy the returned `token` value.
@@ -121,7 +124,7 @@ Use Postman or similar tool:
 
 ### Test Users
 
-Pre-configured test accounts (accept any password):
+Pre-configured test accounts (password for all users: `Demo123!`):
 - `super-admin@cmnetwork.com` - Super Admin role
 - `accountant@cmnetwork.com` - Accountant role
 - `faculty-admin@cmnetwork.com` - Faculty Admin role
@@ -130,11 +133,6 @@ Pre-configured test accounts (accept any password):
 - `auditor@cmnetwork.com` - Auditor role
 - `cfo@cmnetwork.com` - CFO role
 - `multi-cfo-accountant@cmnetwork.com` - Multi-role user (CFO + Accountant)
-
-Or use email keywords to auto-infer roles:
-- `john-accountant@test.com` → Accountant role
-- `sarah-faculty-admin@test.com` → Faculty Admin role
-- `multi-cfo-accountant@test.com` → CFO + Accountant roles
 
 ---
 
@@ -145,7 +143,7 @@ Or use email keywords to auto-infer roles:
 
 ### Project Structure
 ```
-c:\Users\kennu\CMNetwork\cmnetwork-erp\
+c:\Users\kennu\CMNetwork\src\CMNetwork.ClientApp\
 ├── src/
 │   ├── pages/
 │   │   ├── LandingPage.tsx
@@ -163,9 +161,9 @@ c:\Users\kennu\CMNetwork\cmnetwork-erp\
 │   │   └── uiStore.ts              # UI state (theme, sidebar)
 │   ├── services/
 │   │   ├── apiClient.ts            # Axios HTTP client with auth interceptors
-│   │   ├── authService.ts          # Real API fallback to mock
-│   │   ├── dashboardService.ts     # Real API fallback to mock
-│   │   └── mockAuthApi.ts          # Fallback mock auth
+│   │   ├── authService.ts          # Identity-backed API auth
+│   │   ├── dashboardService.ts     # Database-backed dashboard API
+│   │   └── adminService.ts         # Admin module API layer
 │   ├── router/
 │   │   └── AppRouter.tsx
 │   ├── routes/
@@ -188,14 +186,14 @@ c:\Users\kennu\CMNetwork\cmnetwork-erp\
 
 #### Step 1: Install Dependencies
 ```bash
-cd c:\Users\kennu\CMNetwork\cmnetwork-erp
+cd c:\Users\kennu\CMNetwork\src\CMNetwork.ClientApp
 npm install
 ```
 
 #### Step 2: Configure API URL
 Frontend should already have `.env.local` configured:
 ```
-VITE_API_URL=https://localhost:7288/api
+VITE_API_URL=https://localhost:7210/api
 ```
 
 If not, create/update `.env.local` with your backend URL.
@@ -238,14 +236,14 @@ Outputs to `dist/` directory.
 ### Terminal 1: Backend (.NET API)
 ```powershell
 cd c:\Users\kennu\CMNetwork
-dotnet run
+dotnet run --launch-profile https --project .\src\CMNetwork.WebApi\CMNetwork.WebApi.csproj
 # Output: info: Microsoft.Hosting.Lifetime[14]
-#         Now listening on: https://localhost:7288
+#         Now listening on: https://localhost:7210
 ```
 
 ### Terminal 2: Frontend (React + Vite)
 ```bash
-cd c:\Users\kennu\CMNetwork\cmnetwork-erp
+cd c:\Users\kennu\CMNetwork\src\CMNetwork.ClientApp
 npm run dev
 # Output: VITE v8.0.10 ready in 279 ms
 #         Local: http://localhost:5173/
@@ -289,7 +287,7 @@ Frontend → Call authService.login() / dashboardService.getMetrics()
            Render dashboard with data (real or mock)
 ```
 
-This enables development/testing even if backend is down.
+The frontend is API-only; backend availability is required for authenticated workflows.
 
 ---
 
@@ -299,8 +297,8 @@ This enables development/testing even if backend is down.
 - **Symptom:** Login fails, dashboard shows mock data
 - **Cause:** Backend not running, wrong URL, CORS issue
 - **Fix:**
-  1. Check backend is running: `netstat -ano | findstr :7288` (PowerShell)
-  2. Verify frontend `.env.local` has correct URL: `VITE_API_URL=https://localhost:7288/api`
+  1. Check backend is running: `netstat -ano | findstr :7210` (PowerShell)
+  2. Verify frontend `.env.local` has correct URL: `VITE_API_URL=https://localhost:7210/api`
   3. Check browser DevTools → Network tab for CORS errors
   4. If CORS error, verify `Program.cs` has CORS policy for `http://localhost:5173`
 
