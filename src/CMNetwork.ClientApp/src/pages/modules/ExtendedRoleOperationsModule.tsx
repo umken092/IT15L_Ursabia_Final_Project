@@ -15,6 +15,7 @@ import { auditLogsService, budgetService, expenseClaimsService, approvalsService
 import { dashboardService, type BudgetControlResponse } from '../../services/dashboardService'
 import { convertAmount, formatMoney, useCurrencyStore, useDisplayCurrency } from '../../store/currencyStore'
 import { createBudgetReallocationSchema, createExpenseClaimSchema, type CreateBudgetReallocationInput, type CreateExpenseClaimInput } from '../../schemas/extendedSchemas'
+import { extractApiError } from '../../utils/errorUtils'
 
 export type ExtendedModuleKey =
   | 'department-report'
@@ -704,8 +705,8 @@ export const ExtendedRoleOperationsModule = ({ moduleKey }: ExtendedRoleOperatio
       await approvalsService.processApproval({ approvalId: next.id, action: 'Approve' })
       pushToast('success', `${next.id} approved.`)
       await loadApprovalQueue()
-    } catch {
-      pushToast('error', `Failed to approve ${next.id}.`)
+    } catch (error) {
+      pushToast('error', extractApiError(error, `Failed to approve ${next.id}.`))
     }
   }
 
@@ -740,8 +741,8 @@ export const ExtendedRoleOperationsModule = ({ moduleKey }: ExtendedRoleOperatio
       setShowClaimDialog(false)
       pushToast('success', 'New claim submitted.')
       await loadExpenseClaims()
-    } catch {
-      pushToast('error', 'Failed to submit claim.')
+    } catch (error) {
+      pushToast('error', extractApiError(error, 'Failed to submit claim.'))
     }
   }
 
@@ -763,8 +764,8 @@ export const ExtendedRoleOperationsModule = ({ moduleKey }: ExtendedRoleOperatio
       setShowBudgetDialog(false)
       pushToast('success', 'New budget reallocation request submitted for approval.')
       await loadApprovalQueue()
-    } catch {
-      pushToast('error', 'Failed to create budget reallocation request.')
+    } catch (error) {
+      pushToast('error', extractApiError(error, 'Failed to create budget reallocation request.'))
     }
   }
 
@@ -788,8 +789,8 @@ export const ExtendedRoleOperationsModule = ({ moduleKey }: ExtendedRoleOperatio
       link.click()
       URL.revokeObjectURL(url)
       pushToast('success', `${slipId} download started.`)
-    } catch {
-      pushToast('error', 'Failed to download payslip.')
+    } catch (error) {
+      pushToast('error', extractApiError(error, 'Failed to download payslip.'))
     }
   }
 

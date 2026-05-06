@@ -215,7 +215,7 @@ public class ARInvoicesController : ControllerBase
                 .ToListAsync();
 
             if (accounts.Count != accountIds.Count)
-                return BadRequest("One or more accounts not found or inactive");
+                return BadRequest(new { message = "One or more accounts not found or inactive." });
 
             // Add new lines
             decimal totalAmount = 0;
@@ -311,4 +311,45 @@ public class ARInvoicesController : ControllerBase
 
         return Ok(new { message = "Invoice voided successfully", invoiceId = id });
     }
+
+    [HttpPost("{id:guid}/mark-paid")]
+    [Authorize(Roles = "accountant,cfo,super-admin")]
+    public async Task<IActionResult> MarkARInvoicePaid(Guid id, [FromBody] MarkPaidRequest request)
+    {
+        var invoice = await _dbContext.ARInvoices.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+        if (invoice is null)
+            return NotFound(new { message = "AR invoice not found." });
+
+        if (invoice.Status == ARInvoiceStatus.Paid)
+            return BadRequest(new { message = "Invoice is already marked as paid." });
+
+        if (invoice.Status == ARInvoiceStatus.Void)
+            return BadRequest(new { message = "Cannot mark a voided invoice as paid." });
+
+        if (invoice.Status == ARInvoiceStatus.Draft)
+            return BadRequest(new { message = "Cannot mark a draft invoice as paid. Send or approve it first." });
+
+        invoice.Status = ARInvoiceStatus.Paid;
+        invoice.LastModifiedByUserId = User.FindFirst("sub")?.Value ?? "system";
+        invoice.LastModifiedUtc = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync();
+
+        await _audit.LogAsync(
+            entityName: "ARInvoice",
+            action: "MarkedPaid",
+            category: AuditCategories.DataChange,
+            recordId: invoice.Id.ToString(),
+            details: new
+            {
+                invoice.InvoiceNumber,
+                invoice.CustomerId,
+                invoice.TotalAmount,
+                paymentReference = request.PaymentReference,
+            });
+
+        return Ok(new { message = "Invoice marked as paid.", invoiceId = id });
+    }
 }
+
+public record MarkPaidRequest(string? PaymentReference);

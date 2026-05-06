@@ -224,7 +224,7 @@ public class AdminController : ControllerBase
         var user = await _userManager.FindByIdAsync(id.ToString());
         if (user is null)
         {
-            return NotFound();
+            return NotFound(new { message = "User not found." });
         }
 
         user.FirstName = request.FirstName;
@@ -273,7 +273,7 @@ public class AdminController : ControllerBase
         var user = await _userManager.FindByIdAsync(id.ToString());
         if (user is null)
         {
-            return NotFound();
+            return NotFound(new { message = "User not found." });
         }
 
         user.IsActive = false;
@@ -293,7 +293,7 @@ public class AdminController : ControllerBase
     public async Task<IActionResult> UnlockUser(Guid id)
     {
         var user = await _userManager.FindByIdAsync(id.ToString());
-        if (user is null) return NotFound();
+        if (user is null) return NotFound(new { message = "User not found." });
 
         await _userManager.ResetAccessFailedCountAsync(user);
         await _userManager.SetLockoutEndDateAsync(user, null);
@@ -319,7 +319,7 @@ public class AdminController : ControllerBase
         var user = await _userManager.FindByIdAsync(id.ToString());
         if (user is null)
         {
-            return NotFound();
+            return NotFound(new { message = "User not found." });
         }
 
         var roles = await _userManager.GetRolesAsync(user);
@@ -426,7 +426,7 @@ public class AdminController : ControllerBase
         var policy = await _dbContext.SecurityPolicies.FirstOrDefaultAsync(x => x.Id == id);
         if (policy is null)
         {
-            return NotFound();
+            return NotFound(new { message = "Security policy not found." });
         }
 
         policy.IsEnabled = !policy.IsEnabled;

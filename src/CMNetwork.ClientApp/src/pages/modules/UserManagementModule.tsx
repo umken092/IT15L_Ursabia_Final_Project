@@ -647,8 +647,8 @@ export const UserManagementModule = () => {
       setShowEditDialog(false)
       setSelectedEmployee(null)
       pushToast('success', 'Employee updated successfully.')
-    } catch {
-      pushToast('error', 'Unable to update employee account.')
+    } catch (error) {
+      pushToast('error', getErrorMessage(error, 'Unable to update employee account.'))
     }
   }
 

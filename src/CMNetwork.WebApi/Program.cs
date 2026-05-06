@@ -206,6 +206,21 @@ using (var scope = app.Services.CreateScope())
 {
     var db     = scope.ServiceProvider.GetRequiredService<CMNetworkDbContext>();
     var recurringJobManager = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
+
+    // Safety guard: warn loudly if the Development environment is pointed at the production database.
+    if (app.Environment.IsDevelopment())
+    {
+        var connStr = db.Database.GetConnectionString() ?? string.Empty;
+        if (connStr.Contains("db49851.databaseasp.net", StringComparison.OrdinalIgnoreCase))
+        {
+            var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
+                .CreateLogger("CMNetwork.Startup");
+            startupLogger.LogCritical(
+                "⚠ DANGER: The Development environment is connected to the PRODUCTION database (db49851.databaseasp.net). " +
+                "Stop the application immediately and check your appsettings.Development.json / environment variables.");
+        }
+    }
+
     await db.Database.MigrateAsync();
     
     // Only seed demo data in Development environment

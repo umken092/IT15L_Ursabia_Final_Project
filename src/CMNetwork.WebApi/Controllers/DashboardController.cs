@@ -10,6 +10,13 @@ namespace CMNetwork.Controllers;
 [Authorize]
 public class DashboardController : ControllerBase
 {
+    private static readonly HashSet<string> KnownRoles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "super-admin", "admin", "accountant", "auditor", "budget-manager",
+        "budget-officer", "employee", "vendor", "faculty-admin", "cfo",
+        "authorized-viewer"
+    };
+
     private readonly IDashboardService _dashboardService;
     private readonly ILogger<DashboardController> _logger;
 
@@ -22,66 +29,34 @@ public class DashboardController : ControllerBase
     [HttpGet("{role}/metrics")]
     public async Task<IActionResult> GetMetrics(string role)
     {
-        try
+        if (string.IsNullOrWhiteSpace(role) || !KnownRoles.Contains(role))
         {
-            if (string.IsNullOrWhiteSpace(role))
-            {
-                return BadRequest(new { message = "Role is required" });
-            }
+            return BadRequest(new { message = $"Unknown role '{role}'. No metrics available." });
+        }
 
-            var response = await _dashboardService.GetMetricsAsync(role);
-            return Ok(response);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError($"Error getting metrics for role {role}: {ex.Message}");
-            return StatusCode(500, new { message = "An error occurred while retrieving metrics" });
-        }
+        var response = await _dashboardService.GetMetricsAsync(role);
+        return Ok(response);
     }
 
     [HttpGet("charts")]
     public async Task<IActionResult> GetChartData()
     {
-        try
-        {
-            var response = await _dashboardService.GetChartDataAsync();
-            return Ok(response);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError($"Error getting chart data: {ex.Message}");
-            return StatusCode(500, new { message = "An error occurred while retrieving chart data" });
-        }
+        var response = await _dashboardService.GetChartDataAsync();
+        return Ok(response);
     }
 
     [HttpGet("approvals")]
     public async Task<IActionResult> GetApprovals()
     {
-        try
-        {
-            var response = await _dashboardService.GetApprovalsAsync();
-            return Ok(response);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError($"Error getting approvals: {ex.Message}");
-            return StatusCode(500, new { message = "An error occurred while retrieving approvals" });
-        }
+        var response = await _dashboardService.GetApprovalsAsync();
+        return Ok(response);
     }
 
     [HttpGet("audit-activities")]
     public async Task<IActionResult> GetAuditActivities()
     {
-        try
-        {
-            var response = await _dashboardService.GetAuditActivitiesAsync();
-            return Ok(response);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError($"Error getting audit activities: {ex.Message}");
-            return StatusCode(500, new { message = "An error occurred while retrieving audit activities" });
-        }
+        var response = await _dashboardService.GetAuditActivitiesAsync();
+        return Ok(response);
     }
 
     [HttpGet("health")]
@@ -94,15 +69,7 @@ public class DashboardController : ControllerBase
     [HttpGet("budget-control")]
     public async Task<IActionResult> GetBudgetControl([FromQuery] int? year = null)
     {
-        try
-        {
-            var response = await _dashboardService.GetBudgetControlAsync(year);
-            return Ok(response);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError($"Error getting budget control data: {ex.Message}");
-            return StatusCode(500, new { message = "An error occurred while retrieving budget control data" });
-        }
+        var response = await _dashboardService.GetBudgetControlAsync(year);
+        return Ok(response);
     }
 }

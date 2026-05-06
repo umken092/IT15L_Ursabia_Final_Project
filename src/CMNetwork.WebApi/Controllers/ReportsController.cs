@@ -505,11 +505,11 @@ public class ReportsController : ControllerBase
             .FirstOrDefaultAsync(x => x.Name == $"{TemplatePrefix}{id}");
 
         if (row is null)
-            return NotFound();
+            return NotFound(new { message = "Report template not found." });
 
         var mapped = MapTemplate(row);
         if (mapped is null)
-            return NotFound();
+            return NotFound(new { message = "Report template data is invalid or corrupt." });
 
         var userIdentity = GetCurrentUserIdentity();
         var canDelete = mapped.Owner.Equals(userIdentity, StringComparison.OrdinalIgnoreCase)
@@ -589,7 +589,7 @@ public class ReportsController : ControllerBase
             .FirstOrDefaultAsync(x => x.Name == $"{SchedulePrefix}{id}");
 
         if (row is null)
-            return NotFound();
+            return NotFound(new { message = "Report schedule not found." });
 
         var payload = new SchedulePayload(request.Label.Trim(), request.Type, request.Cadence, request.Target);
         row.Status = request.Active ? "active" : "inactive";
@@ -617,7 +617,7 @@ public class ReportsController : ControllerBase
             .FirstOrDefaultAsync(x => x.Name == $"{SchedulePrefix}{id}");
 
         if (row is null)
-            return NotFound();
+            return NotFound(new { message = "Report schedule not found." });
 
         row.LastSyncUtc = DateTime.UtcNow;
         await _db.SaveChangesAsync();
