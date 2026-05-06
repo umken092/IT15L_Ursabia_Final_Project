@@ -120,6 +120,13 @@ public class ExpenseClaimsController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
+        var claimDate = request.ClaimDate != default
+            ? request.ClaimDate
+            : request.Date;
+
+        if (claimDate is null || claimDate == default)
+            return BadRequest(new { message = "Claim date is required." });
+
         var userId = GetCurrentUserId();
         if (!Guid.TryParse(userId, out var employeeId))
             return Unauthorized(new { message = "Token is missing a valid user id claim." });
@@ -134,7 +141,7 @@ public class ExpenseClaimsController : ControllerBase
             ClaimNumber = claimNumber,
             EmployeeId = employeeId,
             EmployeeName = userName,
-            ClaimDate = request.ClaimDate,
+            ClaimDate = claimDate.Value,
             Category = request.Category.Trim(),
             Description = request.Description.Trim(),
             Amount = decimal.Round(request.Amount, 2),
@@ -256,6 +263,7 @@ public class ExpenseClaimsController : ControllerBase
 public record CreateExpenseClaimRequest
 {
     public DateOnly ClaimDate { get; init; }
+    public DateOnly? Date { get; init; }
     public string Category { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
     public decimal Amount { get; init; }
