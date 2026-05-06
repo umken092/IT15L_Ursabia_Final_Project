@@ -183,6 +183,7 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
             entity.Property(x => x.CreatedBy).HasMaxLength(256).IsRequired();
             entity.Property(x => x.PostedBy).HasMaxLength(256);
             entity.HasIndex(x => x.EntryNumber).IsUnique();
+            entity.HasIndex(x => x.EntryDate);
             entity.HasMany(x => x.Lines)
                 .WithOne(x => x.JournalEntry)
                 .HasForeignKey(x => x.JournalEntryId)
@@ -256,7 +257,7 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
                 .HasForeignKey(x => x.VendorId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(x => x.InvoiceNumber).IsUnique();
-            entity.HasIndex(x => new { x.VendorId, x.Status });
+            entity.HasIndex(x => new { x.VendorId, x.Status, x.InvoiceDate });
             entity.HasIndex(x => x.IsDeleted);
         });
 
@@ -294,7 +295,7 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
                 .HasForeignKey(x => x.CustomerId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(x => x.InvoiceNumber).IsUnique();
-            entity.HasIndex(x => new { x.CustomerId, x.Status });
+            entity.HasIndex(x => new { x.CustomerId, x.Status, x.InvoiceDate });
             entity.HasIndex(x => x.IsDeleted);
         });
 
@@ -376,6 +377,10 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
             entity.Property(x => x.ReviewNotes).HasMaxLength(512);
             entity.HasIndex(x => x.ClaimNumber).IsUnique();
             entity.HasIndex(x => x.EmployeeId);
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.EmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // ── ApprovalQueue ─────────────────────────────────────────────────────
@@ -390,6 +395,7 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
             entity.Property(x => x.ProcessedByName).HasMaxLength(256);
             entity.Property(x => x.Notes).HasMaxLength(512);
             entity.Property(x => x.Amount).HasPrecision(18, 2);
+            entity.HasIndex(x => new { x.Status, x.RequiredApproverRole });
         });
 
         // ── Payslip ───────────────────────────────────────────────────────────

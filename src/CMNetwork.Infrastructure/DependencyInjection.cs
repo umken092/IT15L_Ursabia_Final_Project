@@ -49,12 +49,12 @@ public static class DependencyInjection
         // ASP.NET Core Identity
         services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
         {
-            options.Password.RequiredLength = 8;
-            options.Password.RequiredUniqueChars = 1;
-            options.Password.RequireUppercase = false;
-            options.Password.RequireLowercase = false;
-            options.Password.RequireDigit = false;
-            options.Password.RequireNonAlphanumeric = false;
+            options.Password.RequiredLength = 12;
+            options.Password.RequiredUniqueChars = 4;
+            options.Password.RequireUppercase = true;
+            options.Password.RequireLowercase = true;
+            options.Password.RequireDigit = true;
+            options.Password.RequireNonAlphanumeric = true;
             options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
             options.Lockout.MaxFailedAccessAttempts = 5;
             options.Lockout.AllowedForNewUsers = true;
