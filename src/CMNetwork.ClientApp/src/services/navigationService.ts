@@ -130,4 +130,7 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
     { label: 'Budget Control', path: '/module/budget-control' },
     { label: 'Reports', path: '/module/reports' },
   ],
+  customer: [
+    { label: 'My Invoices', path: '/dashboard/customer' },
+  ],
 }

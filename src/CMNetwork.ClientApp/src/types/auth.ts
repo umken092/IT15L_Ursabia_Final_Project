@@ -6,6 +6,7 @@ export type Role =
   | 'authorized-viewer'
   | 'auditor'
   | 'cfo'
+  | 'customer'
 
 export interface User {
   id: string
@@ -30,6 +31,7 @@ export const roleLabels: Record<Role, string> = {
   'authorized-viewer': 'Authorized Viewer',
   auditor: 'Auditor',
   cfo: 'CFO',
+  customer: 'Customer',
 }
 
 export const roleDashboardPath = (role: Role): string => `/dashboard/${role}`

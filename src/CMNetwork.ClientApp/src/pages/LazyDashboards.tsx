@@ -51,6 +51,13 @@ const CfoDashboard = lazy(
     })),
 )
 
+const CustomerDashboard = lazy(
+  () =>
+    import('./dashboards/CustomerDashboard').then((m) => ({
+      default: m.CustomerDashboard,
+    })),
+)
+
 const LoadingFallback = () => (
   <div
     style={{
@@ -101,6 +108,11 @@ export const LazyDashboards = {
   CfoDashboard: () => (
     <Suspense fallback={<LoadingFallback />}>
       <CfoDashboard />
+    </Suspense>
+  ),
+  CustomerDashboard: () => (
+    <Suspense fallback={<LoadingFallback />}>
+      <CustomerDashboard />
     </Suspense>
   ),
 }

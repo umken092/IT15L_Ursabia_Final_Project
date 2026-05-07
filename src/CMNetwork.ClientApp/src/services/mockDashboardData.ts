@@ -96,6 +96,9 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
     { label: 'Financial Reports', path: '/module/financial-reports' },
     { label: 'Reports', path: '/module/reports' },
   ],
+  customer: [
+    { label: 'My Invoices', path: '/dashboard/customer' },
+  ],
 }
 
 export const chartData = {

@@ -442,6 +442,227 @@ public class AdminController : ControllerBase
         return NoContent();
     }
 
+    // ── SMTP Settings ─────────────────────────────────────────────────────
+
+    private const string SmtpSettingsPolicyName = "smtp-settings";
+    private static readonly Guid SmtpSettingsPolicyId = Guid.Parse("40000000-0000-0000-0000-000000000001");
+
+    [HttpGet("smtp-settings")]
+    public async Task<IActionResult> GetSmtpSettings()
+    {
+        var policy = await _dbContext.SecurityPolicies
+            .FirstOrDefaultAsync(x => x.Name == SmtpSettingsPolicyName);
+        if (policy is null)
+        {
+            return Ok(new SmtpSettingsDto());
+        }
+
+        try
+        {
+            var dto = JsonSerializer.Deserialize<SmtpSettingsDto>(policy.Value, SecurityPolicyJsonOptions)
+                      ?? new SmtpSettingsDto();
+            return Ok(dto);
+        }
+        catch (JsonException)
+        {
+            return Ok(new SmtpSettingsDto());
+        }
+    }
+
+    [HttpPut("smtp-settings")]
+    public async Task<IActionResult> UpdateSmtpSettings([FromBody] SmtpSettingsDto? request)
+    {
+        if (request is null)
+        {
+            return BadRequest(new { message = "SMTP settings payload is required." });
+        }
+
+        var policy = await _dbContext.SecurityPolicies
+            .FirstOrDefaultAsync(x => x.Name == SmtpSettingsPolicyName);
+
+        if (policy is null)
+        {
+            policy = new CMNetwork.Domain.Entities.SecurityPolicy
+            {
+                Id = SmtpSettingsPolicyId,
+                Name = SmtpSettingsPolicyName,
+                Description = "SMTP email integration configuration.",
+                IsEnabled = true,
+            };
+            _dbContext.SecurityPolicies.Add(policy);
+        }
+
+        policy.Value = JsonSerializer.Serialize(request, SecurityPolicyJsonOptions);
+        await _dbContext.SaveChangesAsync();
+
+        await _audit.LogAsync(
+            entityName: "SmtpSettings",
+            action: "Updated",
+            category: AuditCategories.System,
+            recordId: policy.Id.ToString(),
+            details: new { request.Host, request.Port, request.FromEmail, request.Security });
+
+        return Ok(request);
+    }
+
+    // ── PayMongo Settings ─────────────────────────────────────────────────
+
+    private const string PayMongoPolicyName = "paymongo-settings";
+    private static readonly Guid PayMongoPolicyId = Guid.Parse("40000000-0000-0000-0000-000000000002");
+
+    [HttpGet("paymongo-settings")]
+    public async Task<IActionResult> GetPayMongoSettings()
+    {
+        var policy = await _dbContext.SecurityPolicies
+            .FirstOrDefaultAsync(x => x.Name == PayMongoPolicyName);
+        if (policy is null)
+        {
+            return Ok(new PayMongoSettingsDto());
+        }
+
+        try
+        {
+            var dto = JsonSerializer.Deserialize<PayMongoSettingsDto>(policy.Value, SecurityPolicyJsonOptions)
+                      ?? new PayMongoSettingsDto();
+            return Ok(dto);
+        }
+        catch (JsonException)
+        {
+            return Ok(new PayMongoSettingsDto());
+        }
+    }
+
+    [HttpPut("paymongo-settings")]
+    public async Task<IActionResult> UpdatePayMongoSettings([FromBody] PayMongoSettingsDto? request)
+    {
+        if (request is null)
+        {
+            return BadRequest(new { message = "PayMongo settings payload is required." });
+        }
+
+        var policy = await _dbContext.SecurityPolicies
+            .FirstOrDefaultAsync(x => x.Name == PayMongoPolicyName);
+
+        if (policy is null)
+        {
+            policy = new CMNetwork.Domain.Entities.SecurityPolicy
+            {
+                Id = PayMongoPolicyId,
+                Name = PayMongoPolicyName,
+                Description = "PayMongo payment gateway configuration.",
+                IsEnabled = true,
+            };
+            _dbContext.SecurityPolicies.Add(policy);
+        }
+
+        policy.Value = JsonSerializer.Serialize(request, SecurityPolicyJsonOptions);
+        await _dbContext.SaveChangesAsync();
+
+        await _audit.LogAsync(
+            entityName: "PayMongoSettings",
+            action: "Updated",
+            category: AuditCategories.System,
+            recordId: policy.Id.ToString(),
+            details: new { request.Mode });
+
+        return Ok(request);
+    }
+
+    // ── Role Permissions ──────────────────────────────────────────────────
+
+    private const string RolePermissionsPolicyNamePrefix = "role-permissions:";
+    private static readonly Dictionary<string, Guid> RolePermissionPolicyIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "super-admin",      Guid.Parse("50000000-0000-0000-0000-000000000001") },
+        { "accountant",       Guid.Parse("50000000-0000-0000-0000-000000000002") },
+        { "faculty-admin",    Guid.Parse("50000000-0000-0000-0000-000000000003") },
+        { "employee",         Guid.Parse("50000000-0000-0000-0000-000000000004") },
+        { "authorized-viewer",Guid.Parse("50000000-0000-0000-0000-000000000005") },
+        { "auditor",          Guid.Parse("50000000-0000-0000-0000-000000000006") },
+        { "cfo",              Guid.Parse("50000000-0000-0000-0000-000000000007") },
+        { "customer",         Guid.Parse("50000000-0000-0000-0000-000000000008") },
+    };
+
+    private static Guid RolePermissionsPolicyId(string roleKey) =>
+        RolePermissionPolicyIds.TryGetValue(roleKey, out var id) ? id : Guid.NewGuid();
+
+    private static readonly HashSet<string> KnownRoleKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "super-admin", "accountant", "faculty-admin", "employee",
+        "authorized-viewer", "auditor", "cfo", "customer",
+    };
+
+    [HttpGet("roles/{role}/permissions")]
+    public async Task<IActionResult> GetRolePermissions(string role)
+    {
+        if (!KnownRoleKeys.Contains(role))
+        {
+            return NotFound(new { message = $"Unknown role '{role}'." });
+        }
+
+        var policyName = RolePermissionsPolicyNamePrefix + role.ToLowerInvariant();
+        var policy = await _dbContext.SecurityPolicies
+            .FirstOrDefaultAsync(x => x.Name == policyName);
+
+        if (policy is null)
+        {
+            return Ok(new RolePermissionSetDto());
+        }
+
+        try
+        {
+            var dto = JsonSerializer.Deserialize<RolePermissionSetDto>(policy.Value, SecurityPolicyJsonOptions)
+                      ?? new RolePermissionSetDto();
+            return Ok(dto);
+        }
+        catch (JsonException)
+        {
+            return Ok(new RolePermissionSetDto());
+        }
+    }
+
+    [HttpPut("roles/{role}/permissions")]
+    public async Task<IActionResult> UpdateRolePermissions(string role, [FromBody] RolePermissionSetDto? request)
+    {
+        if (!KnownRoleKeys.Contains(role))
+        {
+            return NotFound(new { message = $"Unknown role '{role}'." });
+        }
+
+        if (request is null)
+        {
+            return BadRequest(new { message = "Permissions payload is required." });
+        }
+
+        var policyName = RolePermissionsPolicyNamePrefix + role.ToLowerInvariant();
+        var policy = await _dbContext.SecurityPolicies
+            .FirstOrDefaultAsync(x => x.Name == policyName);
+
+        if (policy is null)
+        {
+            policy = new CMNetwork.Domain.Entities.SecurityPolicy
+            {
+                Id = RolePermissionsPolicyId(role),
+                Name = policyName,
+                Description = $"Permission set for role: {role}.",
+                IsEnabled = true,
+            };
+            _dbContext.SecurityPolicies.Add(policy);
+        }
+
+        policy.Value = JsonSerializer.Serialize(request, SecurityPolicyJsonOptions);
+        await _dbContext.SaveChangesAsync();
+
+        await _audit.LogAsync(
+            entityName: "RolePermissions",
+            action: "Updated",
+            category: AuditCategories.Security,
+            recordId: policy.Id.ToString(),
+            details: new { Role = role, PermissionCount = request.Permissions.Count });
+
+        return Ok(request);
+    }
+
     [HttpGet("integrations")]
     public async Task<IActionResult> GetIntegrations()
     {

@@ -68,6 +68,12 @@ const SYSTEM_ROLES: RoleMeta[] = [
     description: 'Approves budgets and reviews all consolidated financial reports.',
     isSystem: true,
   },
+  {
+    key: 'customer',
+    label: 'Customer',
+    description: 'Read-only portal access to own invoices and account statements.',
+    isSystem: true,
+  },
 ]
 
 const MODULE_LIST = [
@@ -129,6 +135,9 @@ const DEFAULT_PERMS: Record<string, Set<string>> = {
     'financial-reports:view',
     'budget-control:view', 'budget-control:edit',
     'audit-logs:view',
+  ]),
+  customer: new Set([
+    'av-reports:view',
   ]),
 }
 
@@ -202,6 +211,27 @@ export const RolesPermissionsModule = () => {
     setSelectedPermRole(roleKey)
     setPermRows(buildPermRows(roleKey))
     setPermsDirty(false)
+    // Load persisted permissions from backend and merge over the defaults
+    const loadPerms = async () => {
+      try {
+        const saved = await adminService.getRolePermissions(roleKey)
+        if (saved.length > 0) {
+          setPermRows(
+            MODULE_LIST.map((m) => ({
+              moduleKey: m.key,
+              moduleLabel: m.label,
+              view: saved.includes(`${m.key}:view`),
+              create: saved.includes(`${m.key}:create`),
+              edit: saved.includes(`${m.key}:edit`),
+              del: saved.includes(`${m.key}:delete`),
+            })),
+          )
+        }
+      } catch {
+        // Non-fatal — keep defaults already set above
+      }
+    }
+    void loadPerms()
   }
 
   const togglePerm = (idx: number, field: 'view' | 'create' | 'edit' | 'del') => {
@@ -213,14 +243,26 @@ export const RolesPermissionsModule = () => {
 
   const handleSavePerms = async () => {
     setSavingPerms(true)
-    // Simulated API call — wire to backend when claims endpoint is ready
-    await new Promise<void>((resolve) => setTimeout(resolve, 700))
-    setSavingPerms(false)
-    setPermsDirty(false)
-    pushToast(
-      'success',
-      `Permissions saved for ${allRoles.find((r) => r.key === selectedPermRole)?.label ?? selectedPermRole}.`,
-    )
+    try {
+      const permissions = permRows.flatMap((row) => {
+        const perms: string[] = []
+        if (row.view) perms.push(`${row.moduleKey}:view`)
+        if (row.create) perms.push(`${row.moduleKey}:create`)
+        if (row.edit) perms.push(`${row.moduleKey}:edit`)
+        if (row.del) perms.push(`${row.moduleKey}:delete`)
+        return perms
+      })
+      await adminService.updateRolePermissions(selectedPermRole, permissions)
+      setPermsDirty(false)
+      pushToast(
+        'success',
+        `Permissions saved for ${allRoles.find((r) => r.key === selectedPermRole)?.label ?? selectedPermRole}.`,
+      )
+    } catch {
+      pushToast('error', 'Failed to save permissions.')
+    } finally {
+      setSavingPerms(false)
+    }
   }
 
   // ── Define Roles tab handlers ────────────────────────────────────────────

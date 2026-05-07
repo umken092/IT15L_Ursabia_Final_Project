@@ -122,6 +122,36 @@ export const IntegrationSettingsModule = () => {
     void loadIntegrations()
   }, [pushToast])
 
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const [smtpData, pmData] = await Promise.all([
+          adminService.getSmtpSettings(),
+          adminService.getPayMongoSettings(),
+        ])
+        setSmtp((s) => ({
+          ...s,
+          host: smtpData.host,
+          port: String(smtpData.port),
+          username: smtpData.username,
+          password: smtpData.password,
+          fromEmail: smtpData.fromEmail,
+          fromName: smtpData.fromName || 'CMNetwork',
+          security: smtpData.security as SmtpSecurity,
+        }))
+        setPaymongo((p) => ({
+          ...p,
+          publicKey: pmData.publicKey,
+          secretKey: pmData.secretKey,
+          mode: pmData.mode as 'test' | 'live',
+        }))
+      } catch {
+        // Non-fatal — form stays at defaults if settings haven't been saved yet
+      }
+    }
+    void loadSettings()
+  }, [])
+
   // ── PayMongo ──────────────────────────────────────────────────────────────
 
   const handleTestPaymongo = async () => {
@@ -138,9 +168,18 @@ export const IntegrationSettingsModule = () => {
 
   const handleSavePaymongo = async () => {
     setSavingPm(true)
-    await new Promise<void>((r) => setTimeout(r, 700))
-    setSavingPm(false)
-    pushToast('success', 'PayMongo settings saved.')
+    try {
+      await adminService.updatePayMongoSettings({
+        publicKey: paymongo.publicKey,
+        secretKey: paymongo.secretKey,
+        mode: paymongo.mode,
+      })
+      pushToast('success', 'PayMongo settings saved.')
+    } catch {
+      pushToast('error', 'Failed to save PayMongo settings.')
+    } finally {
+      setSavingPm(false)
+    }
   }
 
   // ── SMTP ──────────────────────────────────────────────────────────────────
@@ -158,9 +197,22 @@ export const IntegrationSettingsModule = () => {
 
   const handleSaveSmtp = async () => {
     setSavingSmtp(true)
-    await new Promise<void>((r) => setTimeout(r, 700))
-    setSavingSmtp(false)
-    pushToast('success', 'SMTP settings saved.')
+    try {
+      await adminService.updateSmtpSettings({
+        host: smtp.host,
+        port: parseInt(smtp.port, 10) || 587,
+        username: smtp.username,
+        password: smtp.password,
+        fromEmail: smtp.fromEmail,
+        fromName: smtp.fromName,
+        security: smtp.security,
+      })
+      pushToast('success', 'SMTP settings saved.')
+    } catch {
+      pushToast('error', 'Failed to save SMTP settings.')
+    } finally {
+      setSavingSmtp(false)
+    }
   }
 
   let integrationContent = <p className="is-muted">No integration records are configured.</p>

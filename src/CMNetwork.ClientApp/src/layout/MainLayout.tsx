@@ -59,6 +59,7 @@ const dashboardPathByRole: Record<Role, string> = {
   'authorized-viewer': '/dashboard/authorized-viewer',
   auditor: '/dashboard/auditor',
   cfo: '/dashboard/cfo',
+  customer: '/dashboard/customer',
 }
 
 const breadcrumbLabelByPath: Partial<Record<Role, Record<string, string[]>>> = {

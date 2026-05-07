@@ -17,7 +17,7 @@ public class DatabaseSeeder
     private static readonly string[] Roles =
     [
         "super-admin", "accountant", "faculty-admin", "employee",
-        "authorized-viewer", "auditor", "cfo"
+        "authorized-viewer", "auditor", "cfo", "customer"
     ];
 
     private static readonly Guid FinanceDeptId = Guid.Parse("10000000-0000-0000-0000-000000000001");

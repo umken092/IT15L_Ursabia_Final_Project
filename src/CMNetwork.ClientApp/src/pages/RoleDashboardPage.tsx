@@ -13,6 +13,7 @@ const isRole = (value: string): value is Role => {
     'authorized-viewer',
     'auditor',
     'cfo',
+    'customer',
   ].includes(value)
 }
 
@@ -24,6 +25,7 @@ const dashboardMap: Record<Role, () => JSX.Element> = {
   'authorized-viewer': LazyDashboards.AuthorizedViewerDashboard,
   auditor: LazyDashboards.AuditorDashboard,
   cfo: LazyDashboards.CfoDashboard,
+  customer: LazyDashboards.CustomerDashboard,
 }
 
 export const RoleDashboardPage = () => {

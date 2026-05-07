@@ -1,9 +1,16 @@
-name: CI / Deploy → MonsterAsp
+name: CI / Deploy → Render
 
 # ─── Triggers ────────────────────────────────────────────────────────────────
 # • PRs to main  → quality gates only (no deploy)
-# • Push to main → quality gates, then auto-deploy via WebDeploy
+# • Push to main → quality gates, then deploy to Render via deploy hook
 # • workflow_dispatch → manual trigger of the full pipeline
+#
+# Required GitHub secrets (Settings → Secrets → Actions):
+#   RENDER_DEPLOY_HOOK_URL   Render dashboard → Service → Deploy → Deploy Hook URL
+#
+# Required GitHub variables (Settings → Variables → Actions):
+#   RENDER_API_URL           e.g. https://cmnetwork-api.onrender.com
+#                            Used for the post-deploy smoke test.
 
 on:
   pull_request:
@@ -49,102 +56,50 @@ jobs:
       - name: Backend build
         run: dotnet build CMNetwork.sln --configuration Release
 
-  # ── 2. Deploy to MonsterAsp ───────────────────────────────────────────────
-  # Runs only on push to main, after quality gates pass.
-  # Uses WebDeploy (MSDeploy) to push the framework-dependent publish output to
-  # the MonsterAsp site (hosting bundle provides .NET 10 runtime).
-  # MonsterAsp's panel "GitHub Deploy" only does a raw git-clone — it does NOT
-  # build; this job is the correct alternative.
-  #
-  # Required GitHub secrets (Settings → Secrets → Actions):
-  #   MONSTERASP_WEBSITE_NAME   e.g.  site12345
-  #   MONSTERASP_SERVER_URL     e.g.  https://site12345.siteasp.net:8172
-  #   MONSTERASP_USERNAME       e.g.  site12345
-  #   MONSTERASP_PASSWORD       WebDeploy password from MonsterAsp control panel
-  #
-  # How to get these values:
-  #   MonsterAsp control panel → Deploy (FTP/WebDeploy/Git) → Enable WebDeploy
+  # ── 2. Deploy to Render ───────────────────────────────────────────────────
+  # Triggers the Render deploy hook, which causes Render to pull the latest
+  # commit, rebuild the Docker image, and swap to the new container.
+  # The Dockerfile at the repo root handles the full self-contained build.
   deploy:
-    name: Deploy → MonsterAsp
+    name: Deploy → Render
     needs: quality
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
 
     environment:
       name: production
-      url: http://cmnetwork.runasp.net
+      url: https://it15l-ursabia-final-project.onrender.com
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-          cache: npm
-          cache-dependency-path: src/CMNetwork.ClientApp/package-lock.json
-
-      - name: Frontend install
-        working-directory: src/CMNetwork.ClientApp
-        run: npm ci
-
-      - name: Frontend build (included in publish output)
-        working-directory: src/CMNetwork.ClientApp
-        run: npm run build
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-
-      # Framework-dependent publish — MonsterAsp hosting bundle provides the .NET runtime.
-      # SkipSpaBuild=true because we already built the frontend above.
-      - name: Framework-dependent publish
-        run: >
-          dotnet publish src/CMNetwork.WebApi/CMNetwork.WebApi.csproj
-          --configuration Release
-          --self-contained false
-          --output ./publish-sc
-          /p:SkipSpaBuild=true
-
-      # MonsterAsp shared hosting: use dotnet processPath (outofprocess).
-      - name: Rewrite web.config for IIS hosting
-        shell: pwsh
+      - name: Trigger Render deploy hook
         run: |
-          Set-Content -Path ./publish-sc/web.config -Encoding UTF8 -Value @'
-          <?xml version="1.0" encoding="utf-8"?>
-          <configuration>
-            <location path="." inheritInChildApplications="false">
-              <system.webServer>
-                <modules>
-                  <remove name="WebDAVModule" />
-                </modules>
-                <handlers>
-                  <remove name="WebDAV" />
-                  <add name="aspNetCore" path="*" verb="*" modules="AspNetCoreModuleV2" resourceType="Unspecified" />
-                </handlers>
-                <aspNetCore processPath="dotnet" arguments=".\CMNetwork.WebApi.dll" stdoutLogEnabled="false" stdoutLogFile=".\logs\stdout" hostingModel="outofprocess" />
-              </system.webServer>
-            </location>
-          </configuration>
-          '@
+          curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+          echo "Deploy hook triggered. Render is building and deploying."
 
-      # Direct msdeploy sync — skips app pool stop/start which is blocked on
-      # MonsterAsp shared hosting. Simply syncs publish-sc/ to the site root.
-      # publishUrl from MonsterAsp publishSettings has no port (uses HTTPS/443).
-      - name: Deploy to MonsterAsp via WebDeploy
-        shell: pwsh
-        env:
-          SITE: ${{ secrets.MONSTERASP_WEBSITE_NAME }}
-          HOST: ${{ secrets.MONSTERASP_SERVER_URL }}
-          USER: ${{ secrets.MONSTERASP_USERNAME }}
-          PASS: ${{ secrets.MONSTERASP_PASSWORD }}
+  # ── 3. Smoke Test ─────────────────────────────────────────────────────────
+  # Polls the health endpoint for up to 8 minutes, then fails if unreachable.
+  smoke:
+    name: Smoke Test
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    env:
+      RENDER_API_URL: https://it15l-ursabia-final-project.onrender.com
+
+    steps:
+      - name: Wait for Render deploy to go live
         run: |
-          $msdeploy = "C:\Program Files (x86)\IIS\Microsoft Web Deploy V3\msdeploy.exe"
-          $src  = (Resolve-Path "./publish-sc").Path
-          $dest = "https://$env:HOST:8172/MsDeploy.axd?site=$env:SITE"
-          Write-Host "Deploying $src → $dest"
-          & $msdeploy `
-            -verb:sync `
-            -allowUntrusted `
-            "-source:contentPath=$src" `
-            "-dest:contentPath=$env:SITE,computerName=$dest,userName=$env:USER,password=$env:PASS,AuthType=Basic"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          URL="${RENDER_API_URL}/api/auth/health"
+          echo "Polling $URL …"
+          MAX=48   # 48 × 10s = 480s ≈ 8 min
+          COUNT=0
+          until curl -fsS -o /dev/null "$URL"; do
+            COUNT=$((COUNT + 1))
+            if [ $COUNT -ge $MAX ]; then
+              echo "Health check timed out after ${MAX} retries."
+              exit 1
+            fi
+            echo "Not ready yet (attempt $COUNT/$MAX) — waiting 10s …"
+            sleep 10
+          done
+          echo "Health check passed."

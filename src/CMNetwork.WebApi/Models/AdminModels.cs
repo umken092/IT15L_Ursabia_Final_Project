@@ -209,3 +209,29 @@ public class AdminJobDto
     public string? Error { get; set; }
     public string? Cron { get; set; }
 }
+
+public class SmtpSettingsDto
+{
+    public string Host { get; set; } = string.Empty;
+    public int Port { get; set; } = 587;
+    public string Username { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+    public string FromEmail { get; set; } = string.Empty;
+    public string FromName { get; set; } = "CMNetwork";
+    /// <summary>Accepted values: none | ssl | starttls</summary>
+    public string Security { get; set; } = "starttls";
+}
+
+public class PayMongoSettingsDto
+{
+    public string PublicKey { get; set; } = string.Empty;
+    public string SecretKey { get; set; } = string.Empty;
+    /// <summary>Accepted values: test | live</summary>
+    public string Mode { get; set; } = "test";
+}
+
+public class RolePermissionSetDto
+{
+    /// <summary>List of permission strings in "module:action" format, e.g. "general-ledger:view".</summary>
+    public List<string> Permissions { get; set; } = new();
+}

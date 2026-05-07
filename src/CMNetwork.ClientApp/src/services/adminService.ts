@@ -7,6 +7,22 @@ export type IntegrationStatus = 'active' | 'inactive' | 'error'
 export type AdminJobType = 'recurring' | 'scheduled' | 'ad-hoc'
 export type AdminJobStatus = 'running' | 'scheduled' | 'succeeded' | 'failed' | 'recurring'
 
+export interface SmtpSettings {
+  host: string
+  port: number
+  username: string
+  password: string
+  fromEmail: string
+  fromName: string
+  security: 'none' | 'ssl' | 'starttls'
+}
+
+export interface PayMongoSettings {
+  publicKey: string
+  secretKey: string
+  mode: 'test' | 'live'
+}
+
 export interface AdminUser {
   id: string
   email: string
@@ -422,5 +438,40 @@ export const adminService = {
 
   async deleteJob(jobId: string): Promise<void> {
     await apiClient.delete(`/admin/jobs/${encodeURIComponent(jobId)}`)
+  },
+
+  // ── SMTP Settings ───────────────────────────────────────────────────────
+
+  async getSmtpSettings(): Promise<SmtpSettings> {
+    const response = await apiClient.get<SmtpSettings>('/admin/smtp-settings')
+    return response.data
+  },
+
+  async updateSmtpSettings(payload: SmtpSettings): Promise<SmtpSettings> {
+    const response = await apiClient.put<SmtpSettings>('/admin/smtp-settings', payload)
+    return response.data
+  },
+
+  // ── PayMongo Settings ───────────────────────────────────────────────────
+
+  async getPayMongoSettings(): Promise<PayMongoSettings> {
+    const response = await apiClient.get<PayMongoSettings>('/admin/paymongo-settings')
+    return response.data
+  },
+
+  async updatePayMongoSettings(payload: PayMongoSettings): Promise<PayMongoSettings> {
+    const response = await apiClient.put<PayMongoSettings>('/admin/paymongo-settings', payload)
+    return response.data
+  },
+
+  // ── Role Permissions ────────────────────────────────────────────────────
+
+  async getRolePermissions(role: string): Promise<string[]> {
+    const response = await apiClient.get<{ permissions: string[] }>(`/admin/roles/${encodeURIComponent(role)}/permissions`)
+    return response.data.permissions ?? []
+  },
+
+  async updateRolePermissions(role: string, permissions: string[]): Promise<void> {
+    await apiClient.put(`/admin/roles/${encodeURIComponent(role)}/permissions`, { permissions })
   },
 }
