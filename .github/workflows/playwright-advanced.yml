@@ -1,0 +1,57 @@
+name: Regression Gate - Advanced
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  advanced-regression:
+    name: Playwright Advanced (Chromium/Firefox/WebKit)
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.ENABLE_ADVANCED_GATE == 'true' }}
+
+    defaults:
+      run:
+        working-directory: src/CMNetwork.ClientApp
+
+    env:
+      BASE_URL: ${{ secrets.E2E_BASE_URL != '' && secrets.E2E_BASE_URL || 'http://cmnetwork.runasp.net' }}
+      E2E_SUPERADMIN_EMAIL: ${{ secrets.E2E_SUPERADMIN_EMAIL }}
+      E2E_SUPERADMIN_PASSWORD: ${{ secrets.E2E_SUPERADMIN_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: src/CMNetwork.ClientApp/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Run advanced suite
+        run: npm run test:e2e:advanced
+
+      - name: Upload advanced report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-advanced-report
+          path: src/CMNetwork.ClientApp/playwright-report/advanced
+
+      - name: Upload advanced test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-advanced-results
+          path: src/CMNetwork.ClientApp/test-results

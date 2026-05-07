@@ -51,9 +51,10 @@ jobs:
 
   # ── 2. Deploy to MonsterAsp ───────────────────────────────────────────────
   # Runs only on push to main, after quality gates pass.
-  # Uses WebDeploy (MSDeploy) to push the self-contained publish output to
-  # the MonsterAsp site. MonsterAsp's panel "GitHub Deploy" only does a raw
-  # git-clone — it does NOT build; this job is the correct alternative.
+  # Uses WebDeploy (MSDeploy) to push the framework-dependent publish output to
+  # the MonsterAsp site (hosting bundle provides .NET 10 runtime).
+  # MonsterAsp's panel "GitHub Deploy" only does a raw git-clone — it does NOT
+  # build; this job is the correct alternative.
   #
   # Required GitHub secrets (Settings → Secrets → Actions):
   #   MONSTERASP_WEBSITE_NAME   e.g.  site12345
@@ -94,19 +95,18 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      # Self-contained win-x64 publish — MonsterAsp server has no .NET 10 runtime.
+      # Framework-dependent publish — MonsterAsp hosting bundle provides the .NET runtime.
       # SkipSpaBuild=true because we already built the frontend above.
-      - name: Self-contained publish (win-x64)
+      - name: Framework-dependent publish
         run: >
           dotnet publish src/CMNetwork.WebApi/CMNetwork.WebApi.csproj
           --configuration Release
-          --self-contained true
-          --runtime win-x64
+          --self-contained false
           --output ./publish-sc
           /p:SkipSpaBuild=true
 
-      # IIS on MonsterAsp requires processPath to point to the .exe, not dotnet.
-      - name: Rewrite web.config for self-contained IIS hosting
+      # MonsterAsp shared hosting: use dotnet processPath (outofprocess).
+      - name: Rewrite web.config for IIS hosting
         shell: pwsh
         run: |
           Set-Content -Path ./publish-sc/web.config -Encoding UTF8 -Value @'
@@ -117,7 +117,7 @@ jobs:
                 <handlers>
                   <add name="aspNetCore" path="*" verb="*" modules="AspNetCoreModuleV2" resourceType="Unspecified" />
                 </handlers>
-                <aspNetCore processPath=".\CMNetwork.WebApi.exe" stdoutLogEnabled="false" stdoutLogFile=".\logs\stdout" hostingModel="inprocess" />
+                <aspNetCore processPath="dotnet" arguments=".\CMNetwork.WebApi.dll" stdoutLogEnabled="false" stdoutLogFile=".\logs\stdout" hostingModel="outofprocess" />
               </system.webServer>
             </location>
           </configuration>

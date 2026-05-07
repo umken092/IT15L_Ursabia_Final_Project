@@ -1568,7 +1568,9 @@ public class AdminController : ControllerBase
         }
 
         var randomDigits = RandomNumberGenerator.GetInt32(100, 1000);
-        return $"harbor-slate-lumen-{DateTime.UtcNow:yyyy}-{randomDigits}";
+        // Format: Harbor-slate-lumen-{year}-{digits}!
+        // Satisfies ASP.NET Identity defaults: uppercase (H), lowercase, digit, non-alphanumeric (!), length ≥ 12
+        return $"Harbor-slate-lumen-{DateTime.UtcNow:yyyy}-{randomDigits}!";
     }
 
     private async Task<List<AdminUserDto>> BuildAdminUsersAsync()
