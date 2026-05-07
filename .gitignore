@@ -25,3 +25,10 @@ appsettings.Development.local.json
 
 # Local agent-skills directory (external template clone, not part of source)
 /agent-skills/
+
+# Generated/local dev artifacts
+local-stdout.txt
+local-stderr.txt
+login-payload.json
+remote-CMNetwork.WebApi.dll
+/server-logs/
