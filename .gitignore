@@ -6,6 +6,9 @@ publish/
 /cmnetwork-erp/
 /CMNetwork.slnx
 /artifacts/
+/publish-sc/
+/publish-sc.zip
+/publish-files.zip
 
 .vs/
 .vscode/*

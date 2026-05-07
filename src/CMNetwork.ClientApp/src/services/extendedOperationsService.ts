@@ -73,6 +73,25 @@ export const budgetService = {
   },
 }
 
+export const profileService = {
+  getProfile: async () => {
+    return apiClient.get('/profile')
+  },
+
+  updateProfile: async (data: {
+    fullName: string
+    email: string
+    phone: string
+    address: string
+    department: string
+    emailNotificationsEnabled: boolean
+    smsNotificationsEnabled: boolean
+    inAppNotificationsEnabled: boolean
+  }) => {
+    return apiClient.put('/profile', data)
+  },
+}
+
 /**
  * Expense Claims Service
  */
@@ -192,7 +211,7 @@ export const auditLogsService = {
 export const budgetControlService = {
   manageBudget: async (data: ManageBudgetInput) => {
     // Budget management is handled through Department entities on backend
-    return Promise.resolve({ data: { message: 'Budget updated.', ...data } })
+    return { data: { message: 'Budget updated.', ...data } }
   },
 
   getBudgets: async () => {

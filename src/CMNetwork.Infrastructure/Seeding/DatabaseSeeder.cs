@@ -3,6 +3,8 @@ using CMNetwork.Infrastructure.Persistence;
 using CMNetwork.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace CMNetwork.Infrastructure.Seeding;
 
@@ -35,11 +37,7 @@ public class DatabaseSeeder
     public async Task SeedAsync()
     {
         // 1. Seed roles
-        foreach (var role in Roles)
-        {
-            if (!await _roleManager.RoleExistsAsync(role))
-                await _roleManager.CreateAsync(new IdentityRole<Guid>(role) { Id = Guid.NewGuid() });
-        }
+        await EnsureRolesAsync();
 
         // 2. Seed demo users
         await SeedUserAsync(
@@ -73,6 +71,69 @@ public class DatabaseSeeder
         // 3. Seed baseline chart of accounts and fiscal period
         await SeedChartOfAccountsAsync();
         await SeedCurrentFiscalPeriodAsync();
+    }
+
+    public async Task EnsureRolesAsync()
+    {
+        foreach (var role in Roles)
+        {
+            if (!await _roleManager.RoleExistsAsync(role))
+            {
+                await _roleManager.CreateAsync(new IdentityRole<Guid>(role) { Id = Guid.NewGuid() });
+            }
+        }
+    }
+
+    public async Task SeedProductionBootstrapAdminAsync(IConfiguration configuration, ILogger logger)
+    {
+        await EnsureRolesAsync();
+
+        var email = configuration["BootstrapAdmin:Email"];
+        var password = configuration["BootstrapAdmin:Password"];
+
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        {
+            logger.LogWarning(
+                "Bootstrap admin credentials are not configured. Set BootstrapAdmin:Email and BootstrapAdmin:Password to create a production login on first deploy.");
+            return;
+        }
+
+        var existingUser = await _userManager.FindByEmailAsync(email);
+        if (existingUser is null)
+        {
+            var firstName = configuration["BootstrapAdmin:FirstName"] ?? "System";
+            var lastName = configuration["BootstrapAdmin:LastName"] ?? "Administrator";
+
+            var bootstrapUser = new ApplicationUser
+            {
+                Id = Guid.NewGuid(),
+                UserName = email,
+                Email = email,
+                FirstName = firstName,
+                LastName = lastName,
+                IsActive = true,
+                EmailConfirmed = true,
+                JoinDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            };
+
+            var createResult = await _userManager.CreateAsync(bootstrapUser, password);
+            if (!createResult.Succeeded)
+            {
+                var errors = string.Join("; ", createResult.Errors.Select(error => error.Description));
+                logger.LogError("Failed to create bootstrap admin {Email}: {Errors}", email, errors);
+                return;
+            }
+
+            await _userManager.AddToRoleAsync(bootstrapUser, "super-admin");
+            logger.LogInformation("Created bootstrap admin account {Email}.", email);
+            return;
+        }
+
+        if (!await _userManager.IsInRoleAsync(existingUser, "super-admin"))
+        {
+            await _userManager.AddToRoleAsync(existingUser, "super-admin");
+            logger.LogInformation("Assigned super-admin role to bootstrap account {Email}.", email);
+        }
     }
 
     private async Task SeedChartOfAccountsAsync()

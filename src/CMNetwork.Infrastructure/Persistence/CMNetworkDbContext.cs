@@ -72,6 +72,9 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
             entity.Property(x => x.TIN).HasMaxLength(32);
             entity.Property(x => x.SSS).HasMaxLength(32);
             entity.Property(x => x.AuthenticatorKey).HasMaxLength(256);
+            entity.Property(x => x.EmailNotificationsEnabled).HasDefaultValue(true);
+            entity.Property(x => x.SmsNotificationsEnabled).HasDefaultValue(false);
+            entity.Property(x => x.InAppNotificationsEnabled).HasDefaultValue(true);
         });
 
         // ── RefreshToken ─────────────────────────────────────────────────────────

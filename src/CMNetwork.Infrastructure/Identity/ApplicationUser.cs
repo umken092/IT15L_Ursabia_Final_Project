@@ -13,6 +13,9 @@ public class ApplicationUser : IdentityUser<Guid>
     public string TIN { get; set; } = string.Empty;
     public string SSS { get; set; } = string.Empty;
     public Guid? DepartmentId { get; set; }
+    public bool EmailNotificationsEnabled { get; set; } = true;
+    public bool SmsNotificationsEnabled { get; set; }
+    public bool InAppNotificationsEnabled { get; set; } = true;
     public bool IsActive { get; set; } = true;
     public DateOnly JoinDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     public string? AuthenticatorKey { get; set; }

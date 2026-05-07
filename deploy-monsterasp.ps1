@@ -1,81 +1,198 @@
-# Clean MonsterAsp deploy script.
+# MonsterAsp deployment package script.
 #
-# Produces a publish folder at .\artifacts\monsterasp-api ready to upload
-# to MonsterAsp via FTP / File Manager.
+# Builds quality gates locally, produces a self-contained IIS package, and
+# writes a ZIP ready for upload to MonsterAsp.
 #
 # Usage (from repo root):
 #   pwsh -File .\deploy-monsterasp.ps1
-#   pwsh -File .\deploy-monsterasp.ps1 -SkipSpaBuild   # only if dist is already up to date
-#
+#   pwsh -File .\deploy-monsterasp.ps1 -VerifyBaseUrl http://cmnetwork.runasp.net -VerifyEmail admin@cmnetwork.com -VerifyPassword '<password>'
+
 [CmdletBinding()]
 param(
     [string]$Configuration = 'Release',
-    [string]$OutputDir    = "$PSScriptRoot\artifacts\monsterasp-api",
-    [switch]$SkipSpaBuild
+    [string]$Runtime = 'win-x64',
+    [string]$PublishDir = "$PSScriptRoot\publish-sc",
+    [string]$ZipPath = "$PSScriptRoot\publish-sc.zip",
+    [string]$VerifyBaseUrl,
+    [string]$VerifyEmail,
+    [string]$VerifyPassword
 )
 
 $ErrorActionPreference = 'Stop'
 
-$repoRoot   = $PSScriptRoot
+$repoRoot = $PSScriptRoot
+$solution = Join-Path $repoRoot 'CMNetwork.sln'
 $webApiProj = Join-Path $repoRoot 'src\CMNetwork.WebApi\CMNetwork.WebApi.csproj'
-$spaRoot    = Join-Path $repoRoot 'src\CMNetwork.ClientApp'
+$spaRoot = Join-Path $repoRoot 'src\CMNetwork.ClientApp'
+$smokeScript = Join-Path $repoRoot 'smoke-test.ps1'
 
-if (-not (Test-Path $webApiProj)) {
-    throw "WebApi project not found at $webApiProj"
+function Invoke-Step {
+    param(
+        [string]$Label,
+        [scriptblock]$Action
+    )
+
+    Write-Host "== $Label ==" -ForegroundColor Cyan
+    & $Action
 }
 
-Write-Host '== Step 1: Wipe previous publish output ==' -ForegroundColor Cyan
-if (Test-Path $OutputDir) {
-    Remove-Item -Recurse -Force $OutputDir
-}
-New-Item -ItemType Directory -Path $OutputDir | Out-Null
+function Assert-PathExists {
+    param([string]$Path)
 
-Write-Host '== Step 2: Stop any running WebApi (releases file locks) ==' -ForegroundColor Cyan
-Get-Process -Name 'CMNetwork.WebApi' -ErrorAction SilentlyContinue |
-    ForEach-Object { Write-Host "  Killing PID $($_.Id)"; $_ | Stop-Process -Force }
-
-Write-Host '== Step 3: dotnet publish (will also build the SPA) ==' -ForegroundColor Cyan
-$publishArgs = @(
-    'publish', $webApiProj,
-    '-c', $Configuration,
-    '-o', $OutputDir,
-    '/p:UseAppHost=false'
-)
-if ($SkipSpaBuild) {
-    $publishArgs += '/p:SkipSpaBuild=true'
-}
-& dotnet @publishArgs
-if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed (exit $LASTEXITCODE)" }
-
-Write-Host '== Step 4: Sanity check ==' -ForegroundColor Cyan
-$indexHtml = Join-Path $OutputDir 'wwwroot\index.html'
-$webConfig = Join-Path $OutputDir 'web.config'
-$mainDll   = Join-Path $OutputDir 'CMNetwork.WebApi.dll'
-foreach ($f in @($indexHtml, $webConfig, $mainDll)) {
-    if (-not (Test-Path $f)) { throw "Missing expected file: $f" }
-    Write-Host "  OK  $f"
+    if (-not (Test-Path $Path)) {
+        throw "Required path not found: $Path"
+    }
 }
 
-# Verify the new ExpenseClaims dialog made it into the SPA bundle
-$placeholderJs = Get-ChildItem -Path (Join-Path $OutputDir 'wwwroot\assets') `
-    -Filter 'ModulePlaceholderPage-*.js' -ErrorAction SilentlyContinue
-if ($placeholderJs) {
-    $hit = Select-String -Path $placeholderJs.FullName -Pattern 'Create Expense Claim' -SimpleMatch -Quiet
-    if ($hit) {
-        Write-Host "  OK  SPA bundle contains 'Create Expense Claim' dialog ($($placeholderJs.Name))" -ForegroundColor Green
-    } else {
-        Write-Warning "SPA bundle does NOT contain 'Create Expense Claim'. Did you skip the SPA build?"
+function Set-MonsterAspWebConfig {
+    param([string]$Path)
+
+    $webConfig = @'
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <location path="." inheritInChildApplications="false">
+    <system.webServer>
+      <handlers>
+        <add name="aspNetCore" path="*" verb="*" modules="AspNetCoreModuleV2" resourceType="Unspecified" />
+      </handlers>
+      <aspNetCore processPath=".\CMNetwork.WebApi.exe" stdoutLogEnabled="false" stdoutLogFile=".\logs\stdout" hostingModel="inprocess" />
+    </system.webServer>
+  </location>
+</configuration>
+'@
+
+    Set-Content -Path $Path -Value $webConfig -Encoding UTF8
+}
+
+Assert-PathExists $solution
+Assert-PathExists $webApiProj
+Assert-PathExists $spaRoot
+Assert-PathExists $smokeScript
+
+Invoke-Step 'Quality gate: frontend install' {
+    Push-Location $spaRoot
+    try {
+        & npm ci
+        if ($LASTEXITCODE -ne 0) { throw "npm ci failed (exit $LASTEXITCODE)" }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+Invoke-Step 'Quality gate: frontend lint' {
+    Push-Location $spaRoot
+    try {
+        & npm run lint
+        if ($LASTEXITCODE -ne 0) { throw "npm run lint failed (exit $LASTEXITCODE)" }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+Invoke-Step 'Quality gate: frontend build' {
+    Push-Location $spaRoot
+    try {
+        & npm run build
+        if ($LASTEXITCODE -ne 0) { throw "npm run build failed (exit $LASTEXITCODE)" }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+Invoke-Step 'Quality gate: backend build' {
+    & dotnet build $solution
+    if ($LASTEXITCODE -ne 0) { throw "dotnet build failed (exit $LASTEXITCODE)" }
+}
+
+Invoke-Step 'Prepare publish output' {
+    if (Test-Path $PublishDir) {
+        Remove-Item -Recurse -Force $PublishDir
+    }
+
+    $publishParent = Split-Path -Parent $PublishDir
+    if (-not (Test-Path $publishParent)) {
+        New-Item -ItemType Directory -Path $publishParent | Out-Null
+    }
+}
+
+Invoke-Step 'Self-contained publish for MonsterAsp' {
+    & dotnet publish $webApiProj `
+        -c $Configuration `
+        -o $PublishDir `
+        --self-contained true `
+        -r $Runtime `
+        /p:SkipSpaBuild=true
+
+    if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed (exit $LASTEXITCODE)" }
+}
+
+Invoke-Step 'Rewrite web.config for self-contained IIS hosting' {
+    Set-MonsterAspWebConfig -Path (Join-Path $PublishDir 'web.config')
+}
+
+Invoke-Step 'Sanity check publish contents' {
+    $requiredFiles = @(
+        (Join-Path $PublishDir 'CMNetwork.WebApi.exe'),
+        (Join-Path $PublishDir 'CMNetwork.WebApi.dll'),
+        (Join-Path $PublishDir 'web.config'),
+        (Join-Path $PublishDir 'wwwroot\index.html')
+    )
+
+    foreach ($file in $requiredFiles) {
+        Assert-PathExists $file
+        Write-Host "  OK  $file" -ForegroundColor Green
+    }
+
+    $assetsDir = Join-Path $PublishDir 'wwwroot\assets'
+    Assert-PathExists $assetsDir
+}
+
+Invoke-Step 'Package deployment zip' {
+    if (Test-Path $ZipPath) {
+        Remove-Item -Force $ZipPath
+    }
+
+    Compress-Archive -Path (Join-Path $PublishDir '*') -DestinationPath $ZipPath -Force
+    Write-Host "  OK  $ZipPath" -ForegroundColor Green
+}
+
+if ($VerifyBaseUrl -and $VerifyPassword) {
+    Invoke-Step 'Post-deploy smoke verification' {
+        $smokeArgs = @(
+            '-File', $smokeScript,
+            '-BaseUrl', $VerifyBaseUrl,
+            '-Password', $VerifyPassword
+        )
+
+        if ($VerifyEmail) {
+            $smokeArgs += @('-Email', $VerifyEmail)
+        }
+
+        & pwsh @smokeArgs
+        if ($LASTEXITCODE -ne 0) { throw "smoke-test.ps1 failed (exit $LASTEXITCODE)" }
     }
 }
 
 Write-Host ''
-Write-Host '== Done ==' -ForegroundColor Green
-Write-Host "Publish output: $OutputDir"
+Write-Host '== MonsterAsp package ready ==' -ForegroundColor Green
+Write-Host "Publish directory: $PublishDir"
+Write-Host "Zip package: $ZipPath"
 Write-Host ''
-Write-Host 'Next steps:' -ForegroundColor Yellow
-Write-Host '  1. Open MonsterAsp File Manager (or FTP).'
-Write-Host '  2. In your site root (httpdocs / wwwroot for the IIS site), DELETE the existing files'
-Write-Host '     (especially the entire /wwwroot/assets folder so old hashed bundles are gone).'
-Write-Host "  3. Upload the ENTIRE contents of '$OutputDir' to the site root."
-Write-Host '  4. Restart the site (Application Pool / Restart) from MonsterAsp control panel.'
-Write-Host '  5. Open the site in incognito and Ctrl+F5.'
+Write-Host 'MonsterAsp environment variables required:' -ForegroundColor Yellow
+Write-Host '  Jwt__Secret'
+Write-Host '  ConnectionStrings__MonsterAspConnection'
+Write-Host '  Database__UseMonsterAsp=true'
+Write-Host '  ASPNETCORE_ENVIRONMENT=Production'
+Write-Host '  BootstrapAdmin__Email  (required on first production deploy / recovery)'
+Write-Host '  BootstrapAdmin__Password  (required on first production deploy / recovery)'
+Write-Host '  BootstrapAdmin__FirstName  (optional)'
+Write-Host '  BootstrapAdmin__LastName  (optional)'
+Write-Host ''
+Write-Host 'MonsterAsp deployment steps:' -ForegroundColor Yellow
+Write-Host '  1. Upload the ZIP contents or extract the ZIP into /wwwroot.'
+Write-Host '  2. Ensure /wwwroot/logs exists.'
+Write-Host '  3. Restart the MonsterAsp app pool.'
+Write-Host '  4. Run this script again with -VerifyBaseUrl/-VerifyPassword for smoke verification.'

@@ -206,6 +206,9 @@ using (var scope = app.Services.CreateScope())
 {
     var db     = scope.ServiceProvider.GetRequiredService<CMNetworkDbContext>();
     var recurringJobManager = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
+    var databaseSeeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
+    var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
+        .CreateLogger("CMNetwork.Startup");
 
     // Safety guard: warn loudly if the Development environment is pointed at the production database.
     if (app.Environment.IsDevelopment())
@@ -213,8 +216,6 @@ using (var scope = app.Services.CreateScope())
         var connStr = db.Database.GetConnectionString() ?? string.Empty;
         if (connStr.Contains("db49851.databaseasp.net", StringComparison.OrdinalIgnoreCase))
         {
-            var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
-                .CreateLogger("CMNetwork.Startup");
             startupLogger.LogCritical(
                 "⚠ DANGER: The Development environment is connected to the PRODUCTION database (db49851.databaseasp.net). " +
                 "Stop the application immediately and check your appsettings.Development.json / environment variables.");
@@ -222,12 +223,17 @@ using (var scope = app.Services.CreateScope())
     }
 
     await db.Database.MigrateAsync();
+    await databaseSeeder.EnsureRolesAsync();
     
     // Only seed demo data in Development environment
     if (app.Environment.IsDevelopment())
     {
         var seeder = scope.ServiceProvider.GetRequiredService<DemoDataSeeder>();
         await seeder.SeedAsync();
+    }
+    else
+    {
+        await databaseSeeder.SeedProductionBootstrapAdminAsync(app.Configuration, startupLogger);
     }
     
     SystemMaintenanceJobs.RegisterRecurringJobs(recurringJobManager);

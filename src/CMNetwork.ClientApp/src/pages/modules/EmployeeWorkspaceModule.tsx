@@ -1,10 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from 'react'
+import type { Dispatch, SetStateAction } from 'react'
 import type { AxiosError } from 'axios'
 import { Button } from '@progress/kendo-react-buttons'
-import { expenseClaimsService, payslipsService } from '../../services/extendedOperationsService'
+import { expenseClaimsService, payslipsService, profileService } from '../../services/extendedOperationsService'
 import { useAuthStore } from '../../store/authStore'
 import { useNotificationStore } from '../../store/notificationStore'
+import type { User } from '../../types/auth'
 
 export type EmployeeWorkspaceKey = 'expense-claims' | 'payslips' | 'profile'
 
@@ -58,6 +59,21 @@ interface ApiPayslip {
   pagIbigDeduction: number
   otherDeductions: number
 }
+
+interface ApiProfile {
+  id: string
+  fullName: string
+  email: string
+  phone: string
+  address: string
+  department: string
+  departmentId: string | null
+  emailNotificationsEnabled: boolean
+  smsNotificationsEnabled: boolean
+  inAppNotificationsEnabled: boolean
+}
+
+type ClaimCategory = 'Travel' | 'Meals' | 'Equipment' | 'Other'
 
 const fallbackClaims: ExpenseClaim[] = [
   { id: 'claim-1', claimNumber: '#24015', date: '2024-05-20', category: 'Travel', amount: 85, status: 'Submitted' },
@@ -123,6 +139,275 @@ const derivePhoneNumber = (email: string) => {
   return `+1 555-0${seed}`
 }
 
+const defaultProfileForm = (user: User | null) => ({
+  fullName: user?.fullName ?? 'Employee User',
+  email: user?.email ?? 'employee@cmnetwork.com',
+  phone: derivePhoneNumber(user?.email ?? 'employee@cmnetwork.com'),
+  address: '123 Corporate Drive, Suite 400, Cityville',
+  department: 'Accounting',
+})
+
+const mapApiClaims = (items: ApiExpenseClaim[]): ExpenseClaim[] => {
+  const statusMap: Record<number, ExpenseClaim['status']> = {
+    1: 'Draft',
+    2: 'Submitted',
+    3: 'Approved',
+    4: 'Rejected',
+  }
+
+  return items.map((item) => ({
+    id: item.id,
+    claimNumber: item.claimNumber,
+    date: item.claimDate,
+    category: item.category,
+    amount: item.amount,
+    status: statusMap[item.status] ?? 'Draft',
+  }))
+}
+
+const mapApiPayslips = (items: ApiPayslip[]): Payslip[] => {
+  return items.map((item) => ({
+    id: item.id,
+    payslipNumber: item.payslipNumber,
+    periodStart: item.periodStart,
+    periodEnd: item.periodEnd,
+    grossPay: item.grossPay,
+    netPay: item.netPay,
+    deductions: item.taxDeduction + item.sssDeduction + item.philHealthDeduction + item.pagIbigDeduction + item.otherDeductions,
+    taxDeduction: item.taxDeduction,
+    sssDeduction: item.sssDeduction,
+    philHealthDeduction: item.philHealthDeduction,
+    pagIbigDeduction: item.pagIbigDeduction,
+    otherDeductions: item.otherDeductions,
+  }))
+}
+
+const getClaimStatusTooltip = (status: ExpenseClaim['status']) => {
+  switch (status) {
+    case 'Approved':
+      return 'Approved \u2014 claim has been approved and is queued for reimbursement.'
+    case 'Submitted':
+      return 'Pending \u2014 claim has been submitted and is awaiting approver review.'
+    case 'Rejected':
+      return 'Rejected \u2014 claim was declined; review notes for the reason.'
+    default:
+      return 'Draft \u2014 claim is still being prepared and has not been submitted.'
+  }
+}
+
+const useProfileData = (
+  moduleKey: EmployeeWorkspaceKey,
+  user: User | null,
+  setProfileForm: Dispatch<SetStateAction<{ fullName: string; email: string; phone: string; address: string; department: string }>>,
+  setNotificationPrefs: Dispatch<SetStateAction<{ email: boolean; sms: boolean; inApp: boolean }>>,
+) => {
+  useEffect(() => {
+    if (moduleKey !== 'profile') {
+      return
+    }
+
+    let isDisposed = false
+
+    const loadProfile = async () => {
+      try {
+        const response = await profileService.getProfile()
+        const profile = response.data as ApiProfile
+        if (isDisposed) {
+          return
+        }
+
+        setProfileForm({
+          fullName: profile.fullName,
+          email: profile.email,
+          phone: profile.phone,
+          address: profile.address,
+          department: profile.department,
+        })
+        setNotificationPrefs({
+          email: profile.emailNotificationsEnabled,
+          sms: profile.smsNotificationsEnabled,
+          inApp: profile.inAppNotificationsEnabled,
+        })
+      } catch {
+        if (!isDisposed) {
+          setProfileForm(defaultProfileForm(user))
+        }
+      }
+    }
+
+    void loadProfile()
+
+    return () => {
+      isDisposed = true
+    }
+  }, [moduleKey, setNotificationPrefs, setProfileForm, user])
+}
+
+const useClaimsData = (
+  moduleKey: EmployeeWorkspaceKey,
+  setClaims: Dispatch<SetStateAction<ExpenseClaim[]>>,
+  setClaimsLoading: Dispatch<SetStateAction<boolean>>,
+) => {
+  useEffect(() => {
+    if (moduleKey !== 'expense-claims') {
+      return
+    }
+
+    const loadClaims = async () => {
+      try {
+        setClaimsLoading(true)
+        const response = await expenseClaimsService.getClaims()
+        const items = (response.data as ApiExpenseClaim[]) ?? []
+        setClaims(mapApiClaims(items))
+      } catch {
+        setClaims(fallbackClaims)
+      } finally {
+        setClaimsLoading(false)
+      }
+    }
+
+    void loadClaims()
+  }, [moduleKey, setClaims, setClaimsLoading])
+}
+
+const usePayslipsData = (
+  moduleKey: EmployeeWorkspaceKey,
+  setPayslips: Dispatch<SetStateAction<Payslip[]>>,
+  setPayslipsLoading: Dispatch<SetStateAction<boolean>>,
+) => {
+  useEffect(() => {
+    if (moduleKey !== 'payslips') {
+      return
+    }
+
+    const loadPayslips = async () => {
+      try {
+        setPayslipsLoading(true)
+        const response = await payslipsService.getPayslips()
+        const items = (response.data as ApiPayslip[]) ?? []
+
+        if (items.length > 0) {
+          setPayslips(mapApiPayslips(items))
+        }
+      } catch {
+        setPayslips(fallbackPayslips)
+      } finally {
+        setPayslipsLoading(false)
+      }
+    }
+
+    void loadPayslips()
+  }, [moduleKey, setPayslips, setPayslipsLoading])
+}
+
+const saveProfileChanges = async (params: {
+  profileForm: { fullName: string; email: string; phone: string; address: string; department: string }
+  notificationPrefs: { email: boolean; sms: boolean; inApp: boolean }
+  setProfileSaving: Dispatch<SetStateAction<boolean>>
+  setProfileForm: Dispatch<SetStateAction<{ fullName: string; email: string; phone: string; address: string; department: string }>>
+  setNotificationPrefs: Dispatch<SetStateAction<{ email: boolean; sms: boolean; inApp: boolean }>>
+  setProfileEditing: Dispatch<SetStateAction<boolean>>
+  pushToast: (type: 'success' | 'error', message: string) => void
+}) => {
+  const {
+    profileForm,
+    notificationPrefs,
+    setProfileSaving,
+    setProfileForm,
+    setNotificationPrefs,
+    setProfileEditing,
+    pushToast,
+  } = params
+
+  try {
+    setProfileSaving(true)
+    const response = await profileService.updateProfile({
+      fullName: profileForm.fullName.trim(),
+      email: profileForm.email.trim(),
+      phone: profileForm.phone.trim(),
+      address: profileForm.address.trim(),
+      department: profileForm.department.trim(),
+      emailNotificationsEnabled: notificationPrefs.email,
+      smsNotificationsEnabled: notificationPrefs.sms,
+      inAppNotificationsEnabled: notificationPrefs.inApp,
+    })
+
+    const savedProfile = response.data as ApiProfile
+    setProfileForm({
+      fullName: savedProfile.fullName,
+      email: savedProfile.email,
+      phone: savedProfile.phone,
+      address: savedProfile.address,
+      department: savedProfile.department,
+    })
+    setNotificationPrefs({
+      email: savedProfile.emailNotificationsEnabled,
+      sms: savedProfile.smsNotificationsEnabled,
+      inApp: savedProfile.inAppNotificationsEnabled,
+    })
+    setProfileEditing(false)
+    pushToast('success', 'Profile changes saved.')
+  } catch (error) {
+    const axiosError = error as AxiosError<{ message?: string }>
+    pushToast('error', axiosError.response?.data?.message ?? 'Failed to save profile changes.')
+  } finally {
+    setProfileSaving(false)
+  }
+}
+
+const createAndSubmitClaim = async (params: {
+  newClaimForm: { date: string; category: ClaimCategory; amount: string; description: string }
+  setNewClaimSubmitting: Dispatch<SetStateAction<boolean>>
+  setNewClaimDialogOpen: Dispatch<SetStateAction<boolean>>
+  setNewClaimForm: Dispatch<SetStateAction<{ date: string; category: ClaimCategory; amount: string; description: string }>>
+  reloadClaims: () => Promise<void>
+  pushToast: (type: 'success' | 'error' | 'warning', message: string) => void
+}) => {
+  const {
+    newClaimForm,
+    setNewClaimSubmitting,
+    setNewClaimDialogOpen,
+    setNewClaimForm,
+    reloadClaims,
+    pushToast,
+  } = params
+
+  if (!newClaimForm.description.trim() || !newClaimForm.amount) {
+    pushToast('warning', 'Please fill in all required fields.')
+    return
+  }
+
+  try {
+    setNewClaimSubmitting(true)
+    const createResponse = await expenseClaimsService.createClaim({
+      date: newClaimForm.date,
+      category: newClaimForm.category,
+      amount: Number.parseFloat(newClaimForm.amount),
+      description: newClaimForm.description.trim(),
+    })
+    const claimId = (createResponse.data as { id?: string }).id
+    if (claimId) {
+      await expenseClaimsService.submitClaim(claimId)
+    }
+    pushToast('success', 'Expense claim submitted successfully!')
+    setNewClaimDialogOpen(false)
+    setNewClaimForm({
+      date: new Date().toISOString().split('T')[0],
+      category: 'Travel',
+      amount: '',
+      description: '',
+    })
+    await reloadClaims()
+  } catch (error) {
+    const axiosError = error as AxiosError<{ message?: string }>
+    const serverMessage = axiosError.response?.data?.message
+    const fallbackMessage = error instanceof Error ? error.message : 'Failed to create expense claim'
+    pushToast('error', serverMessage || fallbackMessage)
+  } finally {
+    setNewClaimSubmitting(false)
+  }
+}
+
 export const EmployeeWorkspaceModule = ({ moduleKey }: EmployeeWorkspaceModuleProps) => {
   const user = useAuthStore((state) => state.user)
   const pushToast = useNotificationStore((state) => state.push)
@@ -138,104 +423,18 @@ export const EmployeeWorkspaceModule = ({ moduleKey }: EmployeeWorkspaceModulePr
   const [notificationPrefs, setNotificationPrefs] = useState({ email: true, sms: false, inApp: true })
   const [newClaimDialogOpen, setNewClaimDialogOpen] = useState(false)
   const [newClaimSubmitting, setNewClaimSubmitting] = useState(false)
+  const [profileSaving, setProfileSaving] = useState(false)
   const [newClaimForm, setNewClaimForm] = useState({
     date: new Date().toISOString().split('T')[0],
-    category: 'Travel' as const,
+    category: 'Travel' as ClaimCategory,
     amount: '',
     description: '',
   })
-  const [profileForm, setProfileForm] = useState({
-    fullName: user?.fullName ?? 'Employee User',
-    email: user?.email ?? 'employee@cmnetwork.com',
-    phone: derivePhoneNumber(user?.email ?? 'employee@cmnetwork.com'),
-    address: '123 Corporate Drive, Suite 400, Cityville',
-    department: user?.departmentId ? 'Assigned Department' : 'Accounting',
-  })
+  const [profileForm, setProfileForm] = useState(defaultProfileForm(user))
 
-  useEffect(() => {
-    if (moduleKey !== 'expense-claims') {
-      return
-    }
-
-    const loadClaims = async () => {
-      try {
-        setClaimsLoading(true)
-        const response = await expenseClaimsService.getClaims()
-        const items = (response.data as ApiExpenseClaim[]) ?? []
-        const statusMap: Record<number, ExpenseClaim['status']> = {
-          1: 'Draft',
-          2: 'Submitted',
-          3: 'Approved',
-          4: 'Rejected',
-        }
-
-        if (items.length > 0) {
-          setClaims(items.map((item) => ({
-            id: item.id,
-            claimNumber: item.claimNumber,
-            date: item.claimDate,
-            category: item.category,
-            amount: item.amount,
-            status: statusMap[item.status] ?? 'Draft',
-          })))
-        }
-      } catch {
-        setClaims(fallbackClaims)
-      } finally {
-        setClaimsLoading(false)
-      }
-    }
-
-    void loadClaims()
-  }, [moduleKey])
-
-  useEffect(() => {
-    if (moduleKey !== 'payslips') {
-      return
-    }
-
-    const loadPayslips = async () => {
-      try {
-        setPayslipsLoading(true)
-        const response = await payslipsService.getPayslips()
-        const items = (response.data as ApiPayslip[]) ?? []
-
-        if (items.length > 0) {
-          setPayslips(items.map((item) => ({
-            id: item.id,
-            payslipNumber: item.payslipNumber,
-            periodStart: item.periodStart,
-            periodEnd: item.periodEnd,
-            grossPay: item.grossPay,
-            netPay: item.netPay,
-            deductions: item.taxDeduction + item.sssDeduction + item.philHealthDeduction + item.pagIbigDeduction + item.otherDeductions,
-            taxDeduction: item.taxDeduction,
-            sssDeduction: item.sssDeduction,
-            philHealthDeduction: item.philHealthDeduction,
-            pagIbigDeduction: item.pagIbigDeduction,
-            otherDeductions: item.otherDeductions,
-          })))
-        }
-      } catch {
-        setPayslips(fallbackPayslips)
-      } finally {
-        setPayslipsLoading(false)
-      }
-    }
-
-    void loadPayslips()
-  }, [moduleKey])
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setProfileForm({
-      fullName: user?.fullName ?? 'Employee User',
-      email: user?.email ?? 'employee@cmnetwork.com',
-      phone: derivePhoneNumber(user?.email ?? 'employee@cmnetwork.com'),
-      address: '123 Corporate Drive, Suite 400, Cityville',
-      department: user?.departmentId ? 'Assigned Department' : 'Accounting',
-    })
-  }, [user])
+  useClaimsData(moduleKey, setClaims, setClaimsLoading)
+  usePayslipsData(moduleKey, setPayslips, setPayslipsLoading)
+  useProfileData(moduleKey, user, setProfileForm, setNotificationPrefs)
 
   const filteredClaims = useMemo(() => {
     return claims.filter((claim) => {
@@ -308,9 +507,28 @@ export const EmployeeWorkspaceModule = ({ moduleKey }: EmployeeWorkspaceModulePr
     }
   }
 
-  const handleSaveProfile = () => {
-    setProfileEditing(false)
-    pushToast('success', 'Profile changes saved.')
+  const reloadClaims = async () => {
+    const response = await expenseClaimsService.getClaims()
+    const items = (response.data as ApiExpenseClaim[]) ?? []
+
+    if (items.length === 0) {
+      setClaims([])
+      return
+    }
+
+    setClaims(mapApiClaims(items))
+  }
+
+  const handleSaveProfile = async () => {
+    await saveProfileChanges({
+      profileForm,
+      notificationPrefs,
+      setProfileSaving,
+      setProfileForm,
+      setNotificationPrefs,
+      setProfileEditing,
+      pushToast,
+    })
   }
 
   const handleClaimAction = () => {
@@ -318,53 +536,27 @@ export const EmployeeWorkspaceModule = ({ moduleKey }: EmployeeWorkspaceModulePr
   }
 
   const handleCreateNewClaim = async () => {
-    if (!newClaimForm.description.trim() || !newClaimForm.amount) {
-      pushToast('warning', 'Please fill in all required fields.')
-      return
-    }
+    await createAndSubmitClaim({
+      newClaimForm,
+      setNewClaimSubmitting,
+      setNewClaimDialogOpen,
+      setNewClaimForm,
+      reloadClaims,
+      pushToast,
+    })
+  }
 
+  const handleSubmitDraftClaim = async (claimId: string) => {
     try {
-      setNewClaimSubmitting(true)
-      await expenseClaimsService.createClaim({
-        date: newClaimForm.date,
-        category: newClaimForm.category,
-        amount: Number.parseFloat(newClaimForm.amount),
-        description: newClaimForm.description.trim(),
-      })
-      pushToast('success', 'Expense claim created successfully!')
-      setNewClaimDialogOpen(false)
-      setNewClaimForm({
-        date: new Date().toISOString().split('T')[0],
-        category: 'Travel',
-        amount: '',
-        description: '',
-      })
-      // Reload claims
-      const response = await expenseClaimsService.getClaims()
-      const items = (response.data as ApiExpenseClaim[]) ?? []
-      const statusMap: Record<number, ExpenseClaim['status']> = {
-        1: 'Draft',
-        2: 'Submitted',
-        3: 'Approved',
-        4: 'Rejected',
-      }
-      if (items.length > 0) {
-        setClaims(items.map((item) => ({
-          id: item.id,
-          claimNumber: item.claimNumber,
-          date: item.claimDate,
-          category: item.category,
-          amount: item.amount,
-          status: statusMap[item.status] ?? 'Draft',
-        })))
-      }
+      setClaimsLoading(true)
+      await expenseClaimsService.submitClaim(claimId)
+      await reloadClaims()
+      pushToast('success', 'Expense claim submitted for approval.')
     } catch (error) {
       const axiosError = error as AxiosError<{ message?: string }>
-      const serverMessage = axiosError.response?.data?.message
-      const fallbackMessage = error instanceof Error ? error.message : 'Failed to create expense claim'
-      pushToast('error', serverMessage || fallbackMessage)
+      pushToast('error', axiosError.response?.data?.message ?? 'Failed to submit expense claim.')
     } finally {
-      setNewClaimSubmitting(false)
+      setClaimsLoading(false)
     }
   }
 
@@ -434,6 +626,7 @@ export const EmployeeWorkspaceModule = ({ moduleKey }: EmployeeWorkspaceModulePr
                   <th>Category</th>
                   <th>Amount</th>
                   <th>Status</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -445,16 +638,22 @@ export const EmployeeWorkspaceModule = ({ moduleKey }: EmployeeWorkspaceModulePr
                     <td>{formatCurrency(claim.amount)}</td>
                     <td><span
                       className={`employee-status-pill ${claim.status.toLowerCase()}`}
-                      data-tooltip={
-                        claim.status === 'Approved'
-                          ? 'Approved \u2014 claim has been approved and is queued for reimbursement.'
-                          : claim.status === 'Submitted'
-                            ? 'Pending \u2014 claim has been submitted and is awaiting approver review.'
-                            : claim.status === 'Rejected'
-                              ? 'Rejected \u2014 claim was declined; review notes for the reason.'
-                              : 'Draft \u2014 claim is still being prepared and has not been submitted.'
-                      }
+                      data-tooltip={getClaimStatusTooltip(claim.status)}
                     >{claim.status === 'Submitted' ? 'Pending' : claim.status}</span></td>
+                    <td>
+                      {claim.status === 'Draft' ? (
+                        <Button
+                          size="small"
+                          themeColor="primary"
+                          onClick={() => void handleSubmitDraftClaim(claim.id)}
+                          disabled={claimsLoading}
+                        >
+                          Submit
+                        </Button>
+                      ) : (
+                        <span style={{ color: '#64748b' }}>No action</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -520,7 +719,7 @@ export const EmployeeWorkspaceModule = ({ moduleKey }: EmployeeWorkspaceModulePr
                 <select
                   id="claim-category"
                   value={newClaimForm.category}
-                  onChange={(e) => setNewClaimForm({ ...newClaimForm, category: e.target.value as any })}
+                  onChange={(e) => setNewClaimForm({ ...newClaimForm, category: e.target.value as ClaimCategory })}
                   disabled={newClaimSubmitting}
                   style={{
                     width: '100%',
@@ -782,10 +981,10 @@ export const EmployeeWorkspaceModule = ({ moduleKey }: EmployeeWorkspaceModulePr
             ))}
           </div>
           <div className="employee-profile-actions">
-            <Button themeColor="primary" onClick={() => (profileEditing ? handleSaveProfile() : setProfileEditing(true))}>
+            <Button themeColor="primary" onClick={() => (profileEditing ? void handleSaveProfile() : setProfileEditing(true))} disabled={profileSaving}>
               {profileEditing ? 'Save Changes' : 'Edit Profile'}
             </Button>
-            <Button disabled={!profileEditing} onClick={() => setProfileEditing(false)}>Cancel</Button>
+            <Button disabled={!profileEditing || profileSaving} onClick={() => setProfileEditing(false)}>Cancel</Button>
           </div>
         </div>
 
@@ -810,7 +1009,7 @@ export const EmployeeWorkspaceModule = ({ moduleKey }: EmployeeWorkspaceModulePr
             <label><input type="checkbox" checked={notificationPrefs.email} onChange={() => setNotificationPrefs((current) => ({ ...current, email: !current.email }))} /> Email Notifications</label>
             <label><input type="checkbox" checked={notificationPrefs.sms} onChange={() => setNotificationPrefs((current) => ({ ...current, sms: !current.sms }))} /> SMS Alerts</label>
             <label><input type="checkbox" checked={notificationPrefs.inApp} onChange={() => setNotificationPrefs((current) => ({ ...current, inApp: !current.inApp }))} /> In-App Notifications</label>
-            <button type="button" className="employee-inline-link" onClick={() => pushToast('success', 'Notification preferences saved locally.')}>Manage Preferences</button>
+            <button type="button" className="employee-inline-link" onClick={() => void handleSaveProfile()} disabled={profileSaving}>Save Notification Preferences</button>
           </div>
         </div>
 
