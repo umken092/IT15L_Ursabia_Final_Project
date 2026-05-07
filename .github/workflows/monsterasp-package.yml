@@ -114,7 +114,11 @@ jobs:
           <configuration>
             <location path="." inheritInChildApplications="false">
               <system.webServer>
+                <modules>
+                  <remove name="WebDAVModule" />
+                </modules>
                 <handlers>
+                  <remove name="WebDAV" />
                   <add name="aspNetCore" path="*" verb="*" modules="AspNetCoreModuleV2" resourceType="Unspecified" />
                 </handlers>
                 <aspNetCore processPath="dotnet" arguments=".\CMNetwork.WebApi.dll" stdoutLogEnabled="false" stdoutLogFile=".\logs\stdout" hostingModel="outofprocess" />
@@ -136,7 +140,7 @@ jobs:
         run: |
           $msdeploy = "C:\Program Files (x86)\IIS\Microsoft Web Deploy V3\msdeploy.exe"
           $src  = (Resolve-Path "./publish-sc").Path
-          $dest = "https://$env:HOST/MsDeploy.axd?site=$env:SITE"
+          $dest = "https://$env:HOST:8172/MsDeploy.axd?site=$env:SITE"
           Write-Host "Deploying $src → $dest"
           & $msdeploy `
             -verb:sync `
