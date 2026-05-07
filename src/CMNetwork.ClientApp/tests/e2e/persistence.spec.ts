@@ -2,6 +2,13 @@ import { expect, test } from '@playwright/test';
 import { dismissToastIfPresent, gotoWithRetry, loginAsSuperAdmin, runId } from './helpers';
 
 test.describe('Save and refresh persistence regressions', () => {
+  test.beforeAll(async () => {
+    test.skip(
+      !process.env.E2E_SUPERADMIN_EMAIL || !process.env.E2E_SUPERADMIN_PASSWORD,
+      'Skipping: E2E_SUPERADMIN_EMAIL or E2E_SUPERADMIN_PASSWORD not configured.',
+    );
+  });
+
   test.beforeEach(async ({ page }) => {
     await loginAsSuperAdmin(page);
   });
@@ -51,39 +58,51 @@ test.describe('Save and refresh persistence regressions', () => {
   });
 
   test('user management: edit employee persists after refresh', async ({ page }) => {
-    const newDepartment = `Finance-QA-${runId.slice(-4)}`;
-    const targetEmail = 'joji.frank@cmnetwork.com';
+    // Create a fresh employee in-test to avoid any dependency on demo/seed data.
+    const firstName = `E2EEdit${runId.slice(0, 4)}`;
+    const lastName = `Target${runId.slice(-4)}`;
     const originalDepartment = 'Finance';
+    const newDepartment = `Finance-QA-${runId.slice(-4)}`;
 
+    // Step 1: create the employee
     await gotoWithRetry(page, '/module/user-management');
     await page.waitForLoadState('networkidle');
 
-    const userRow = page.getByRole('row', { name: new RegExp(targetEmail, 'i') });
-    await expect(userRow).toBeVisible();
+    await page.getByRole('button', { name: 'Create Employee Account' }).click();
+    await page.waitForSelector('[role="dialog"]', { state: 'visible' });
+
+    await page.locator('#create-first-name').pressSequentially(firstName);
+    await page.locator('#create-last-name').pressSequentially(lastName);
+    await page.locator('#create-birthdate').fill('1990-06-15');
+    await page.locator('#create-address').pressSequentially('456 Edit Ave');
+    await page.locator('#create-tin').pressSequentially('111222333000');
+    await page.locator('#create-sss').pressSequentially('1112223330');
+    await page.locator('#create-department').pressSequentially(originalDepartment);
+
+    await page.getByRole('button', { name: 'Save Employee' }).click();
+    await page.waitForSelector('[role="dialog"]', { state: 'detached', timeout: 30000 });
+
+    // Step 2: search for and edit that employee
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.getByPlaceholder('Search by name or email').fill(firstName);
+
+    const userRow = page.getByRole('row', { name: new RegExp(firstName, 'i') });
+    await expect(userRow).toBeVisible({ timeout: 15000 });
     await userRow.getByRole('button', { name: 'Edit' }).click();
     await page.waitForSelector('[role="dialog"]', { state: 'visible' });
 
-    // Triple-click to select existing department text, then pressSequentially to replace it.
-    // Using pressSequentially instead of fill() to properly fire Kendo InputChangeEvent.
     await page.locator('#edit-department').click({ clickCount: 3 });
     await page.locator('#edit-department').pressSequentially(newDepartment);
 
     await page.getByRole('button', { name: 'Save Changes' }).click();
-    // Dialog closes only when the save API call succeeds
     await page.waitForSelector('[role="dialog"]', { state: 'detached', timeout: 30000 });
 
+    // Step 3: reload and verify the department change persisted
     await page.reload({ waitUntil: 'networkidle' });
-    // The row shows the department name in the Department column
-    await expect(page.getByRole('row', { name: new RegExp(targetEmail, 'i') }).getByRole('cell', { name: newDepartment })).toBeVisible({ timeout: 15000 });
-
-    // Restore Joji's original department so the test is repeatable
-    const restoredRow = page.getByRole('row', { name: new RegExp(targetEmail, 'i') });
-    await restoredRow.getByRole('button', { name: 'Edit' }).click();
-    await page.waitForSelector('[role="dialog"]', { state: 'visible' });
-    await page.locator('#edit-department').click({ clickCount: 3 });
-    await page.locator('#edit-department').pressSequentially(originalDepartment);
-    await page.getByRole('button', { name: 'Save Changes' }).click();
-    await page.waitForSelector('[role="dialog"]', { state: 'detached', timeout: 30000 });
+    await page.getByPlaceholder('Search by name or email').fill(firstName);
+    await expect(
+      page.getByRole('row', { name: new RegExp(firstName, 'i') }).getByRole('cell', { name: newDepartment }),
+    ).toBeVisible({ timeout: 15000 });
   });
 
   // DEFECT: IntegrationSettingsModule.handleSaveSmtp() is a fake save — it does a
