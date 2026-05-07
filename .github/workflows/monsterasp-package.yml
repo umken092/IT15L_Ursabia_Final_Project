@@ -124,7 +124,7 @@ jobs:
           '@
 
       - name: Deploy to MonsterAsp via WebDeploy
-        uses: rasmusbuchholdt/simply-web-deploy@2.1.0
+        uses: rasmusbuchholdt/simply-web-deploy@2.2.0
         with:
           website-name: ${{ secrets.MONSTERASP_WEBSITE_NAME }}
           server-computer-name: ${{ secrets.MONSTERASP_SERVER_URL }}
