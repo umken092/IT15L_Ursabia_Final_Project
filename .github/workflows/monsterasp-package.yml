@@ -123,11 +123,24 @@ jobs:
           </configuration>
           '@
 
+      # Direct msdeploy sync — skips app pool stop/start which is blocked on
+      # MonsterAsp shared hosting. Simply syncs publish-sc/ to the site root.
+      # publishUrl from MonsterAsp publishSettings has no port (uses HTTPS/443).
       - name: Deploy to MonsterAsp via WebDeploy
-        uses: rasmusbuchholdt/simply-web-deploy@2.2.0
-        with:
-          website-name: ${{ secrets.MONSTERASP_WEBSITE_NAME }}
-          server-computer-name: ${{ secrets.MONSTERASP_SERVER_URL }}
-          server-username: ${{ secrets.MONSTERASP_USERNAME }}
-          server-password: ${{ secrets.MONSTERASP_PASSWORD }}
-          source-path: ./publish-sc
+        shell: pwsh
+        env:
+          SITE: ${{ secrets.MONSTERASP_WEBSITE_NAME }}
+          HOST: ${{ secrets.MONSTERASP_SERVER_URL }}
+          USER: ${{ secrets.MONSTERASP_USERNAME }}
+          PASS: ${{ secrets.MONSTERASP_PASSWORD }}
+        run: |
+          $msdeploy = "C:\Program Files (x86)\IIS\Microsoft Web Deploy V3\msdeploy.exe"
+          $src  = (Resolve-Path "./publish-sc").Path
+          $dest = "https://$env:HOST/MsDeploy.axd?site=$env:SITE"
+          Write-Host "Deploying $src → $dest"
+          & $msdeploy `
+            -verb:sync `
+            -allowUntrusted `
+            "-source:contentPath=$src" `
+            "-dest:contentPath=$env:SITE,computerName=$dest,userName=$env:USER,password=$env:PASS,AuthType=Basic"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
