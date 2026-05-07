@@ -73,7 +73,8 @@ jobs:
     steps:
       - name: Trigger Render deploy hook
         run: |
-          curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+          HOOK_URL=$(printf '%s' "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" | tr -d '[:space:]')
+          curl -fsS -X POST "$HOOK_URL"
           echo "Deploy hook triggered. Render is building and deploying."
 
   # ── 3. Smoke Test ─────────────────────────────────────────────────────────

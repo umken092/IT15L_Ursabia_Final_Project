@@ -17,7 +17,7 @@ jobs:
         working-directory: src/CMNetwork.ClientApp
 
     env:
-      BASE_URL: ${{ secrets.E2E_BASE_URL != '' && secrets.E2E_BASE_URL || 'http://cmnetwork.runasp.net' }}
+      BASE_URL: ${{ secrets.E2E_BASE_URL != '' && secrets.E2E_BASE_URL || 'https://it15l-ursabia-final-project.onrender.com' }}
       E2E_SUPERADMIN_EMAIL: ${{ secrets.E2E_SUPERADMIN_EMAIL }}
       E2E_SUPERADMIN_PASSWORD: ${{ secrets.E2E_SUPERADMIN_PASSWORD }}
 
