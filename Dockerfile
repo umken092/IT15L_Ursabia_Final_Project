@@ -2,6 +2,12 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+# Install Node.js (LTS) so the MSBuild SPA build target can run npm ci + npm run build
+RUN apt-get update && apt-get install -y curl \
+    && curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy source and publish the Web API project
 COPY . .
 RUN dotnet restore src/CMNetwork.WebApi/CMNetwork.WebApi.csproj
