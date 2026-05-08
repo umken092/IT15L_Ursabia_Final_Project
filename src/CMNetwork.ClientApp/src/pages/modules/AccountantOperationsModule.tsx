@@ -208,6 +208,82 @@ const getFileNameFromDisposition = (disposition: string | undefined, fallback: s
   return asciiMatch?.[1] ?? fallback
 }
 
+const extractApiErrorMessage = (error: unknown): string => {
+  if (typeof error !== 'object' || error === null) {
+    return ''
+  }
+
+  const apiError = error as {
+    message?: string
+    response?: {
+      data?: unknown
+    }
+  }
+
+  const responseData = apiError.response?.data
+  if (typeof responseData === 'string' && responseData.trim().length > 0) {
+    return responseData.trim()
+  }
+
+  if (typeof responseData === 'object' && responseData !== null) {
+    const responseObject = responseData as { message?: unknown; title?: unknown }
+    if (typeof responseObject.message === 'string' && responseObject.message.trim().length > 0) {
+      return responseObject.message.trim()
+    }
+    if (typeof responseObject.title === 'string' && responseObject.title.trim().length > 0) {
+      return responseObject.title.trim()
+    }
+  }
+
+  if (typeof apiError.message === 'string' && apiError.message.trim().length > 0) {
+    return apiError.message.trim()
+  }
+
+  return ''
+}
+
+const getJournalFormIssues = (
+  journalForm: { date: string; reference: string; description: string },
+  journalLines: JournalLineForm[],
+) => {
+  const issues: string[] = []
+
+  if (!journalForm.date.trim()) {
+    issues.push('Date is required.')
+  }
+
+  if (!journalForm.reference.trim()) {
+    issues.push('Reference is required.')
+  }
+
+  if (!journalForm.description.trim()) {
+    issues.push('Description is required.')
+  }
+
+  const debitLinesWithAmount = journalLines.filter((line) => line.side === 'debit' && Number(line.amount || 0) > 0)
+  const creditLinesWithAmount = journalLines.filter((line) => line.side === 'credit' && Number(line.amount || 0) > 0)
+
+  if (debitLinesWithAmount.length === 0) {
+    issues.push('At least one debit line with an amount is required.')
+  }
+
+  if (creditLinesWithAmount.length === 0) {
+    issues.push('At least one credit line with an amount is required.')
+  }
+
+  const lineWithMissingAccount = journalLines.find((line) => Number(line.amount || 0) > 0 && !line.accountId)
+  if (lineWithMissingAccount) {
+    issues.push('Each line with an amount must have an account selected.')
+  }
+
+  const lineWithMissingAmount = journalLines.find((line) => line.accountId && Number(line.amount || 0) <= 0)
+  if (lineWithMissingAmount) {
+    issues.push('Each selected account must have an amount greater than zero.')
+  }
+
+  return issues
+}
+
 const defaultJournals: JournalEntry[] = [
   { id: 'JE-24018', date: '2026-04-24', reference: 'REV-RECLASS', debit: 92500, credit: 92500, status: 'Draft', recurring: false },
   { id: 'JE-24019', date: '2026-04-25', reference: 'UTIL-ACCRUAL', debit: 18000, credit: 18000, status: 'Posted', recurring: true },
@@ -314,6 +390,7 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
     createDefaultJournalLine('debit'),
     createDefaultJournalLine('credit'),
   ])
+  const [journalSubmitAttempted, setJournalSubmitAttempted] = useState(false)
   const [editingJournalId, setEditingJournalId] = useState<string | null>(null)
   const [viewingJournal, setViewingJournal] = useState<ApiJournalEntry | null>(null)
   const [viewJournalLoading, setViewJournalLoading] = useState(false)
@@ -372,6 +449,10 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
 
     return `Not balanced yet: add ${formatCurrency(difference)} to debits or reduce credits.`
   }, [journalBalanced, journalDebitTotal, journalCreditTotal])
+  const journalFormIssues = useMemo(
+    () => getJournalFormIssues(journalForm, journalLines),
+    [journalForm, journalLines],
+  )
 
   const debitEligibleAccounts = useMemo(
     () =>
@@ -570,6 +651,7 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
 
   const resetJournalEditor = () => {
     setEditingJournalId(null)
+    setJournalSubmitAttempted(false)
     setJournalForm({
       date: new Date().toISOString().slice(0, 10),
       reference: '',
@@ -647,6 +729,7 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
         description: detail.description ?? '',
         recurring: false,
       })
+      setJournalSubmitAttempted(false)
       setJournalLines(mappedLines.length ? mappedLines : [createDefaultJournalLine('debit'), createDefaultJournalLine('credit')])
       setShowCreateJournal(true)
     } catch {
@@ -684,6 +767,13 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
   }, [canCallProtectedGlApi, pushToast])
 
   const createOrUpdateJournalEntry = async () => {
+    setJournalSubmitAttempted(true)
+
+    if (journalFormIssues.length > 0) {
+      pushToast('error', journalFormIssues[0])
+      return
+    }
+
     if (!journalForm.reference || !journalForm.description) {
       pushToast('error', 'Reference and description are required.')
       return
@@ -734,8 +824,14 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
       setShowCreateJournal(false)
       resetJournalEditor()
       pushToast('success', editingJournalId ? 'Journal entry updated.' : 'Journal entry created.')
-    } catch {
-      pushToast('error', 'Failed to save journal entry. Verify fields and try again.')
+    } catch (error) {
+      const detail = extractApiErrorMessage(error)
+      pushToast(
+        'error',
+        detail
+          ? `Failed to save journal entry. ${detail}`
+          : 'Failed to save journal entry. Verify fields and try again.',
+      )
     }
   }
 
@@ -1902,17 +1998,17 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
         <Dialog title={editingJournalId ? 'Edit Journal Entry' : 'Create Journal Entry'} onClose={() => setShowCreateJournal(false)}>
           <div style={{ minWidth: '500px' }}>
             <div>
-              <label>Date</label>
+              <label>Date *</label>
               <input
                 className="role-select"
-                style={{ width: '100%' }}
+                style={{ width: '100%', borderColor: journalSubmitAttempted && !journalForm.date.trim() ? '#dc2626' : undefined }}
                 type="date"
                 value={journalForm.date}
                 onChange={(event) => setJournalForm((current) => ({ ...current, date: event.target.value }))}
               />
             </div>
             <div>
-              <label>Reference</label>
+              <label>Reference *</label>
               <Input
                 placeholder="e.g. JE-2026-05-001"
                 value={journalForm.reference}
@@ -1920,7 +2016,7 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
               />
             </div>
             <div>
-              <label>Description</label>
+              <label>Description *</label>
               <Input
                 placeholder="Enter a short journal description"
                 value={journalForm.description}
@@ -1928,7 +2024,7 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
               />
             </div>
             <div>
-              <label>Journal Lines</label>
+              <label>Journal Lines *</label>
               <div style={{ display: 'grid', gap: '8px' }}>
                 {journalLines.map((line) => (
                   <div key={line.id} style={{ display: 'grid', gridTemplateColumns: '130px 1fr 1fr 140px 80px', gap: '8px', alignItems: 'center' }}>
@@ -2005,6 +2101,26 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
             >
               {journalBalanceMessage}
             </div>
+            {journalSubmitAttempted && journalFormIssues.length > 0 && (
+              <div
+                style={{
+                  marginBottom: '16px',
+                  color: '#991b1b',
+                  background: '#fee2e2',
+                  border: '1px solid #fca5a5',
+                  borderRadius: '8px',
+                  padding: '8px 10px',
+                  fontWeight: 600,
+                }}
+              >
+                Please complete required field(s):
+                <ul style={{ margin: '6px 0 0 18px', padding: 0, fontWeight: 500 }}>
+                  {journalFormIssues.map((issue) => (
+                    <li key={issue}>{issue}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {accountsLoading && <div style={{ color: 'var(--text-muted)' }}>Loading chart of accounts...</div>}
           </div>
           <DialogActionsBar>

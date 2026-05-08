@@ -10,7 +10,7 @@ import { useAuthStore } from '../../store/authStore'
 import { roleLabels, type Role } from '../../types/auth'
 import { DashboardCard } from '../../components/DashboardCard'
 import { adminService } from '../../services/adminService'
-import type { SecurityPolicySettings } from '../../services/adminService'
+import type { DepartmentOption, SecurityPolicySettings } from '../../services/adminService'
 import { useNotificationStore } from '../../store/notificationStore'
 
 interface Employee {
@@ -479,6 +479,7 @@ export const UserManagementModule = () => {
   const [totalCount, setTotalCount] = useState(0)
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [directoryDepartments, setDirectoryDepartments] = useState<string[]>([])
+  const [departmentOptions, setDepartmentOptions] = useState<DepartmentOption[]>([])
   const [userSummary, setUserSummary] = useState<UserSummary>({ active: 0, pending: 0, total: 0 })
   const currentPasswordIssues = getPasswordPolicyIssues(passwordForm.newPassword, selectedEmployee, passwordPolicy)
 
@@ -502,6 +503,16 @@ export const UserManagementModule = () => {
       setPasswordPolicy(settings.password)
     } catch {
       setPasswordPolicy(DEFAULT_PASSWORD_POLICY)
+    }
+  }
+
+  const loadDepartmentOptions = async () => {
+    try {
+      const items = await adminService.getDepartments()
+      setDepartmentOptions(items)
+    } catch {
+      setDepartmentOptions([])
+      pushToast('warning', 'Unable to load departments for the employee form.')
     }
   }
 
@@ -548,6 +559,7 @@ export const UserManagementModule = () => {
   useEffect(() => {
     void loadUserSummary()
     void loadPasswordPolicy()
+    void loadDepartmentOptions()
   }, [])
 
   const handleCreateClick = () => {
@@ -989,11 +1001,20 @@ export const UserManagementModule = () => {
 
               <div>
                 <label htmlFor="create-department">Department (optional for non-faculty)</label>
-                <Input
+                <select
                   id="create-department"
                   value={formData.department}
-                  onChange={(e: InputChangeEvent) => setFormData((current) => ({ ...current, department: String(e.value ?? '') }))}
-                />
+                  onChange={(event) => setFormData((current) => ({ ...current, department: event.target.value }))}
+                  className="role-select"
+                  style={{ width: '100%' }}
+                >
+                  <option value="">Unassigned</option>
+                  {departmentOptions.map((department) => (
+                    <option key={department.id} value={department.name}>
+                      {department.code} - {department.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>

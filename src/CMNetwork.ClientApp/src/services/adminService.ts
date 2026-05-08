@@ -33,6 +33,13 @@ export interface AdminUser {
   joinDate: string
 }
 
+export interface DepartmentOption {
+  id: string
+  code: string
+  name: string
+  budgetAmount: number
+}
+
 export interface CreateAdminUserRequest {
   firstName: string
   middleName: string
@@ -355,6 +362,11 @@ export const adminService = {
 
   async unlockUser(userId: string): Promise<void> {
     await apiClient.post(`/admin/users/${userId}/unlock`)
+  },
+
+  async getDepartments(): Promise<DepartmentOption[]> {
+    const response = await apiClient.get<DepartmentOption[]>('/budget/departments')
+    return response.data
   },
 
   async getSecurityPolicies(): Promise<SecurityPolicy[]> {

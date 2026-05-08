@@ -45,8 +45,8 @@ test.describe('Save and refresh persistence regressions', () => {
     await page.locator('#create-tin').pressSequentially('123456789000');
     await page.locator('#create-sss').pressSequentially('1234567890');
 
-    // Kendo Input for department
-    await page.locator('#create-department').pressSequentially('Finance');
+    // Department is now a select dropdown.
+    await page.locator('#create-department').selectOption({ label: /finance/i });
 
     await page.getByRole('button', { name: 'Save Employee' }).click();
     // Dialog closes only when the save API call succeeds
@@ -77,7 +77,7 @@ test.describe('Save and refresh persistence regressions', () => {
     await page.locator('#create-address').pressSequentially('456 Edit Ave');
     await page.locator('#create-tin').pressSequentially('111222333000');
     await page.locator('#create-sss').pressSequentially('1112223330');
-    await page.locator('#create-department').pressSequentially(originalDepartment);
+    await page.locator('#create-department').selectOption({ label: /finance/i });
 
     await page.getByRole('button', { name: 'Save Employee' }).click();
     await page.waitForSelector('[role="dialog"]', { state: 'detached', timeout: 30000 });
