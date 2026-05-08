@@ -1788,10 +1788,35 @@ public class AdminController : ControllerBase
             return requestedPassword;
         }
 
-        var randomDigits = RandomNumberGenerator.GetInt32(100, 1000);
-        // Format: Harbor-slate-lumen-{year}-{digits}!
-        // Satisfies ASP.NET Identity defaults: uppercase (H), lowercase, digit, non-alphanumeric (!), length ≥ 12
-        return $"Harbor-slate-lumen-{DateTime.UtcNow:yyyy}-{randomDigits}!";
+        const string uppercase = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+        const string lowercase = "abcdefghijkmnopqrstuvwxyz";
+        const string digits = "23456789";
+        const string symbols = "!@#$%^&*";
+        var all = string.Concat(uppercase, lowercase, digits, symbols);
+
+        static char Pick(string source) => source[RandomNumberGenerator.GetInt32(source.Length)];
+
+        // Exactly 12 chars with guaranteed upper/lower/digit/symbol for Identity defaults.
+        var chars = new List<char>
+        {
+            Pick(uppercase),
+            Pick(lowercase),
+            Pick(digits),
+            Pick(symbols)
+        };
+
+        while (chars.Count < 12)
+        {
+            chars.Add(Pick(all));
+        }
+
+        for (var i = chars.Count - 1; i > 0; i--)
+        {
+            var j = RandomNumberGenerator.GetInt32(i + 1);
+            (chars[i], chars[j]) = (chars[j], chars[i]);
+        }
+
+        return new string(chars.ToArray());
     }
 
     private async Task<List<AdminUserDto>> BuildAdminUsersAsync()

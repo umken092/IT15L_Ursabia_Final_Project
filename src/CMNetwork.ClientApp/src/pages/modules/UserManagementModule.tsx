@@ -117,6 +117,36 @@ const isSuperAdminRole = (role: string) => role === 'super-admin'
 
 const getStatusClassName = (status: Employee['status']) => `um-status-pill ${status}`
 
+const randomIndex = (maxExclusive: number) => Math.floor(Math.random() * maxExclusive)
+
+const generateCreatePassword = (): string => {
+  const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+  const lowercase = 'abcdefghijkmnopqrstuvwxyz'
+  const digits = '23456789'
+  const symbols = '!@#$%^&*'
+  const all = `${uppercase}${lowercase}${digits}${symbols}`
+
+  // Ensure at least one character from each required group, then fill to 12 chars.
+  const chars = [
+    uppercase[randomIndex(uppercase.length)],
+    lowercase[randomIndex(lowercase.length)],
+    digits[randomIndex(digits.length)],
+    symbols[randomIndex(symbols.length)],
+  ]
+
+  while (chars.length < 12) {
+    chars.push(all[randomIndex(all.length)])
+  }
+
+  // Fisher-Yates shuffle to avoid predictable category positions.
+  for (let i = chars.length - 1; i > 0; i -= 1) {
+    const j = randomIndex(i + 1)
+    ;[chars[i], chars[j]] = [chars[j], chars[i]]
+  }
+
+  return chars.join('')
+}
+
 const statusTooltips: Record<Employee['status'], string> = {
   active: 'Active - user can sign in and access permitted modules.',
   pending: 'Pending - account created but awaiting first sign-in or activation.',
@@ -601,7 +631,7 @@ export const UserManagementModule = () => {
         .replaceAll(' ', '.')
         .concat('@cmnetwork.com')
 
-      const generatedPassword = `harbor-slate-lumen-${new Date().getFullYear()}-${Math.floor(Math.random() * 900 + 100)}`
+      const generatedPassword = generateCreatePassword()
 
       const payload = {
         firstName: formData.firstName,
