@@ -80,7 +80,7 @@ public class ARInvoicesController : ControllerBase
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
         if (invoice == null)
-            return NotFound(new { message = "AR invoice not found." });
+            return NotFound(new { message = "Accounts receivable invoice not found." });
 
         var result = new
         {
@@ -120,7 +120,7 @@ public class ARInvoicesController : ControllerBase
         // Validate customer exists
         var customer = await _dbContext.Customers.FirstOrDefaultAsync(x => x.Id == request.CustomerId && x.IsActive);
         if (customer == null)
-            return BadRequest(new { message = "Customer not found or inactive." });
+            return BadRequest(new { message = "Selected customer is missing or inactive." });
 
         // Validate lines not empty
         if (request.Lines == null || request.Lines.Count == 0)
@@ -139,7 +139,7 @@ public class ARInvoicesController : ControllerBase
             .ToListAsync();
 
         if (accounts.Count != accountIds.Count)
-            return BadRequest(new { message = "One or more accounts not found or inactive." });
+            return BadRequest(new { message = "Some selected accounts are missing or inactive." });
 
         // Calculate total
         decimal totalAmount = request.Lines.Sum(x => x.Amount + (x.TaxAmount ?? 0));
@@ -190,11 +190,11 @@ public class ARInvoicesController : ControllerBase
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
         if (invoice == null)
-            return NotFound(new { message = "AR invoice not found." });
+            return NotFound(new { message = "Accounts receivable invoice not found." });
 
         // Only allow updating Draft or Sent invoices
         if (invoice.Status != ARInvoiceStatus.Draft && invoice.Status != ARInvoiceStatus.Sent)
-            return BadRequest(new { message = $"Cannot update invoice in {invoice.Status} status." });
+            return BadRequest(new { message = $"This invoice cannot be updated while it is {invoice.Status}." });
 
         // Update header
         invoice.InvoiceDate = request.InvoiceDate;
@@ -215,7 +215,7 @@ public class ARInvoicesController : ControllerBase
                 .ToListAsync();
 
             if (accounts.Count != accountIds.Count)
-                return BadRequest(new { message = "One or more accounts not found or inactive." });
+                return BadRequest(new { message = "Some selected accounts are missing or inactive." });
 
             // Add new lines
             decimal totalAmount = 0;
@@ -254,10 +254,10 @@ public class ARInvoicesController : ControllerBase
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
         if (invoice == null)
-            return NotFound(new { message = "AR invoice not found." });
+            return NotFound(new { message = "Accounts receivable invoice not found." });
 
         if (invoice.Status != ARInvoiceStatus.Draft)
-            return BadRequest(new { message = $"Cannot send invoice in {invoice.Status} status." });
+            return BadRequest(new { message = $"This invoice cannot be sent while it is {invoice.Status}." });
 
         invoice.Status = ARInvoiceStatus.Sent;
         invoice.LastModifiedByUserId = User.FindFirst("sub")?.Value ?? "system";
@@ -280,7 +280,7 @@ public class ARInvoicesController : ControllerBase
             recordId: invoice.Id.ToString(),
             details: new { invoice.InvoiceNumber, invoice.CustomerId, invoice.TotalAmount });
 
-        return Ok(new { message = "Invoice sent successfully and posted to GL", invoiceId = id });
+        return Ok(new { message = "Invoice sent successfully and posted to the general ledger.", invoiceId = id });
     }
 
     [HttpPost("{id:guid}/void")]
@@ -289,10 +289,10 @@ public class ARInvoicesController : ControllerBase
         var invoice = await _dbContext.ARInvoices.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
         if (invoice == null)
-            return NotFound(new { message = "AR invoice not found." });
+            return NotFound(new { message = "Accounts receivable invoice not found." });
 
         if (invoice.Status == ARInvoiceStatus.Paid)
-            return BadRequest(new { message = "Cannot void a paid invoice." });
+            return BadRequest(new { message = "This invoice cannot be voided because it is already paid." });
 
         invoice.Status = ARInvoiceStatus.Void;
         invoice.IsDeleted = true;
@@ -309,7 +309,7 @@ public class ARInvoicesController : ControllerBase
             recordId: invoice.Id.ToString(),
             details: new { invoice.InvoiceNumber, invoice.CustomerId, invoice.TotalAmount });
 
-        return Ok(new { message = "Invoice voided successfully", invoiceId = id });
+        return Ok(new { message = "Invoice voided successfully.", invoiceId = id });
     }
 
     [HttpPost("{id:guid}/mark-paid")]
@@ -318,16 +318,16 @@ public class ARInvoicesController : ControllerBase
     {
         var invoice = await _dbContext.ARInvoices.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (invoice is null)
-            return NotFound(new { message = "AR invoice not found." });
+            return NotFound(new { message = "Accounts receivable invoice not found." });
 
         if (invoice.Status == ARInvoiceStatus.Paid)
-            return BadRequest(new { message = "Invoice is already marked as paid." });
+            return BadRequest(new { message = "This invoice is already marked as paid." });
 
         if (invoice.Status == ARInvoiceStatus.Void)
-            return BadRequest(new { message = "Cannot mark a voided invoice as paid." });
+            return BadRequest(new { message = "This invoice cannot be marked as paid because it is voided." });
 
         if (invoice.Status == ARInvoiceStatus.Draft)
-            return BadRequest(new { message = "Cannot mark a draft invoice as paid. Send or approve it first." });
+            return BadRequest(new { message = "This invoice cannot be marked as paid while it is a draft. Send or approve it first." });
 
         invoice.Status = ARInvoiceStatus.Paid;
         invoice.LastModifiedByUserId = User.FindFirst("sub")?.Value ?? "system";

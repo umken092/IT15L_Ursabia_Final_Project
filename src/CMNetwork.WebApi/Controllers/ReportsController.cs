@@ -354,7 +354,7 @@ public class ReportsController : ControllerBase
         var normalizedType = type.Trim().ToLowerInvariant();
 
         if (normalizedFormat is not ("excel" or "pdf"))
-            return BadRequest(new { message = "Format must be 'excel' or 'pdf'." });
+            return BadRequest(new { message = "Invalid file format. Choose Excel or PDF." });
 
         if (normalizedType is not ("income-statement" or "balance-sheet" or "aging-ap" or "aging-ar"))
             return BadRequest(new { message = "Unsupported report type for export." });

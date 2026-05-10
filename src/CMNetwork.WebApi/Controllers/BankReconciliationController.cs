@@ -75,7 +75,7 @@ public class BankReconciliationController : ControllerBase
                 return BadRequest(new { message = "Bank account number is required." });
 
             if (!IsAccountNumberValid(bankAccountNumber, bank.AccountNumberPattern))
-                return BadRequest(new { message = $"Account number format is invalid for {bank.Name}. Expected format similar to {bank.AccountNumberSample}." });
+                return BadRequest(new { message = $"Account number does not match {bank.Name}'s required format. Use a format similar to {bank.AccountNumberSample}." });
 
             bankAccountName = bank.Name;
             bankDirectoryId = bank.Id;
@@ -228,14 +228,14 @@ public class BankReconciliationController : ControllerBase
             .FirstOrDefaultAsync(x => x.Id == request.JournalEntryLineId);
 
         if (glLine is null)
-            return NotFound(new { message = "GL journal entry line not found." });
+            return NotFound(new { message = "General ledger entry line not found." });
 
         if (glLine.JournalEntry?.Status != JournalEntryStatus.Posted)
             return BadRequest(new { message = "Only lines from posted journal entries can be matched." });
 
         var alreadyMatched = await _db.BankTransactions.AnyAsync(x => x.MatchedJournalEntryLineId == request.JournalEntryLineId);
         if (alreadyMatched)
-            return Conflict(new { message = "This GL line is already matched to another transaction." });
+            return Conflict(new { message = "This general ledger line is already matched to another transaction." });
 
         transaction.IsMatched = true;
         transaction.MatchedJournalEntryLineId = request.JournalEntryLineId;
@@ -245,7 +245,7 @@ public class BankReconciliationController : ControllerBase
         await _db.SaveChangesAsync();
         await UpdateReconciliationDifference(transaction.BankStatementId);
 
-        return Ok(new { message = "Matched successfully." });
+        return Ok(new { message = "Transaction matched successfully." });
     }
 
     [HttpPost("unmatch")]
@@ -277,7 +277,7 @@ public class BankReconciliationController : ControllerBase
         await _db.SaveChangesAsync();
         await UpdateReconciliationDifference(transaction.BankStatementId);
 
-        return Ok(new { message = "Unmatched successfully." });
+        return Ok(new { message = "Transaction unmatched successfully." });
     }
 
     // ── Difference ────────────────────────────────────────────────────────────
@@ -336,7 +336,7 @@ public class BankReconciliationController : ControllerBase
 
         var unmatchedCount = statement.Transactions.Count(x => !x.IsMatched);
         if (unmatchedCount > 0 && !request.ForceFinalize)
-            return BadRequest(new { message = $"There are {unmatchedCount} unmatched transactions. Set forceFinalize=true to finalize anyway." });
+            return BadRequest(new { message = $"There are {unmatchedCount} unmatched transactions. Match them first, or choose to force finalize." });
 
         reconciliation.Status = BankReconciliationStatus.Finalized;
         reconciliation.FinalizedBy = GetCurrentUser();

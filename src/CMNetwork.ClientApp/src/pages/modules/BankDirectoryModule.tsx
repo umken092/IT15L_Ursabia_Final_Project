@@ -83,7 +83,7 @@ export const BankDirectoryModule = () => {
 
   const addBank = async () => {
     if (!form.name.trim() || !form.accountNumberPattern.trim() || !form.accountNumberSample.trim()) {
-      push('warning', 'Bank name, account number format, and sample are required.')
+      push('warning', 'Bank name, account number format rule, and sample account number are required.')
       return
     }
 
@@ -122,7 +122,7 @@ export const BankDirectoryModule = () => {
 
   const saveEdit = async (id: string) => {
     if (!editForm.name.trim() || !editForm.accountNumberPattern.trim() || !editForm.accountNumberSample.trim()) {
-      push('warning', 'Bank name, account number format, and sample are required.')
+      push('warning', 'Bank name, account number format rule, and sample account number are required.')
       return
     }
 
@@ -173,10 +173,10 @@ export const BankDirectoryModule = () => {
     <section className="accountant-module">
       <header className="card-header" style={{ marginBottom: '0.75rem' }}>
         <h1 className="page-title">Bank Directory</h1>
-        <p className="card-subtitle">Manage active banks and account number formats for statement imports.</p>
+        <p className="card-subtitle">Manage active banks and account number format rules for statement imports.</p>
       </header>
 
-      <DashboardCard title="Directory Overview" subtitle="Register banks and define account number formats by bank and branch.">
+      <DashboardCard title="Directory Overview" subtitle="Register banks and define account number format rules by bank and branch.">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr auto', gap: '10px', alignItems: 'end' }}>
           <div>
             <label htmlFor="bank-directory-name">Bank Name</label>
@@ -206,16 +206,19 @@ export const BankDirectoryModule = () => {
             />
           </div>
           <div>
-            <label htmlFor="bank-directory-pattern">Account Number Regex</label>
+            <label htmlFor="bank-directory-pattern">Account Number Format Rule</label>
             <Input
               id="bank-directory-pattern"
-              placeholder="^\\d{4}-\\d{4}-\\d{2}$"
+              placeholder="Use the format pattern (advanced)"
               value={form.accountNumberPattern}
               onChange={(e: InputChangeEvent) => setForm((curr) => ({ ...curr, accountNumberPattern: toText(e.value) }))}
             />
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '4px' }}>
+              This rule checks if the account number follows your sample format.
+            </div>
           </div>
           <div>
-            <label htmlFor="bank-directory-sample">Sample Format</label>
+            <label htmlFor="bank-directory-sample">Sample Account Number</label>
             <Input
               id="bank-directory-sample"
               placeholder="1234-5678-90"
@@ -227,7 +230,7 @@ export const BankDirectoryModule = () => {
         </div>
       </DashboardCard>
 
-      <DashboardCard title="Banks" subtitle="Listed/removed timeline and format details">
+      <DashboardCard title="Banks" subtitle="Listed/removed timeline and account format details">
         <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
           <Input
             placeholder="Search bank name"
@@ -259,8 +262,8 @@ export const BankDirectoryModule = () => {
                   <th>Country</th>
                   <th>Branch</th>
                   <th>Status</th>
-                  <th>Format Regex</th>
-                  <th>Sample</th>
+                  <th>Format Rule</th>
+                  <th>Sample Account</th>
                   <th>Listed</th>
                   <th>Removed</th>
                   <th>Action</th>

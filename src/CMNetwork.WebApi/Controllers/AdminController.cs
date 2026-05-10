@@ -857,7 +857,7 @@ public class AdminController : ControllerBase
                 BuildSystemReportPdf(report),
                 "application/pdf",
                 $"system-usage-report-{timestamp}.pdf"),
-            _ => BadRequest(new { message = "Format must be csv, xlsx, or pdf." }),
+            _ => BadRequest(new { message = "Invalid file format. Choose CSV, Excel, or PDF." }),
         };
     }
 

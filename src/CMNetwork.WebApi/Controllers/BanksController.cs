@@ -109,10 +109,10 @@ public class BanksController : ControllerBase
         var currentUser = GetCurrentUser();
 
         if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(country) || string.IsNullOrWhiteSpace(pattern) || string.IsNullOrWhiteSpace(sample))
-            return BadRequest(new { message = "Bank name, country, account number format, and sample are required." });
+            return BadRequest(new { message = "Bank name, country, account number format rule, and sample account number are required." });
 
         if (!IsRegexPatternValid(pattern))
-            return BadRequest(new { message = "Account number format pattern is invalid." });
+            return BadRequest(new { message = "Account number format rule is invalid. Please update the format rule and try again." });
 
         var existing = await _db.BankDirectoryEntries.FirstOrDefaultAsync(x => x.Name.ToLower() == name.ToLower());
         if (existing is not null)
@@ -195,10 +195,10 @@ public class BanksController : ControllerBase
         var sample = request.AccountNumberSample.Trim();
 
         if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(country) || string.IsNullOrWhiteSpace(pattern) || string.IsNullOrWhiteSpace(sample))
-            return BadRequest(new { message = "Bank name, country, account number format, and sample are required." });
+            return BadRequest(new { message = "Bank name, country, account number format rule, and sample account number are required." });
 
         if (!IsRegexPatternValid(pattern))
-            return BadRequest(new { message = "Account number format pattern is invalid." });
+            return BadRequest(new { message = "Account number format rule is invalid. Please update the format rule and try again." });
 
         var duplicate = await _db.BankDirectoryEntries
             .AnyAsync(x => x.Id != id && x.Name.ToLower() == name.ToLower());
@@ -238,7 +238,7 @@ public class BanksController : ControllerBase
 
                 return BadRequest(new
                 {
-                    message = $"Cannot change account number format while {blockingWorkflowCount} open reconciliation workflow(s) still reference {bank.Name}. Finalize those statements first."
+                    message = $"Cannot change the account number format rule while {blockingWorkflowCount} statement(s) for {bank.Name} are still in progress. Finalize those statements first."
                 });
             }
         }
@@ -304,7 +304,7 @@ public class BanksController : ControllerBase
 
             return BadRequest(new
             {
-                message = $"Cannot remove {bank.Name} while {blockingWorkflowCount} open reconciliation workflow(s) still reference it. Finalize or resolve those statements first."
+                message = $"Cannot remove {bank.Name} while {blockingWorkflowCount} statement(s) are still in progress. Finalize or resolve those statements first."
             });
         }
 

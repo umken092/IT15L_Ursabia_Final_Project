@@ -118,7 +118,7 @@ public class GeneralLedgerController : ControllerBase
             return BadRequest(ModelState);
 
         if (request.EndDate < request.StartDate)
-            return BadRequest(new { message = "EndDate must be greater than or equal to StartDate." });
+            return BadRequest(new { message = "End date must be on or after the start date." });
 
         var overlaps = await _dbContext.FiscalPeriods.AnyAsync(x =>
             request.StartDate <= x.EndDate && request.EndDate >= x.StartDate);
@@ -542,7 +542,7 @@ public class GeneralLedgerController : ControllerBase
 
         var normalizedFormat = format.Trim().ToLowerInvariant();
         if (normalizedFormat is not ("excel" or "csv"))
-            return BadRequest(new { message = "Invalid export format. Use 'excel' or 'csv'." });
+            return BadRequest(new { message = "Invalid file format. Choose Excel or CSV." });
 
         if (normalizedFormat == "csv")
         {
