@@ -399,10 +399,8 @@ public class GeneralLedgerController : ControllerBase
         if (validCount != accountIds.Count)
             return BadRequest(new { message = "One or more line accounts are invalid or inactive." });
 
-        var isWithinOpenPeriod = await _dbContext.FiscalPeriods.AnyAsync(x =>
-            !x.IsClosed && request.EntryDate >= x.StartDate && request.EntryDate <= x.EndDate);
-        if (!isWithinOpenPeriod)
-            return BadRequest(new { message = "Entry date must fall within an open fiscal period." });
+        // Draft journals can be saved ahead of period setup/approval.
+        // Open-period enforcement remains in PostJournal.
 
         var entry = new JournalEntry
         {
@@ -456,10 +454,8 @@ public class GeneralLedgerController : ControllerBase
         if (validCount != accountIds.Count)
             return BadRequest(new { message = "One or more line accounts are invalid or inactive." });
 
-        var isWithinOpenPeriod = await _dbContext.FiscalPeriods.AnyAsync(x =>
-            !x.IsClosed && request.EntryDate >= x.StartDate && request.EntryDate <= x.EndDate);
-        if (!isWithinOpenPeriod)
-            return BadRequest(new { message = "Entry date must fall within an open fiscal period." });
+        // Draft journals can be edited even if the target period is currently closed/missing.
+        // Open-period enforcement remains in PostJournal.
 
         entry.EntryDate = request.EntryDate;
         entry.Description = request.Description.Trim();

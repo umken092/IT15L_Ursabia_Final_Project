@@ -79,6 +79,7 @@ const SYSTEM_ROLES: RoleMeta[] = [
 const MODULE_LIST = [
   { key: 'user-management', label: 'User Management' },
   { key: 'system-settings', label: 'System Settings' },
+  { key: 'bank-directory', label: 'Bank Directory' },
   { key: 'general-ledger', label: 'General Ledger' },
   { key: 'accounts-payable', label: 'Accounts Payable' },
   { key: 'accounts-receivable', label: 'Accounts Receivable' },

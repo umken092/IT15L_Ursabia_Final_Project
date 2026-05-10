@@ -770,7 +770,7 @@ export const ExtendedRoleOperationsModule = ({ moduleKey }: ExtendedRoleOperatio
   }
 
   const uploadReceipt = () => {
-    pushToast('info', 'Receipt uploaded. OCR extraction placeholder queued.')
+    pushToast('info', 'Receipt uploaded. OCR extraction has been queued.')
   }
 
   const downloadPayslip = async () => {

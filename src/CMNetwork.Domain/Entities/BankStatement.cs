@@ -9,6 +9,7 @@ public enum BankReconciliationStatus
 public class BankStatement
 {
     public Guid Id { get; set; }
+    public Guid? BankDirectoryId { get; set; }
     public string BankAccountName { get; set; } = string.Empty;
     public string? BankAccountNumber { get; set; }
     public DateOnly StatementDate { get; set; }
@@ -19,6 +20,7 @@ public class BankStatement
     public DateTime ImportedAtUtc { get; set; } = DateTime.UtcNow;
 
     public FiscalPeriod? FiscalPeriod { get; set; }
+    public BankDirectoryEntry? BankDirectory { get; set; }
     public ICollection<BankTransaction> Transactions { get; set; } = new List<BankTransaction>();
     public BankReconciliation? Reconciliation { get; set; }
 }

@@ -422,7 +422,7 @@ const ExecutiveSummaryView = () => {
             <div className="exs-export-body">
               <p className="exs-export-title">Export Executive Brief (PDF)</p>
               <p className="exs-export-desc">
-                Pre-formatted board-ready PDF with KPIs, summary charts, and commentary placeholder.
+                Pre-formatted board-ready PDF with KPIs, summary charts, and executive commentary.
                 Watermarked Confidential – For Authorized Viewers Only.
               </p>
             </div>

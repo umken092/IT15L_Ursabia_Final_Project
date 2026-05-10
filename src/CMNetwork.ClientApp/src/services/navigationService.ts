@@ -25,6 +25,7 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
       children: [
         { label: 'Fiscal Periods', path: '/module/fiscal-periods' },
         { label: 'Integration Settings', path: '/module/integration-settings' },
+        { label: 'Bank Directory', path: '/module/bank-directory' },
         { label: 'Security Policy', path: '/module/security-policy' },
         { label: 'Backup & Restore', path: '/module/system-settings#backup-restore' },
       ],

@@ -8,6 +8,7 @@ import { DashboardCard } from '../../components/DashboardCard'
 import { DataTable } from '../../components/ui/data-table'
 import { createClientId } from '../../lib/utils'
 import { generalLedgerService, bankReconciliationService } from '../../services/accountantService'
+import { bankDirectoryService, type BankDirectoryItem } from '../../services/bankDirectoryService'
 import { useAuthStore } from '../../store/authStore'
 import { useNotificationStore } from '../../store/notificationStore'
 import { formatMoney, useDisplayCurrency } from '../../store/currencyStore'
@@ -105,6 +106,7 @@ interface ReceivableInvoice {
 
 interface BankStatement {
   id: string
+  bankDirectoryId?: string | null
   bankAccountName: string
   bankAccountNumber: string
   statementDate: string
@@ -178,6 +180,12 @@ interface MonthEndChecklistItem {
   completed: boolean
 }
 
+interface MonthEndContext {
+  fiscalYear: number
+  month: number
+  isPeriodClosed: boolean
+}
+
 const moduleMeta: Record<AccountantModuleKey, { title: string; subtitle: string }> = {
   'general-ledger': {
     title: 'General Ledger',
@@ -242,6 +250,24 @@ const extractApiErrorMessage = (error: unknown): string => {
   return ''
 }
 
+const toFriendlyJournalSaveError = (detail: string, entryDate: string): string => {
+  const normalized = detail.trim().toLowerCase()
+
+  if (normalized.includes('open fiscal period')) {
+    return `Entry date ${entryDate} is not in an open fiscal period. Open or reopen the period from Manage Fiscal Periods, or choose a date within an open period.`
+  }
+
+  if (normalized.includes('invalid or inactive')) {
+    return 'One or more selected accounts are invalid or inactive. Update the affected journal lines and try again.'
+  }
+
+  if (normalized.includes('balanced')) {
+    return 'Journal is not balanced. Make sure total debits equal total credits before saving.'
+  }
+
+  return detail
+}
+
 const getJournalFormIssues = (
   journalForm: { date: string; reference: string; description: string },
   journalLines: JournalLineForm[],
@@ -284,11 +310,6 @@ const getJournalFormIssues = (
   return issues
 }
 
-const defaultJournals: JournalEntry[] = [
-  { id: 'JE-24018', date: '2026-04-24', reference: 'REV-RECLASS', debit: 92500, credit: 92500, status: 'Draft', recurring: false },
-  { id: 'JE-24019', date: '2026-04-25', reference: 'UTIL-ACCRUAL', debit: 18000, credit: 18000, status: 'Posted', recurring: true },
-]
-
 const createDefaultJournalLine = (side: 'debit' | 'credit'): JournalLineForm => ({
   id: createClientId(),
   side,
@@ -330,6 +351,53 @@ const normalizeJournalStatus = (status: string | number) => {
   return 'Unknown'
 }
 
+const monthLabel = (year: number, month: number) => {
+  const dt = new Date(year, month - 1, 1)
+  return dt.toLocaleString(undefined, { month: 'long', year: 'numeric' })
+}
+
+const applyAccountNumberMask = (rawValue: string, sample: string) => {
+  const digitsOnly = rawValue.replaceAll(/\D/g, '')
+  const sampleChars = sample.split('')
+  const maxDigits = sampleChars.filter((ch) => /\d/.test(ch)).length
+  const digits = digitsOnly.slice(0, maxDigits)
+
+  let digitIndex = 0
+  let output = ''
+
+  for (const ch of sampleChars) {
+    if (/\d/.test(ch)) {
+      if (digitIndex >= digits.length) break
+      output += digits[digitIndex]
+      digitIndex += 1
+      continue
+    }
+
+    if (digitIndex > 0 && digitIndex < digits.length) {
+      output += ch
+    }
+  }
+
+  return output
+}
+
+const isValidAccountNumberByPattern = (value: string, pattern: string) => {
+  try {
+    return new RegExp(pattern).test(value.trim())
+  } catch {
+    return false
+  }
+}
+
+const canCompilePattern = (pattern: string) => {
+  try {
+    new RegExp(pattern)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsModuleProps) => {
   const displayCurrency = useDisplayCurrency()
   const user = useAuthStore((state) => state.user)
@@ -339,19 +407,11 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
   const pushToast = useNotificationStore((state) => state.push)
   const currentRole = selectedRole || user?.role || 'accountant'
 
-  const [journals, setJournals] = useState<JournalEntry[]>(defaultJournals)
+  const [journals, setJournals] = useState<JournalEntry[]>([])
 
-  const [payables, setPayables] = useState<PayableInvoice[]>([
-    { id: 'AP-1001', supplier: 'Metro Office Supply', poNumber: 'PO-8821', receiptNumber: 'RCV-5511', invoiceAmount: 48200, poAmount: 48200, receiptAmount: 48200, status: 'Ready for Payment' },
-    { id: 'AP-1002', supplier: 'North Facilities', poNumber: 'PO-8830', receiptNumber: 'RCV-5519', invoiceAmount: 128000, poAmount: 128000, receiptAmount: 125000, status: 'Mismatch' },
-    { id: 'AP-1003', supplier: 'Techstream Subscriptions', poNumber: 'PO-8841', receiptNumber: 'RCV-5524', invoiceAmount: 22500, poAmount: 22500, receiptAmount: 22500, status: 'Matched' },
-  ])
+  const [payables, setPayables] = useState<PayableInvoice[]>([])
 
-  const [receivables, setReceivables] = useState<ReceivableInvoice[]>([
-    { id: 'AR-8812', customer: 'University Services', dueDate: '2026-03-10', amount: 120000, ageDays: 49, status: 'Overdue' },
-    { id: 'AR-8813', customer: 'Conference Partners', dueDate: '2026-04-30', amount: 82500, ageDays: 2, status: 'Due Soon' },
-    { id: 'AR-8814', customer: 'Training Plus', dueDate: '2026-04-15', amount: 56000, ageDays: 0, status: 'Paid' },
-  ])
+  const [receivables, setReceivables] = useState<ReceivableInvoice[]>([])
 
   const [showCreateJournal, setShowCreateJournal] = useState(false)
   const [showFiscalPeriods, setShowFiscalPeriods] = useState(false)
@@ -372,13 +432,26 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
   const [selectedBankTxId, setSelectedBankTxId] = useState<string | null>(null)
   const [selectedGlLineId, setSelectedGlLineId] = useState<string | null>(null)
   const [bankReconTab, setBankReconTab] = useState<'overview' | 'reconcile' | 'history'>('overview')
+  const [bankDirectory, setBankDirectory] = useState<BankDirectoryItem[]>([])
+  const [bankDirectoryLoading, setBankDirectoryLoading] = useState(false)
   const [importForm, setImportForm] = useState({
+    bankDirectoryId: '',
     bankName: '',
     accountNumber: '',
     statementDate: new Date().toISOString().slice(0, 10),
     openingBalance: '',
     closingBalance: '',
   })
+
+  const selectedImportBank = useMemo(
+    () => bankDirectory.find((bank) => bank.id === importForm.bankDirectoryId) ?? null,
+    [bankDirectory, importForm.bankDirectoryId],
+  )
+
+  const importAccountNumberLooksValid = useMemo(() => {
+    if (!selectedImportBank || !importForm.accountNumber.trim()) return false
+    return isValidAccountNumberByPattern(importForm.accountNumber, selectedImportBank.accountNumberPattern)
+  }, [selectedImportBank, importForm.accountNumber])
 
   const [journalForm, setJournalForm] = useState({
     date: new Date().toISOString().slice(0, 10),
@@ -405,11 +478,8 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
     format: 'csv' as 'csv' | 'excel',
   })
 
-  const [monthEndChecklist, setMonthEndChecklist] = useState<MonthEndChecklistItem[]>([
-    { id: 'reconcile', label: 'Reconcile banks', completed: false },
-    { id: 'accruals', label: 'Post accruals', completed: false },
-    { id: 'trial-balance', label: 'Review trial balance', completed: false },
-  ])
+  const [monthEndChecklist, setMonthEndChecklist] = useState<MonthEndChecklistItem[]>([])
+  const [monthEndContext, setMonthEndContext] = useState<MonthEndContext | null>(null)
   const [journalLoading, setJournalLoading] = useState(false)
   const [accountsLoading, setAccountsLoading] = useState(false)
   const [trialBalanceLoading, setTrialBalanceLoading] = useState(false)
@@ -515,12 +585,23 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
       setJournals(mapped)
 
       const checklistData = checklistResponse.data as {
+        fiscalYear?: number
+        month?: number
+        isPeriodClosed?: boolean
         tasks?: Array<{
           taskId: string
           label: string
           completed: boolean
         }>
       }
+      if (typeof checklistData.fiscalYear === 'number' && typeof checklistData.month === 'number') {
+        setMonthEndContext({
+          fiscalYear: checklistData.fiscalYear,
+          month: checklistData.month,
+          isPeriodClosed: Boolean(checklistData.isPeriodClosed),
+        })
+      }
+
       const tasks = checklistData.tasks ?? []
       if (tasks.length > 0) {
         setMonthEndChecklist(
@@ -561,8 +642,8 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
       }
 
       const toastMessage = detail
-        ? `Unable to refresh GL data from API: ${detail}. Showing cached UI values.`
-        : 'Unable to refresh GL data from API. Showing cached UI values.'
+        ? `Unable to refresh GL data from API: ${detail}.`
+        : 'Unable to refresh GL data from API.'
 
       pushToast('warning', toastMessage)
       console.error('General Ledger refresh failed', error)
@@ -609,6 +690,27 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
     () => agingRows.map((item) => ({ ...item, amountText: formatCurrency(item.amount) })),
     [agingRows, displayCurrency],
   )
+
+  const supplierViewRows = useMemo(() => {
+    const bySupplier = new Map<string, { supplier: string; count: number; status: string }>()
+
+    payables.forEach((item) => {
+      const current = bySupplier.get(item.supplier)
+      if (current) {
+        current.count += 1
+        current.status = item.status
+        return
+      }
+
+      bySupplier.set(item.supplier, {
+        supplier: item.supplier,
+        count: 1,
+        status: item.status,
+      })
+    })
+
+    return Array.from(bySupplier.values()).sort((a, b) => a.supplier.localeCompare(b.supplier))
+  }, [payables])
 
   const ledgerExportRows = useMemo(
     () =>
@@ -826,11 +928,12 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
       pushToast('success', editingJournalId ? 'Journal entry updated.' : 'Journal entry created.')
     } catch (error) {
       const detail = extractApiErrorMessage(error)
+      const message = detail
+        ? toFriendlyJournalSaveError(detail, journalForm.date)
+        : 'Unable to save journal entry. Verify the date, selected accounts, and balanced amounts, then try again.'
       pushToast(
         'error',
-        detail
-          ? `Failed to save journal entry. ${detail}`
-          : 'Failed to save journal entry. Verify fields and try again.',
+        `Failed to save journal entry. ${message}`,
       )
     }
   }
@@ -896,20 +999,33 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
       return
     }
 
+    if (monthEndContext?.isPeriodClosed) {
+      pushToast('info', `${monthLabel(monthEndContext.fiscalYear, monthEndContext.month)} is already closed.`)
+      return
+    }
+
     const today = new Date()
+    const fiscalYear = monthEndContext?.fiscalYear ?? today.getFullYear()
+    const month = monthEndContext?.month ?? (today.getMonth() + 1)
 
     try {
       await generalLedgerService.monthEndClose({
-        fiscalYear: today.getFullYear(),
-        month: today.getMonth() + 1,
+        fiscalYear,
+        month,
         checklistItems: monthEndChecklist.map((item) => ({ taskId: item.id, completed: item.completed })),
       })
 
-      await refreshGeneralLedgerData()
+      await Promise.all([refreshGeneralLedgerData(), loadFiscalPeriods()])
       setShowMonthEnd(false)
-      pushToast('success', 'Month-end close finalized and GL data refreshed.')
-    } catch {
-      pushToast('error', 'Month-end close failed. Ensure checklist tasks are complete and retry.')
+      pushToast('success', `Month-end close completed for ${monthLabel(fiscalYear, month)}.`)
+    } catch (error) {
+      const detail = extractApiErrorMessage(error)
+      pushToast(
+        'error',
+        detail
+          ? `Month-end close failed for ${monthLabel(fiscalYear, month)}. ${detail}`
+          : 'Month-end close failed. Ensure checklist tasks are complete and retry.',
+      )
     }
   }
 
@@ -1098,31 +1214,88 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
   }
 
   const handleImportStatement = async () => {
-    if (!importForm.bankName || !importForm.accountNumber || !importForm.statementDate) {
+    if (!importForm.bankDirectoryId || !importForm.accountNumber || !importForm.statementDate) {
       pushToast('error', 'Bank name, account number, and statement date are required.')
       return
     }
+
+    const selectedBank = selectedImportBank
+    if (!selectedBank) {
+      pushToast('error', 'Select a valid active bank before importing.')
+      return
+    }
+
+    if (!canCompilePattern(selectedBank.accountNumberPattern)) {
+      pushToast('error', 'Selected bank has an invalid account number format. Contact Super Admin.')
+      return
+    }
+
+    if (!isValidAccountNumberByPattern(importForm.accountNumber, selectedBank.accountNumberPattern)) {
+      pushToast('error', `Account number format is invalid for ${selectedBank.name}. Expected format similar to ${selectedBank.accountNumberSample}.`)
+      return
+    }
+
+    const opening = Number(importForm.openingBalance || 0)
+    const closing = Number(importForm.closingBalance || 0)
+    if (opening < 0 || closing < 0) {
+      pushToast('error', 'Opening and closing balances must be zero or greater.')
+      return
+    }
+
+    const statementDate = new Date(importForm.statementDate)
+    const today = new Date()
+    today.setHours(23, 59, 59, 999)
+    if (statementDate > today) {
+      pushToast('error', 'Statement date cannot be in the future.')
+      return
+    }
+
     try {
       await bankReconciliationService.importStatement({
-        bankAccountName: importForm.bankName,
+        bankDirectoryId: selectedBank.id,
+        bankAccountName: selectedBank.name,
         bankAccountNumber: importForm.accountNumber,
         statementDate: importForm.statementDate,
-        openingBalance: Number(importForm.openingBalance || 0),
-        closingBalance: Number(importForm.closingBalance || 0),
+        openingBalance: opening,
+        closingBalance: closing,
         transactions: [],
       })
       pushToast('success', 'Bank statement imported.')
       setShowImportStatement(false)
-      setImportForm({ bankName: '', accountNumber: '', statementDate: new Date().toISOString().slice(0, 10), openingBalance: '', closingBalance: '' })
+      setImportForm({
+        bankDirectoryId: '',
+        bankName: '',
+        accountNumber: '',
+        statementDate: new Date().toISOString().slice(0, 10),
+        openingBalance: '',
+        closingBalance: '',
+      })
       await loadBankStatements()
     } catch {
       pushToast('error', 'Failed to import statement.')
     }
   }
 
+  const loadBankDirectory = useCallback(async () => {
+    if (!canCallProtectedBankApi) return
+    setBankDirectoryLoading(true)
+    try {
+      const response = await bankDirectoryService.getActiveBanks()
+      setBankDirectory(response.data.items ?? [])
+    } catch {
+      pushToast('warning', 'Unable to load active banks for import.')
+    } finally {
+      setBankDirectoryLoading(false)
+    }
+  }, [canCallProtectedBankApi, pushToast])
+
   useEffect(() => {
     void loadBankStatements()
   }, [loadBankStatements])
+
+  useEffect(() => {
+    void loadBankDirectory()
+  }, [loadBankDirectory])
 
   const journalColumns = useMemo<ColumnDef<(typeof journalRows)[number]>[]>(
     () => [
@@ -1257,7 +1430,7 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
         cell: ({ row }) => {
           const period = row.original
           return (
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <Button
                 size="small"
                 disabled={period.isClosed}
@@ -2132,15 +2305,26 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
 
       {showFiscalPeriods && (
         <Dialog title="Fiscal Period Close/Reopen" onClose={() => setShowFiscalPeriods(false)}>
-          <div style={{ minWidth: '700px' }}>
+          <div
+            style={{
+              width: 'min(980px, 95vw)',
+              maxWidth: '95vw',
+              maxHeight: '75vh',
+              display: 'grid',
+              gridTemplateRows: 'auto 1fr',
+              overflow: 'hidden',
+            }}
+          >
             {fiscalPeriodsLoading && <div style={{ marginBottom: '12px', color: 'var(--text-muted)' }}>Loading fiscal periods...</div>}
-            <DataTable
-              data={fiscalPeriodRowsDisplay}
-              columns={fiscalPeriodColumns}
-              pageSizeOptions={[20, 50, 100]}
-              initialPageSize={20}
-              emptyMessage="No fiscal periods available."
-            />
+            <div style={{ overflow: 'auto' }}>
+              <DataTable
+                data={fiscalPeriodRowsDisplay}
+                columns={fiscalPeriodColumns}
+                pageSizeOptions={[20, 50, 100]}
+                initialPageSize={20}
+                emptyMessage="No fiscal periods available."
+              />
+            </div>
           </div>
           <DialogActionsBar>
             <Button onClick={() => setShowFiscalPeriods(false)}>Close</Button>
@@ -2151,6 +2335,24 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
       {showMonthEnd && (
         <Dialog title="Review Month-End Close" onClose={() => setShowMonthEnd(false)}>
           <div style={{ minWidth: '460px' }}>
+            <div
+              style={{
+                marginBottom: '14px',
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                color: '#1e3a8a',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                lineHeight: 1.35,
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: '4px' }}>
+                Target period: {monthEndContext ? monthLabel(monthEndContext.fiscalYear, monthEndContext.month) : 'Current month'}
+              </div>
+              <div>
+                Finalize will close this fiscal period. After closing, new journals for this month cannot be posted until the period is reopened.
+              </div>
+            </div>
             <div style={{ marginBottom: '16px' }}>Progress: {monthEndProgress}%</div>
             {monthEndLoading && <div style={{ marginBottom: '16px', color: 'var(--text-muted)' }}>Refreshing checklist...</div>}
             <div style={{ display: 'grid', gap: '8px', marginBottom: '16px' }}>
@@ -2163,7 +2365,9 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
             </div>
           </div>
           <DialogActionsBar>
-            <Button themeColor="primary" disabled={monthEndProgress < 100} onClick={finalizeMonthEnd}>Finalize</Button>
+            <Button themeColor="primary" disabled={monthEndProgress < 100 || monthEndContext?.isPeriodClosed === true} onClick={finalizeMonthEnd}>
+              Finalize & Close Period
+            </Button>
             <Button onClick={() => setShowMonthEnd(false)}>Cancel</Button>
           </DialogActionsBar>
         </Dialog>
@@ -2252,15 +2456,17 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
       {showSupplierView && (
         <Dialog title="Supplier View" onClose={() => setShowSupplierView(false)}>
           <div style={{ minWidth: '520px', display: 'grid', gap: '8px' }}>
-            <div style={{ border: '1px solid var(--border)', borderRadius: '8px', padding: '8px' }}>
-              Metro Office Supply - transactions: 12 - aging: Current
-            </div>
-            <div style={{ border: '1px solid var(--border)', borderRadius: '8px', padding: '8px' }}>
-              North Facilities - transactions: 5 - aging: 31-60
-            </div>
-            <div style={{ border: '1px solid var(--border)', borderRadius: '8px', padding: '8px' }}>
-              Techstream Subscriptions - transactions: 3 - aging: Current
-            </div>
+            {supplierViewRows.length === 0 ? (
+              <div style={{ border: '1px solid var(--border)', borderRadius: '8px', padding: '10px', color: 'var(--text-muted)' }}>
+                No supplier data available from the database.
+              </div>
+            ) : (
+              supplierViewRows.map((row) => (
+                <div key={row.supplier} style={{ border: '1px solid var(--border)', borderRadius: '8px', padding: '8px' }}>
+                  {row.supplier} - transactions: {row.count} - latest status: {row.status}
+                </div>
+              ))
+            )}
           </div>
           <DialogActionsBar>
             <Button onClick={() => setShowSupplierView(false)}>Close</Button>
@@ -2306,11 +2512,56 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
           <div style={{ minWidth: '480px' }}>
             <div>
               <label>Bank Name</label>
-              <Input placeholder="e.g. BDO, BPI, UnionBank" value={importForm.bankName} onChange={(e: InputChangeEvent) => setImportForm((c) => ({ ...c, bankName: String(e.value ?? '') }))} />
+              <select
+                className="k-input k-input-md w-full"
+                style={{ height: 36 }}
+                value={importForm.bankDirectoryId}
+                onChange={(e) => {
+                  const selectedBank = bankDirectory.find((bank) => bank.id === e.target.value)
+                  setImportForm((c) => ({
+                    ...c,
+                    bankDirectoryId: e.target.value,
+                    bankName: selectedBank?.name ?? '',
+                    accountNumber: '',
+                  }))
+                }}
+              >
+                <option value="">{bankDirectoryLoading ? 'Loading banks...' : 'Select bank'}</option>
+                {bankDirectory.map((bank) => (
+                  <option key={bank.id} value={bank.id}>{bank.name} ({bank.country})</option>
+                ))}
+              </select>
+              {selectedImportBank && (
+                <p style={{ color: 'var(--text-muted)', marginTop: '6px', fontSize: '12px' }}>
+                  {selectedImportBank.country}{selectedImportBank.branchName ? ` - ${selectedImportBank.branchName}` : ''}
+                </p>
+              )}
             </div>
             <div>
               <label>Account Number</label>
-              <Input placeholder="e.g. 1234-5678-90" value={importForm.accountNumber} onChange={(e: InputChangeEvent) => setImportForm((c) => ({ ...c, accountNumber: String(e.value ?? '') }))} />
+              <Input
+                placeholder={selectedImportBank?.accountNumberSample || 'e.g. 1234-5678-90'}
+                value={importForm.accountNumber}
+                onChange={(e: InputChangeEvent) => setImportForm((c) => ({
+                  ...c,
+                  accountNumber: applyAccountNumberMask(
+                    String(e.value ?? ''),
+                    selectedImportBank?.accountNumberSample || '1234-5678-90',
+                  ),
+                }))}
+              />
+              {importForm.bankDirectoryId && (
+                <p style={{ color: 'var(--text-muted)', marginTop: '6px', fontSize: '12px' }}>
+                  Expected format: {selectedImportBank?.accountNumberSample}
+                </p>
+              )}
+              {selectedImportBank && importForm.accountNumber.trim() && (
+                <p style={{ color: importAccountNumberLooksValid ? 'var(--success)' : 'var(--danger)', marginTop: '6px', fontSize: '12px' }}>
+                  {importAccountNumberLooksValid
+                    ? 'Account number format looks valid.'
+                    : `Format does not match ${selectedImportBank.name} expected structure.`}
+                </p>
+              )}
             </div>
             <div>
               <label>Statement Date</label>
@@ -2329,7 +2580,13 @@ export const AccountantOperationsModule = ({ moduleKey }: AccountantOperationsMo
             </p>
           </div>
           <DialogActionsBar>
-            <Button themeColor="primary" onClick={() => void handleImportStatement()}>Import</Button>
+            <Button
+              themeColor="primary"
+              onClick={() => void handleImportStatement()}
+              disabled={Boolean(selectedImportBank) && importForm.accountNumber.trim().length > 0 && !importAccountNumberLooksValid}
+            >
+              Import
+            </Button>
             <Button onClick={() => setShowImportStatement(false)}>Cancel</Button>
           </DialogActionsBar>
         </Dialog>

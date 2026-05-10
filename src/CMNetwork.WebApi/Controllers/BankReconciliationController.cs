@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 using CMNetwork.Domain.Entities;
 using CMNetwork.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
@@ -54,11 +55,41 @@ public class BankReconciliationController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
+        if (request.StatementDate > DateOnly.FromDateTime(DateTime.UtcNow.Date))
+            return BadRequest(new { message = "Statement date cannot be in the future." });
+
+        if (request.OpeningBalance < 0 || request.ClosingBalance < 0)
+            return BadRequest(new { message = "Opening and closing balances must be non-negative." });
+
+        var bankAccountNumber = request.BankAccountNumber?.Trim();
+        var bankAccountName = request.BankAccountName.Trim();
+        Guid? bankDirectoryId = null;
+
+        if (request.BankDirectoryId.HasValue)
+        {
+            var bank = await _db.BankDirectoryEntries.FirstOrDefaultAsync(x => x.Id == request.BankDirectoryId.Value);
+            if (bank is null || !bank.IsActive)
+                return BadRequest(new { message = "Selected bank is not available. Choose an active bank from the list." });
+
+            if (string.IsNullOrWhiteSpace(bankAccountNumber))
+                return BadRequest(new { message = "Bank account number is required." });
+
+            if (!IsAccountNumberValid(bankAccountNumber, bank.AccountNumberPattern))
+                return BadRequest(new { message = $"Account number format is invalid for {bank.Name}. Expected format similar to {bank.AccountNumberSample}." });
+
+            bankAccountName = bank.Name;
+            bankDirectoryId = bank.Id;
+        }
+
+        if (string.IsNullOrWhiteSpace(bankAccountName))
+            return BadRequest(new { message = "Bank account name is required." });
+
         var statement = new BankStatement
         {
             Id = Guid.NewGuid(),
-            BankAccountName = request.BankAccountName.Trim(),
-            BankAccountNumber = request.BankAccountNumber?.Trim(),
+            BankDirectoryId = bankDirectoryId,
+            BankAccountName = bankAccountName,
+            BankAccountNumber = bankAccountNumber,
             StatementDate = request.StatementDate,
             OpeningBalance = request.OpeningBalance,
             ClosingBalance = request.ClosingBalance,
@@ -68,6 +99,7 @@ public class BankReconciliationController : ControllerBase
         };
 
         statement.Transactions = request.Transactions.Select(t => new BankTransaction
+                x.BankDirectoryId,
         {
             Id = Guid.NewGuid(),
             BankStatementId = statement.Id,
@@ -357,6 +389,18 @@ public class BankReconciliationController : ControllerBase
             ?? "system";
     }
 
+    private static bool IsAccountNumberValid(string value, string pattern)
+    {
+        try
+        {
+            return Regex.IsMatch(value.Trim(), pattern);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private async Task UpdateReconciliationDifference(Guid statementId)
     {
         var statement = await _db.BankStatements
@@ -390,6 +434,7 @@ public record ImportStatementTransactionItem
 
 public record ImportStatementRequest
 {
+    public Guid? BankDirectoryId { get; init; }
     public string BankAccountName { get; init; } = string.Empty;
     public string? BankAccountNumber { get; init; }
     public DateOnly StatementDate { get; init; }

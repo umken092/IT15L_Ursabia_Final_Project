@@ -53,6 +53,7 @@ export const moduleRoleMap: Record<string, Role[]> = {
   'system-health': ['super-admin'],
   'admin-reports': ['super-admin'],
   'system-settings': ['super-admin'],
+  'bank-directory': ['super-admin'],
   // Accountant modules
   'general-ledger': ['accountant'],
   'accounts-payable': ['accountant'],

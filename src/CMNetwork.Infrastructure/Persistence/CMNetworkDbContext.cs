@@ -31,6 +31,7 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
     public DbSet<APInvoiceLine> APInvoiceLines => Set<APInvoiceLine>();
     public DbSet<ARInvoice> ARInvoices => Set<ARInvoice>();
     public DbSet<ARInvoiceLine> ARInvoiceLines => Set<ARInvoiceLine>();
+    public DbSet<BankDirectoryEntry> BankDirectoryEntries => Set<BankDirectoryEntry>();
     public DbSet<BankStatement> BankStatements => Set<BankStatement>();
     public DbSet<BankTransaction> BankTransactions => Set<BankTransaction>();
     public DbSet<BankReconciliation> BankReconciliations => Set<BankReconciliation>();
@@ -320,6 +321,58 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        // ── BankDirectoryEntry ───────────────────────────────────────────────
+        modelBuilder.Entity<BankDirectoryEntry>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.Country).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.BranchName).HasMaxLength(128);
+            entity.Property(x => x.AccountNumberPattern).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.AccountNumberSample).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.ListedBy).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.RemovedBy).HasMaxLength(256);
+            entity.HasIndex(x => x.Name).IsUnique();
+
+            entity.HasData(
+                new BankDirectoryEntry
+                {
+                    Id = Guid.Parse("70000000-0000-0000-0000-000000000001"),
+                    Name = "BDO",
+                    Country = "Philippines",
+                    BranchName = "Main Branch",
+                    AccountNumberPattern = "^\\d{4}-\\d{4}-\\d{2}$",
+                    AccountNumberSample = "1234-5678-90",
+                    IsActive = true,
+                    ListedAtUtc = new DateTime(2026, 5, 11, 0, 0, 0, DateTimeKind.Utc),
+                    ListedBy = "system"
+                },
+                new BankDirectoryEntry
+                {
+                    Id = Guid.Parse("70000000-0000-0000-0000-000000000002"),
+                    Name = "BPI",
+                    Country = "Philippines",
+                    BranchName = "Main Branch",
+                    AccountNumberPattern = "^\\d{3,4}-\\d{4}-\\d{2,4}$",
+                    AccountNumberSample = "1234-5678-90",
+                    IsActive = true,
+                    ListedAtUtc = new DateTime(2026, 5, 11, 0, 0, 0, DateTimeKind.Utc),
+                    ListedBy = "system"
+                },
+                new BankDirectoryEntry
+                {
+                    Id = Guid.Parse("70000000-0000-0000-0000-000000000003"),
+                    Name = "UnionBank",
+                    Country = "Philippines",
+                    BranchName = "Main Branch",
+                    AccountNumberPattern = "^\\d{4}-\\d{4}-\\d{4}$",
+                    AccountNumberSample = "1234-5678-9012",
+                    IsActive = true,
+                    ListedAtUtc = new DateTime(2026, 5, 11, 0, 0, 0, DateTimeKind.Utc),
+                    ListedBy = "system"
+                }
+            );
+        });
+
         // ── BankStatement ─────────────────────────────────────────────────────
         modelBuilder.Entity<BankStatement>(entity =>
         {
@@ -331,6 +384,10 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
             entity.HasOne(x => x.FiscalPeriod)
                 .WithMany()
                 .HasForeignKey(x => x.FiscalPeriodId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.BankDirectory)
+                .WithMany()
+                .HasForeignKey(x => x.BankDirectoryId)
                 .OnDelete(DeleteBehavior.SetNull);
             entity.HasMany(x => x.Transactions)
                 .WithOne(x => x.BankStatement)

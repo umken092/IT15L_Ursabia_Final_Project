@@ -188,6 +188,7 @@ export const bankReconciliationService = {
   },
 
   importStatement: async (data: {
+    bankDirectoryId?: string
     bankAccountName: string
     bankAccountNumber: string
     statementDate: string

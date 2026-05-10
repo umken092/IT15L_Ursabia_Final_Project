@@ -663,6 +663,7 @@ export function ARInvoicesModule() {
                 <Input
                   name="invoiceNumber"
                   value={formData.invoiceNumber}
+                  placeholder="e.g. AR-2026-0001"
                   onChange={handleHeaderChange}
                   disabled={editingId !== null}
                 />
@@ -726,6 +727,7 @@ export function ARInvoicesModule() {
                           <td className="px-2 py-2">
                             <Input
                               value={line.description}
+                              placeholder="Item or service description"
                               onChange={(e: InputChangeEvent) =>
                                 handleLineChange(line.id, 'description', (e.target.value as string) || '')
                               }
@@ -735,6 +737,7 @@ export function ARInvoicesModule() {
                             <Input
                               type="number"
                               value={line.quantity}
+                              placeholder="1"
                               onChange={(e: InputChangeEvent) =>
                                 handleLineChange(line.id, 'quantity', (e.target.value as string) || '0')
                               }
@@ -744,6 +747,7 @@ export function ARInvoicesModule() {
                             <Input
                               type="number"
                               value={line.unitPrice}
+                              placeholder="0.00"
                               onChange={(e: InputChangeEvent) =>
                                 handleLineChange(line.id, 'unitPrice', (e.target.value as string) || '0')
                               }
@@ -754,6 +758,7 @@ export function ARInvoicesModule() {
                             <Input
                               type="number"
                               value={line.taxAmount}
+                              placeholder="0.00"
                               onChange={(e: InputChangeEvent) =>
                                 handleLineChange(line.id, 'taxAmount', (e.target.value as string) || '0')
                               }
