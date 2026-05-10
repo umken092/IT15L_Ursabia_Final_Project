@@ -12,13 +12,16 @@ using CMNetwork.Middleware;
 using CMNetwork.Services;
 using CMNetwork.Infrastructure.Services;
 using Hangfire;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
+using System.IO;
 using OfficeOpenXml;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -138,6 +141,33 @@ builder.Services.AddRateLimiter(options =>
     });
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 });
+
+// ── Reverse Proxy / DataProtection ───────────────────────────────────────────
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor |
+        ForwardedHeaders.XForwardedProto |
+        ForwardedHeaders.XForwardedHost;
+
+    // Trust forwarded headers from hosting reverse proxies.
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+var configuredKeysPath = builder.Configuration["DataProtection:KeysPath"];
+if (!builder.Environment.IsDevelopment())
+{
+    var keyRingPath = !string.IsNullOrWhiteSpace(configuredKeysPath)
+        ? configuredKeysPath
+        : Path.Combine(AppContext.BaseDirectory, "data-protection-keys");
+
+    Directory.CreateDirectory(keyRingPath);
+    builder.Services
+        .AddDataProtection()
+        .SetApplicationName("CMNetwork")
+        .PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
+}
 
 // ── Build ──────────────────────────────────────────────────────────────────────
 var app = builder.Build();
@@ -261,8 +291,13 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+app.UseForwardedHeaders();
 app.UseCors("AllowFrontend");
-app.UseHttpsRedirection();
+var enableHttpsRedirection = app.Configuration.GetValue("Networking:EnableHttpsRedirection", app.Environment.IsDevelopment());
+if (enableHttpsRedirection)
+{
+    app.UseHttpsRedirection();
+}
 app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
