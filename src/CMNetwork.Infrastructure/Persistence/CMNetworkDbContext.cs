@@ -54,6 +54,7 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
             entity.Property(x => x.Code).HasMaxLength(32).IsRequired();
             entity.Property(x => x.Name).HasMaxLength(128).IsRequired();
             entity.Property(x => x.Description).HasMaxLength(512);
+            entity.Property(x => x.BudgetAmount).HasPrecision(18, 2);
             entity.HasIndex(x => x.Code).IsUnique();
             entity.HasData(
                 new Department { Id = financeId, Code = "FIN", Name = "Finance", Description = "Finance & Accounting" },
@@ -160,6 +161,7 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
         modelBuilder.Entity<BackupRecord>(entity =>
         {
             entity.Property(x => x.Status).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.SizeInMb).HasPrecision(18, 2);
         });
 
         modelBuilder.Entity<ChartOfAccount>(entity =>
@@ -254,7 +256,9 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
             entity.Property(x => x.TotalAmount).HasPrecision(18, 2);
             entity.Property(x => x.CreatedByUserId).HasMaxLength(256).IsRequired();
             entity.Property(x => x.LastModifiedByUserId).HasMaxLength(256);
-            entity.Property(x => x.Status).HasDefaultValue(APInvoiceStatus.Draft);
+            entity.Property(x => x.Status)
+                .HasDefaultValue(APInvoiceStatus.Draft)
+                .HasSentinel(APInvoiceStatus.Draft);
             entity.Property(x => x.IsDeleted).HasDefaultValue(false);
             entity.HasOne(x => x.Vendor)
                 .WithMany()
@@ -292,7 +296,9 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
             entity.Property(x => x.TotalAmount).HasPrecision(18, 2);
             entity.Property(x => x.CreatedByUserId).HasMaxLength(256).IsRequired();
             entity.Property(x => x.LastModifiedByUserId).HasMaxLength(256);
-            entity.Property(x => x.Status).HasDefaultValue(ARInvoiceStatus.Draft);
+            entity.Property(x => x.Status)
+                .HasDefaultValue(ARInvoiceStatus.Draft)
+                .HasSentinel(ARInvoiceStatus.Draft);
             entity.Property(x => x.IsDeleted).HasDefaultValue(false);
             entity.HasOne(x => x.Customer)
                 .WithMany()
