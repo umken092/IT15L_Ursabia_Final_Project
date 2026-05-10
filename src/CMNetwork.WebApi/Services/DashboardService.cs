@@ -22,7 +22,8 @@ public class DashboardService : IDashboardService
         {
             var normalizedRole = NormalizeRole(role);
             var now = DateTime.UtcNow;
-            var monthStart = new DateTime(now.Year, now.Month, 1);
+            var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            var monthStartDate = DateOnly.FromDateTime(monthStart);
 
             var postedLines = await _dbContext.JournalEntryLines
                 .Include(x => x.Account)
@@ -31,7 +32,7 @@ public class DashboardService : IDashboardService
                 .ToListAsync();
 
             var currentMonthPosted = postedLines
-                .Where(x => x.JournalEntry!.EntryDate >= DateOnly.FromDateTime(monthStart));
+                .Where(x => x.JournalEntry!.EntryDate >= monthStartDate);
 
             decimal currentRevenue = currentMonthPosted
                 .Where(x => x.Account != null && x.Account.Type == AccountType.Revenue)
@@ -42,6 +43,46 @@ public class DashboardService : IDashboardService
                 .Sum(x => x.Debit - x.Credit);
 
             decimal netIncome = currentRevenue - currentExpenses;
+
+            var cfoPeriodLabel = "MTD";
+            var cfoRevenueSubtitle = "Posted revenue journals this month";
+            var cfoExpenseSubtitle = "Posted expense journals this month";
+            var cfoRevenue = currentRevenue;
+            var cfoExpenses = currentExpenses;
+
+            if (normalizedRole == "cfo" && cfoRevenue == 0 && cfoExpenses == 0)
+            {
+                var fallbackMonth = postedLines
+                    .Where(x => x.Account != null
+                        && (x.Account.Type == AccountType.Revenue || x.Account.Type == AccountType.Expense))
+                    .GroupBy(x => new { x.JournalEntry!.EntryDate.Year, x.JournalEntry.EntryDate.Month })
+                    .Select(group => new
+                    {
+                        group.Key.Year,
+                        group.Key.Month,
+                        Revenue = group
+                            .Where(x => x.Account != null && x.Account.Type == AccountType.Revenue)
+                            .Sum(x => x.Credit - x.Debit),
+                        Expenses = group
+                            .Where(x => x.Account != null && x.Account.Type == AccountType.Expense)
+                            .Sum(x => x.Debit - x.Credit),
+                    })
+                    .Where(x => x.Revenue != 0 || x.Expenses != 0)
+                    .OrderByDescending(x => x.Year)
+                    .ThenByDescending(x => x.Month)
+                    .FirstOrDefault();
+
+                if (fallbackMonth != null)
+                {
+                    cfoRevenue = fallbackMonth.Revenue;
+                    cfoExpenses = fallbackMonth.Expenses;
+                    cfoPeriodLabel = new DateTime(fallbackMonth.Year, fallbackMonth.Month, 1, 0, 0, 0, DateTimeKind.Utc).ToString("MMM yyyy");
+                    cfoRevenueSubtitle = $"Posted revenue journals in {cfoPeriodLabel}";
+                    cfoExpenseSubtitle = $"Posted expense journals in {cfoPeriodLabel}";
+                }
+            }
+
+            decimal cfoNetIncome = cfoRevenue - cfoExpenses;
 
             var pendingAp = await _dbContext.APInvoices.CountAsync(x => !x.IsDeleted && x.Status != APInvoiceStatus.Paid && x.Status != APInvoiceStatus.Void);
             var pendingAr = await _dbContext.ARInvoices.CountAsync(x => !x.IsDeleted && x.Status != ARInvoiceStatus.Paid && x.Status != ARInvoiceStatus.Void);
@@ -100,9 +141,9 @@ public class DashboardService : IDashboardService
                 },
                 "cfo" => new List<MetricDto>
                 {
-                    new() { Title = "Total Revenue (MTD)", Value = FormatCurrency(currentRevenue), Subtitle = "Posted revenue journals this month", TrendDirection = "up" },
-                    new() { Title = "Total Expenses (MTD)", Value = FormatCurrency(currentExpenses), Subtitle = "Posted expense journals this month", TrendDirection = "down" },
-                    new() { Title = "Net Income (MTD)", Value = FormatCurrency(netIncome), Subtitle = "Revenue - expenses", TrendDirection = netIncome >= 0 ? "up" : "down" },
+                    new() { Title = $"Total Revenue ({cfoPeriodLabel})", Value = FormatCurrency(cfoRevenue), Subtitle = cfoRevenueSubtitle, TrendDirection = "up" },
+                    new() { Title = $"Total Expenses ({cfoPeriodLabel})", Value = FormatCurrency(cfoExpenses), Subtitle = cfoExpenseSubtitle, TrendDirection = "down" },
+                    new() { Title = $"Net Income ({cfoPeriodLabel})", Value = FormatCurrency(cfoNetIncome), Subtitle = "Revenue - expenses", TrendDirection = cfoNetIncome >= 0 ? "up" : "down" },
                 },
                 _ => new List<MetricDto>(),
             };

@@ -88,10 +88,25 @@ const breadcrumbLabelByPath: Partial<Record<Role, Record<string, string[]>>> = {
   },
 }
 
+const ACRONYM_MAP: Record<string, string> = {
+  cfo: 'CFO',
+  ap: 'AP',
+  ar: 'AR',
+  gl: 'GL',
+  fa: 'FA',
+  av: 'AV',
+}
+
 const formatCrumb = (segment: string) =>
   segment
     .split('-')
-    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .map((part) => {
+      const normalized = part.toLowerCase()
+      if (ACRONYM_MAP[normalized]) {
+        return ACRONYM_MAP[normalized]
+      }
+      return part[0].toUpperCase() + part.slice(1)
+    })
     .join(' ')
 
 const isRole = (value: string): value is Role => {

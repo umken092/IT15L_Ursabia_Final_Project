@@ -54,6 +54,17 @@ interface ApiApprovalQueueItem {
   createdAtUtc: string
 }
 
+const approvalStatusFromApi = (value: number): QueueItem['status'] => {
+  switch (value) {
+    case 2:
+      return 'Approved'
+    case 3:
+      return 'Rejected'
+    default:
+      return 'Pending'
+  }
+}
+
 interface BudgetDepartment {
   id: string
   code: string
@@ -562,16 +573,19 @@ export const ExtendedRoleOperationsModule = ({ moduleKey }: ExtendedRoleOperatio
     try {
       const res = await approvalsService.getApprovalQueue()
       const items = (res.data as ApiApprovalQueueItem[]) ?? []
-      setQueueItems(items.map((item) => ({
-        id: item.id,
-        title: item.entityDescription,
-        entityType: item.entityType,
-        entityId: item.entityId,
-        requestedByName: item.requestedByName,
-        amount: item.amount,
-        priority: item.amount > 10000 ? 'High' : item.amount > 3000 ? 'Medium' : 'Low',
-        status: 'Pending',
-      })))
+      setQueueItems(items.map((item) => {
+        const amount = item.amount ?? 0
+        return {
+          id: item.id,
+          title: item.entityDescription,
+          entityType: item.entityType,
+          entityId: item.entityId,
+          requestedByName: item.requestedByName,
+          amount,
+          priority: amount > 10000 ? 'High' : amount > 3000 ? 'Medium' : 'Low',
+          status: approvalStatusFromApi(item.status),
+        }
+      }))
     } catch {
       pushToast('warning', 'Unable to load approval queue.')
     } finally {
@@ -1731,7 +1745,7 @@ const ApprovalInboxView = ({
                                 type="button"
                                 title="View details"
                                 className="ai-icon-btn"
-                                onClick={(e) => { e.stopPropagation(); onSelectItem(item.id); onForward(); }}
+                                onClick={(e) => { e.stopPropagation(); onSelectItem(item.id); }}
                               >
                                 ⊙
                               </button>
@@ -2014,6 +2028,10 @@ const BudgetControlView = ({
           ) : (
           <svg viewBox="0 0 760 280" preserveAspectRatio="none" style={{ width: '100%', height: chartHeight }}>
             <defs>
+              <linearGradient id="bc-actual-gradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#1e40af" />
+                <stop offset="100%" stopColor="#3b82f6" />
+              </linearGradient>
               <pattern id="bc-stripe" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
                 <rect width="3" height="6" fill="#cbd5e1" />
                 <rect x="3" width="3" height="6" fill="transparent" />
@@ -2024,22 +2042,26 @@ const BudgetControlView = ({
               return (
                 <g key={g.toString()}>
                   <line x1="50" x2="750" y1={y} y2={y} stroke="#f1f5f9" strokeWidth="1" />
-                  <text x="40" y={y + 4} textAnchor="end" fontSize="11" fill="#94a3b8">{g.toFixed(2)}M</text>
+                  <text x="40" y={y + 4} textAnchor="end" fontSize="11" fill="#64748b">{displayCurrency} {g.toFixed(1)}M</text>
                 </g>
               )
             })}
             {months.map((m, i) => {
-              const groupX = 60 + i * 58
+              const groupX = 62 + i * 57
               const aH = (actualsM[i] / maxVal) * 220
               const pH = (projectedM[i] / maxVal) * 220
               return (
                 <g key={m}>
-                  <rect x={groupX} y={240 - pH} width="18" height={pH} fill="url(#bc-stripe)" rx="2" />
-                  <rect x={groupX + 22} y={240 - aH} width="18" height={aH} fill="#1d4ed8" rx="2" />
-                  <text x={groupX + 20} y="262" textAnchor="middle" fontSize="11" fill="#94a3b8">{m}</text>
+                  <rect x={groupX} y={240 - pH} width="20" height={pH} fill="url(#bc-stripe)" stroke="#94a3b8" strokeWidth="1" rx="5" />
+                  <rect x={groupX + 24} y={240 - aH} width="20" height={aH} fill="url(#bc-actual-gradient)" rx="5" />
+                  <text x={groupX + 22} y="262" textAnchor="middle" fontSize="11" fill="#475569">{m}</text>
                 </g>
               )
             })}
+            <text x="400" y="278" textAnchor="middle" fontSize="12" fill="#334155">Month</text>
+            <text x="14" y="145" textAnchor="middle" transform="rotate(-90 14 145)" fontSize="12" fill="#334155">
+              Spend ({displayCurrency}, millions)
+            </text>
           </svg>
           )}
         </div>

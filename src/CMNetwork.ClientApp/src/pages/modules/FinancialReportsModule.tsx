@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Dialog, DialogActionsBar } from '@progress/kendo-react-dialogs'
 import { useNotificationStore } from '../../store/notificationStore'
 import { useAuthStore } from '../../store/authStore'
@@ -252,6 +252,13 @@ export const FinancialReportsModule = () => {
   const [newScheduleCadence, setNewScheduleCadence] = useState<ScheduleCadence>('Weekly')
   const [newScheduleTarget, setNewScheduleTarget] = useState<ScheduleTarget>('Excel')
   const [newScheduleActive, setNewScheduleActive] = useState(true)
+  const [liveSummaryLoading, setLiveSummaryLoading] = useState(false)
+  const [liveSummary, setLiveSummary] = useState({
+    savedReports: 0,
+    activeSchedules: 0,
+    netIncome: 0,
+    lastUpdated: '',
+  })
 
   const rrIsDateRange = rrType === 'income-statement' || rrType === 'cash-flow'
   const rrIsBudget = rrType === 'department-budget'
@@ -609,6 +616,37 @@ export const FinancialReportsModule = () => {
     }
   }
 
+  const loadLiveSummary = useCallback(async () => {
+    setLiveSummaryLoading(true)
+    try {
+      const [templatesRes, schedulesRes, incomeRes] = await Promise.all([
+        reportsService.listTemplates(),
+        reportsService.listSchedules(),
+        reportsService.getIncomeStatement({ startDate: firstOfMonth, endDate: today }),
+      ])
+
+      const templatesCount = templatesRes.data.items?.length ?? 0
+      const schedules = schedulesRes.data.items ?? []
+      const activeSchedules = schedules.filter((item) => item.active).length
+      const incomeData = incomeRes.data as { netIncome?: number }
+
+      setLiveSummary({
+        savedReports: templatesCount,
+        activeSchedules,
+        netIncome: incomeData.netIncome ?? 0,
+        lastUpdated: new Date().toISOString(),
+      })
+    } catch {
+      push('warning', 'Unable to refresh live report summary right now.')
+    } finally {
+      setLiveSummaryLoading(false)
+    }
+  }, [push])
+
+  useEffect(() => {
+    void loadLiveSummary()
+  }, [loadLiveSummary])
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -623,15 +661,23 @@ export const FinancialReportsModule = () => {
               Consolidated reporting workspace with read-only and drill-down outputs based on role permissions.
             </p>
           </div>
-
+          <button
+            type="button"
+            onClick={() => { void loadLiveSummary() }}
+            disabled={liveSummaryLoading}
+            style={{ border: '1px solid #cbd5e1', background: '#fff', color: '#1d4ed8', borderRadius: 8, padding: '8px 14px', fontWeight: 600, cursor: liveSummaryLoading ? 'not-allowed' : 'pointer' }}
+          >
+            {liveSummaryLoading ? 'Refreshing...' : 'Refresh Live Data'}
+          </button>
         </div>
       </div>
 
       {/* Stats row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, marginBottom: 14 }}>
         {[
-          { label: 'Saved Reports', value: '14', sub: 'Available in your role scope', valueColor: '#111827' },
-          { label: 'Scheduled Exports', value: '6', sub: 'Auto-generated weekly/monthly', valueColor: '#111827' },
+          { label: 'Saved Reports', value: String(liveSummary.savedReports), sub: 'Templates available in your role scope', valueColor: '#111827' },
+          { label: 'Scheduled Exports', value: String(liveSummary.activeSchedules), sub: 'Active automations ready to run', valueColor: '#111827' },
+          { label: 'Net Income (MTD)', value: formatCurrency(liveSummary.netIncome), sub: liveSummary.lastUpdated ? `Live as of ${new Date(liveSummary.lastUpdated).toLocaleString()}` : 'Loading from live APIs', valueColor: liveSummary.netIncome >= 0 ? '#065f46' : '#b91c1c' },
         ].map(({ label, value, sub, valueColor }) => (
           <div key={label} style={{ background: '#fff', borderRadius: 12, border: '1px solid #d1d5db', padding: '14px 16px', minHeight: 132 }}>
             <div style={{ fontWeight: 700, color: '#111827', marginBottom: 10, fontSize: 16 }}>{label}</div>
