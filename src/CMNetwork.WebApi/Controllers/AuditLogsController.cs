@@ -48,6 +48,7 @@ public class AuditLogsController : ControllerBase
         var q = BuildAuditQuery(category, userEmail, entityName, recordId, action, from, to, reviewed);
 
         var total = await q.CountAsync();
+        var reviewedCount = await q.CountAsync(x => x.IsReviewed);
         var items = await q
             .OrderByDescending(x => x.CreatedUtc)
             .Skip((page - 1) * pageSize)
@@ -71,7 +72,7 @@ public class AuditLogsController : ControllerBase
             })
             .ToListAsync();
 
-        return Ok(new { totalCount = total, page, pageSize, items });
+        return Ok(new { totalCount = total, reviewedCount, page, pageSize, items });
     }
 
     [HttpPost("review")]
@@ -97,11 +98,9 @@ public class AuditLogsController : ControllerBase
         }
         await _dbContext.SaveChangesAsync();
 
-        await _audit.LogAsync(
-            entityName: nameof(CMNetwork.Domain.Entities.AuditLogEntry),
-            action: "Reviewed",
-            category: AuditCategories.Review,
-            details: new { count = rows.Count, ids = rows.Select(r => r.Id) });
+        // Note: review actions are intentionally not self-logged here.
+        // Each entry already records ReviewedBy and ReviewedDate, which provides
+        // a sufficient audit trail without adding unreviewed noise to the list.
 
         return Ok(new { reviewed = rows.Count });
     }

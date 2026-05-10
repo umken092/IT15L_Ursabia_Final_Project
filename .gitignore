@@ -32,3 +32,4 @@ local-stderr.txt
 login-payload.json
 remote-CMNetwork.WebApi.dll
 /server-logs/
+/deploy-logs/

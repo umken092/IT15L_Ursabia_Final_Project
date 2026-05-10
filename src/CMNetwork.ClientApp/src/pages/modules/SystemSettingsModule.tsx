@@ -339,6 +339,8 @@ export const SystemSettingsModule = () => {
   const [backups, setBackups] = useState<BackupRecord[]>([])
   const [integrations, setIntegrations] = useState<IntegrationSetting[]>([])
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([])
+  const [auditTotalCount, setAuditTotalCount] = useState(0)
+  const [auditReviewedCount, setAuditReviewedCount] = useState(0)
   const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLogItem | null>(null)
   const [selectedAuditIds, setSelectedAuditIds] = useState<string[]>([])
   const [showAuditSearch, setShowAuditSearch] = useState(false)
@@ -406,6 +408,9 @@ export const SystemSettingsModule = () => {
       setPolicyDraft(Object.fromEntries(policyData.map((policy) => [policy.id, policy.enabled])))
       setBackups(backupData)
       setIntegrations(integrationData)
+      const auditMeta = auditRes.data as { totalCount?: number; reviewedCount?: number } | undefined
+      setAuditTotalCount(auditMeta?.totalCount ?? auditItems.length)
+      setAuditReviewedCount(auditMeta?.reviewedCount ?? auditItems.filter((i) => i.reviewed).length)
       setAuditLogs(auditItems)
       retainSelectableAuditIds(auditItems)
     } catch {
@@ -680,12 +685,12 @@ export const SystemSettingsModule = () => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
               <div className="kpi-card">
                 <div className="kpi-title">Events</div>
-                <div className="kpi-value">{filteredAuditLogs.length}</div>
+                <div className="kpi-value">{auditTotalCount}</div>
                 <p className="kpi-subtitle">Latest tracked admin and system actions</p>
               </div>
               <div className="kpi-card">
                 <div className="kpi-title">Reviewed</div>
-                <div className="kpi-value">{filteredAuditLogs.filter((item) => item.reviewed).length}</div>
+                <div className="kpi-value">{auditReviewedCount}</div>
                 <p className="kpi-subtitle">Entries already acknowledged</p>
               </div>
               <div className="kpi-card">
