@@ -99,7 +99,6 @@ public class BankReconciliationController : ControllerBase
         };
 
         statement.Transactions = request.Transactions.Select(t => new BankTransaction
-                x.BankDirectoryId,
         {
             Id = Guid.NewGuid(),
             BankStatementId = statement.Id,
