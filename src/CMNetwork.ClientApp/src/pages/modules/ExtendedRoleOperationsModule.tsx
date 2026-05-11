@@ -1036,7 +1036,6 @@ export const ExtendedRoleOperationsModule = ({ moduleKey }: ExtendedRoleOperatio
           onReject={(id) => processSingleApproval(id, 'Reject')}
           onApproveBatch={approveBatch}
           onExport={exportApprovalQueue}
-          onForward={forwardForClarification}
           onSelectItem={setSelectedQueueId}
           selectedItemId={selectedQueueId}
         />
@@ -1558,7 +1557,6 @@ interface ApprovalInboxViewProps {
   onReject: (id: string) => void
   onApproveBatch: () => void
   onExport: () => void
-  onForward: () => void
 }
 
 const PAGE_SIZE = 10
@@ -1613,7 +1611,6 @@ const ApprovalInboxView = ({
   onReject,
   onApproveBatch,
   onExport,
-  onForward,
 }: ApprovalInboxViewProps) => {
   const [page, setPage] = useState(1)
   const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE))
