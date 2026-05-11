@@ -9,8 +9,13 @@ RUN npm run build
 # Stage 2: Build the .NET Web API (skip the MSBuild SPA target — already built above)
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
-COPY . .
+COPY CMNetwork.sln ./
+COPY src/CMNetwork.Domain/CMNetwork.Domain.csproj src/CMNetwork.Domain/
+COPY src/CMNetwork.Application/CMNetwork.Application.csproj src/CMNetwork.Application/
+COPY src/CMNetwork.Infrastructure/CMNetwork.Infrastructure.csproj src/CMNetwork.Infrastructure/
+COPY src/CMNetwork.WebApi/CMNetwork.WebApi.csproj src/CMNetwork.WebApi/
 RUN dotnet restore src/CMNetwork.WebApi/CMNetwork.WebApi.csproj
+COPY . .
 RUN dotnet publish src/CMNetwork.WebApi/CMNetwork.WebApi.csproj -c Release -o /app/publish /p:UseAppHost=false /p:SkipSpaBuild=true
 
 # Copy the pre-built SPA dist into the publish wwwroot

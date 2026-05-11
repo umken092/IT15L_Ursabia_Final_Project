@@ -22,3 +22,13 @@ artifacts
 
 # Existing docs/output not needed for image
 dataabsestructure.md
+agent-skills/
+cmnetwork-erp/
+docs/
+memories/
+
+# Client app generated output and test artifacts
+src/CMNetwork.ClientApp/dist
+src/CMNetwork.ClientApp/playwright-report
+src/CMNetwork.ClientApp/test-results
+src/CMNetwork.ClientApp/tests
