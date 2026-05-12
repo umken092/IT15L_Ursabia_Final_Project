@@ -844,15 +844,6 @@ export const ExtendedRoleOperationsModule = ({ moduleKey }: ExtendedRoleOperatio
     }
   }
 
-  const forwardForClarification = () => {
-    if (!selectedQueueId) {
-      pushToast('warning', 'Select an item to forward.')
-      return
-    }
-
-    pushToast('info', `${selectedQueueId} forwarded for clarification.`)
-  }
-
   const processSingleApproval = async (id: string, action: 'Approve' | 'Reject') => {
     try {
       await approvalsService.processApproval({ approvalId: id, action })
