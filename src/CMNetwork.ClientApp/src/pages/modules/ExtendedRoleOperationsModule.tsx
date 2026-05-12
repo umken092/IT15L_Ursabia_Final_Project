@@ -1914,8 +1914,27 @@ const BudgetControlView = ({
   const projectedM = monthsData.map((m) => convertAmount(m.projected, sourceCurrency, displayCurrency) / 1_000_000)
   const peakValue = Math.max(0.5, ...actualsM, ...projectedM)
   const maxVal = Math.ceil(peakValue * 2) / 2 || 0.5
-  const chartHeight = 260
   const chartGridLines = [0, maxVal * 0.25, maxVal * 0.5, maxVal * 0.75, maxVal]
+  const chartDims = {
+    width: 760,
+    height: 280,
+    left: 56,
+    right: 22,
+    top: 20,
+    bottom: 40,
+  }
+  const plotWidth = chartDims.width - chartDims.left - chartDims.right
+  const plotHeight = chartDims.height - chartDims.top - chartDims.bottom
+  const monthCount = Math.max(1, months.length)
+  const slotWidth = plotWidth / monthCount
+  const projectedBarWidth = Math.max(12, Math.min(20, slotWidth * 0.33))
+  const barGap = Math.max(5, Math.min(10, slotWidth * 0.14))
+  const actualBarWidth = projectedBarWidth
+  const groupWidth = projectedBarWidth + barGap + actualBarWidth
+  const monthLabelY = chartDims.top + plotHeight + 22
+  const xAxisY = chartDims.top + plotHeight
+  const chartCenterX = chartDims.left + plotWidth / 2
+  const chartSvgMinWidth = Math.max(620, monthCount * 56 + 140)
   const formatMillionsTick = (value: number) => {
     if (value === 0) return '0'
     if (value >= 100) return value.toFixed(0)
@@ -2020,7 +2039,12 @@ const BudgetControlView = ({
           {budgetLoading ? (
             <div style={{ padding: 24 }}><SkeletonCard rows={4} /></div>
           ) : (
-          <svg viewBox="0 0 760 280" preserveAspectRatio="none" style={{ width: '100%', height: chartHeight }}>
+          <svg
+            className="bc-chart-svg"
+            viewBox={`0 0 ${chartDims.width} ${chartDims.height}`}
+            preserveAspectRatio="xMidYMid meet"
+            style={{ minWidth: chartSvgMinWidth }}
+          >
             <defs>
               <linearGradient id="bc-actual-gradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#1e40af" />
@@ -2038,32 +2062,58 @@ const BudgetControlView = ({
                 <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#1d4ed8" floodOpacity="0.2" />
               </filter>
             </defs>
-            <rect x="50" y="20" width="700" height="220" rx="12" fill="url(#bc-plot-bg)" />
-            <line x1="50" x2="50" y1="20" y2="240" stroke="#cbd5e1" strokeWidth="1" />
-            <line x1="50" x2="750" y1="240" y2="240" stroke="#cbd5e1" strokeWidth="1" />
+            <rect x={chartDims.left} y={chartDims.top} width={plotWidth} height={plotHeight} rx="12" fill="url(#bc-plot-bg)" />
+            <line x1={chartDims.left} x2={chartDims.left} y1={chartDims.top} y2={xAxisY} stroke="#cbd5e1" strokeWidth="1" />
+            <line x1={chartDims.left} x2={chartDims.left + plotWidth} y1={xAxisY} y2={xAxisY} stroke="#cbd5e1" strokeWidth="1" />
             {chartGridLines.map((g) => {
-              const y = 240 - (g / maxVal) * 220
+              const y = chartDims.top + plotHeight - (g / maxVal) * plotHeight
               return (
                 <g key={g.toString()}>
-                  <line x1="50" x2="750" y1={y} y2={y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4 4" />
-                  <text x="42" y={y + 4} textAnchor="end" fontSize="11" fill="#64748b">{formatMillionsTick(g)}M</text>
+                  <line
+                    x1={chartDims.left}
+                    x2={chartDims.left + plotWidth}
+                    y1={y}
+                    y2={y}
+                    stroke="#e2e8f0"
+                    strokeWidth="1"
+                    strokeDasharray="4 4"
+                  />
+                  <text x={chartDims.left - 8} y={y + 4} textAnchor="end" fontSize="11" fill="#64748b">{formatMillionsTick(g)}M</text>
                 </g>
               )
             })}
             {months.map((m, i) => {
-              const groupX = 62 + i * 57
-              const aH = (actualsM[i] / maxVal) * 220
-              const pH = (projectedM[i] / maxVal) * 220
+              const slotX = chartDims.left + i * slotWidth
+              const groupX = slotX + (slotWidth - groupWidth) / 2
+              const aH = (actualsM[i] / maxVal) * plotHeight
+              const pH = (projectedM[i] / maxVal) * plotHeight
               return (
                 <g key={m}>
-                  <rect x={groupX} y={240 - pH} width="20" height={pH} fill="#f8fafc" stroke="#94a3b8" strokeWidth="1" rx="5" />
-                  <rect x={groupX} y={240 - pH} width="20" height={pH} fill="url(#bc-stripe)" rx="5" />
-                  <rect x={groupX + 24} y={240 - aH} width="20" height={aH} fill="url(#bc-actual-gradient)" rx="5" filter="url(#bc-bar-shadow)" />
-                  <text x={groupX + 22} y="262" textAnchor="middle" fontSize="11" fill="#475569">{m}</text>
+                  <rect
+                    x={groupX}
+                    y={xAxisY - pH}
+                    width={projectedBarWidth}
+                    height={pH}
+                    fill="#f8fafc"
+                    stroke="#94a3b8"
+                    strokeWidth="1"
+                    rx="5"
+                  />
+                  <rect x={groupX} y={xAxisY - pH} width={projectedBarWidth} height={pH} fill="url(#bc-stripe)" rx="5" />
+                  <rect
+                    x={groupX + projectedBarWidth + barGap}
+                    y={xAxisY - aH}
+                    width={actualBarWidth}
+                    height={aH}
+                    fill="url(#bc-actual-gradient)"
+                    rx="5"
+                    filter="url(#bc-bar-shadow)"
+                  />
+                  <text x={slotX + slotWidth / 2} y={monthLabelY} textAnchor="middle" fontSize="11" fill="#475569">{m}</text>
                 </g>
               )
             })}
-            <text x="400" y="278" textAnchor="middle" fontSize="12" fill="#334155" fontWeight="600">Month</text>
+            <text x={chartCenterX} y={chartDims.height - 2} textAnchor="middle" fontSize="12" fill="#334155" fontWeight="600">Month</text>
             <text x="12" y="145" textAnchor="middle" transform="rotate(-90 12 145)" fontSize="11" fill="#64748b" fontWeight="600">
               Spend ({displayCurrency}, M)
             </text>

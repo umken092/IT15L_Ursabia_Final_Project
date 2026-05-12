@@ -6253,6 +6253,15 @@ section > div:first-child,
 
 .budget-control .bc-chart-body {
   width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.budget-control .bc-chart-svg {
+  display: block;
+  width: 100%;
+  height: clamp(220px, 34vw, 310px);
 }
 
 .budget-control .bc-chart-foot {
@@ -6493,6 +6502,22 @@ section > div:first-child,
   .budget-control .bc-chart-legend {
     gap: 12px;
     flex-wrap: wrap;
+  }
+  .budget-control .bc-chart-svg {
+    min-width: 620px;
+  }
+}
+
+@media (max-width: 640px) {
+  .budget-control .bc-chart-card {
+    padding: 16px 14px 12px;
+  }
+  .budget-control .bc-chart-svg {
+    min-width: 560px;
+    height: 230px;
+  }
+  .budget-control .bc-chart-foot {
+    font-size: 11px;
   }
 }
 
