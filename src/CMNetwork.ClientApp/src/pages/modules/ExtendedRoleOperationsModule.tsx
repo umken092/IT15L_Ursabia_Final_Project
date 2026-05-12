@@ -1916,6 +1916,12 @@ const BudgetControlView = ({
   const maxVal = Math.ceil(peakValue * 2) / 2 || 0.5
   const chartHeight = 260
   const chartGridLines = [0, maxVal * 0.25, maxVal * 0.5, maxVal * 0.75, maxVal]
+  const formatMillionsTick = (value: number) => {
+    if (value === 0) return '0'
+    if (value >= 100) return value.toFixed(0)
+    if (value >= 10) return value.toFixed(1).replace(/\.0$/, '')
+    return value.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')
+  }
 
   const allocatedFillPct = totalAllocated > 0 ? Math.min(100, (totalActual / totalAllocated) * 100) : 0
   const remainingPct = totalAllocated > 0 ? Math.min(100, (remainingForecast / totalAllocated) * 100) : 0
@@ -2003,11 +2009,11 @@ const BudgetControlView = ({
         <div className="bc-chart-head">
           <div>
             <h3 className="bc-chart-title">Projected vs. Actual Spending</h3>
-            <p className="bc-chart-sub">FINANCIAL YEAR {budget?.year ?? new Date().getFullYear()} ANALYSIS · {displayCurrency} (MILLIONS)</p>
+            <p className="bc-chart-sub">Financial year {budget?.year ?? new Date().getFullYear()} analysis · values in {displayCurrency} millions</p>
           </div>
           <div className="bc-chart-legend">
-            <span><i style={{ background: '#1d4ed8' }} /> ACTUAL SPENDING</span>
-            <span><i className="bc-legend-stripe" /> PROJECTED TARGET</span>
+            <span><i style={{ background: 'linear-gradient(180deg, #1e40af 0%, #3b82f6 100%)' }} /> Actual spending</span>
+            <span><i className="bc-legend-stripe" /> Projected target</span>
           </div>
         </div>
         <div className="bc-chart-body">
@@ -2020,17 +2026,27 @@ const BudgetControlView = ({
                 <stop offset="0%" stopColor="#1e40af" />
                 <stop offset="100%" stopColor="#3b82f6" />
               </linearGradient>
+              <linearGradient id="bc-plot-bg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#f8fbff" />
+                <stop offset="100%" stopColor="#ffffff" />
+              </linearGradient>
               <pattern id="bc-stripe" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
                 <rect width="3" height="6" fill="#cbd5e1" />
                 <rect x="3" width="3" height="6" fill="transparent" />
               </pattern>
+              <filter id="bc-bar-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#1d4ed8" floodOpacity="0.2" />
+              </filter>
             </defs>
+            <rect x="50" y="20" width="700" height="220" rx="12" fill="url(#bc-plot-bg)" />
+            <line x1="50" x2="50" y1="20" y2="240" stroke="#cbd5e1" strokeWidth="1" />
+            <line x1="50" x2="750" y1="240" y2="240" stroke="#cbd5e1" strokeWidth="1" />
             {chartGridLines.map((g) => {
               const y = 240 - (g / maxVal) * 220
               return (
                 <g key={g.toString()}>
-                  <line x1="50" x2="750" y1={y} y2={y} stroke="#f1f5f9" strokeWidth="1" />
-                  <text x="40" y={y + 4} textAnchor="end" fontSize="11" fill="#64748b">{displayCurrency} {g.toFixed(1)}M</text>
+                  <line x1="50" x2="750" y1={y} y2={y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4 4" />
+                  <text x="42" y={y + 4} textAnchor="end" fontSize="11" fill="#64748b">{formatMillionsTick(g)}M</text>
                 </g>
               )
             })}
@@ -2040,15 +2056,16 @@ const BudgetControlView = ({
               const pH = (projectedM[i] / maxVal) * 220
               return (
                 <g key={m}>
-                  <rect x={groupX} y={240 - pH} width="20" height={pH} fill="url(#bc-stripe)" stroke="#94a3b8" strokeWidth="1" rx="5" />
-                  <rect x={groupX + 24} y={240 - aH} width="20" height={aH} fill="url(#bc-actual-gradient)" rx="5" />
+                  <rect x={groupX} y={240 - pH} width="20" height={pH} fill="#f8fafc" stroke="#94a3b8" strokeWidth="1" rx="5" />
+                  <rect x={groupX} y={240 - pH} width="20" height={pH} fill="url(#bc-stripe)" rx="5" />
+                  <rect x={groupX + 24} y={240 - aH} width="20" height={aH} fill="url(#bc-actual-gradient)" rx="5" filter="url(#bc-bar-shadow)" />
                   <text x={groupX + 22} y="262" textAnchor="middle" fontSize="11" fill="#475569">{m}</text>
                 </g>
               )
             })}
-            <text x="400" y="278" textAnchor="middle" fontSize="12" fill="#334155">Month</text>
-            <text x="14" y="145" textAnchor="middle" transform="rotate(-90 14 145)" fontSize="12" fill="#334155">
-              Spend ({displayCurrency}, millions)
+            <text x="400" y="278" textAnchor="middle" fontSize="12" fill="#334155" fontWeight="600">Month</text>
+            <text x="12" y="145" textAnchor="middle" transform="rotate(-90 12 145)" fontSize="11" fill="#64748b" fontWeight="600">
+              Spend ({displayCurrency}, M)
             </text>
           </svg>
           )}

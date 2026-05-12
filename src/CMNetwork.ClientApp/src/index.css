@@ -6196,6 +6196,7 @@ section > div:first-child,
 
 .budget-control .bc-chart-card {
   padding: 22px 24px 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
 }
 
 .budget-control .bc-chart-head {
@@ -6208,28 +6209,28 @@ section > div:first-child,
 }
 
 .budget-control .bc-chart-title {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
   margin: 0;
   color: #0f172a;
 }
 
 .budget-control .bc-chart-sub {
   margin: 4px 0 0;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: #94a3b8;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: #64748b;
 }
 
 .budget-control .bc-chart-legend {
   display: flex;
   gap: 18px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: #64748b;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
 }
 
 .budget-control .bc-chart-legend span {
@@ -6257,9 +6258,9 @@ section > div:first-child,
 .budget-control .bc-chart-foot {
   display: flex;
   justify-content: flex-end;
-  font-size: 11px;
+  font-size: 12px;
   color: #94a3b8;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .budget-control .bc-queue-head {
@@ -6480,6 +6481,18 @@ section > div:first-child,
   }
   .budget-control .bc-header-actions {
     justify-content: flex-end;
+  }
+  .budget-control .bc-chart-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .budget-control .bc-chart-title {
+    font-size: 18px;
+  }
+  .budget-control .bc-chart-legend {
+    gap: 12px;
+    flex-wrap: wrap;
   }
 }
 
