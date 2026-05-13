@@ -136,10 +136,10 @@ export const PayrollProcessingPage = ({
                 {lines.map((line) => (
                   <tr key={line.employeeId}>
                     <td>{line.employeeName}</td>
-                    <td><input type="number" value={line.regularHours} disabled={!allowEditing} onChange={(e) => onUpdateLine(line.employeeId, 'regularHours', Number(e.target.value))} /></td>
-                    <td><input type="number" value={line.overtimeHours} disabled={!allowEditing} onChange={(e) => onUpdateLine(line.employeeId, 'overtimeHours', Number(e.target.value))} /></td>
-                    <td><input type="number" value={line.absenceHours} disabled={!allowEditing} onChange={(e) => onUpdateLine(line.employeeId, 'absenceHours', Number(e.target.value))} /></td>
-                    <td><input type="number" value={line.otherDeductions} disabled={!allowEditing} onChange={(e) => onUpdateLine(line.employeeId, 'otherDeductions', Number(e.target.value))} /></td>
+                    <td><input type="number" value={line.regularHours} disabled={!allowEditing} onChange={(e) => onUpdateLine(line.employeeId, 'regularHours', Number(e.target.value))} placeholder="Total regular hours" title="Enter total regular hours worked for the period (not PHP)" /></td>
+                    <td><input type="number" value={line.overtimeHours} disabled={!allowEditing} onChange={(e) => onUpdateLine(line.employeeId, 'overtimeHours', Number(e.target.value))} placeholder="Total OT hours" title="Enter total overtime hours worked for the period (not PHP)" /></td>
+                    <td><input type="number" value={line.absenceHours} disabled={!allowEditing} onChange={(e) => onUpdateLine(line.employeeId, 'absenceHours', Number(e.target.value))} placeholder="Total absent hours" title="Enter total hours absent for the period (not PHP)" /></td>
+                    <td><input type="number" value={line.otherDeductions} disabled={!allowEditing} onChange={(e) => onUpdateLine(line.employeeId, 'otherDeductions', Number(e.target.value))} placeholder="₱ deductions" title="Enter total other deductions in PHP (₱)" /></td>
                   </tr>
                 ))}
               </tbody>

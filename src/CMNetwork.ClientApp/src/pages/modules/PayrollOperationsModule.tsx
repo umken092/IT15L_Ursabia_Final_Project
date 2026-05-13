@@ -6,7 +6,7 @@ import { useNotificationStore } from '../../store/notificationStore'
 import { extractApiError } from '../../utils/errorUtils'
 import { MyPayslipsPage } from './payroll/MyPayslipsPage'
 import { PayrollApprovalPage } from './payroll/PayrollApprovalPage'
-import { payrollFaqItems, payrollWalkthroughSteps } from './payroll/helpContent'
+import { payrollFaqItems } from './payroll/helpContent'
 import type { PayrollHelpRole } from './payroll/helpContent'
 import { PayrollOverviewPage } from './payroll/PayrollOverviewPage'
 import { PayrollProcessingPage } from './payroll/PayrollProcessingPage'
@@ -31,7 +31,6 @@ export const PayrollOperationsModule = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [helpOpen, setHelpOpen] = useState(false)
-  const [walkthroughOpen, setWalkthroughOpen] = useState(false)
   const [helpQuery, setHelpQuery] = useState('')
 
   const [activePage, setActivePage] = useState<'overview' | 'periods' | 'processing' | 'approval' | 'payslips'>('overview')
@@ -415,9 +414,6 @@ export const PayrollOperationsModule = () => {
             </Button>
           ))}
 
-          <Button fillMode="outline" onClick={() => setWalkthroughOpen(true)}>
-            Payroll Walkthrough
-          </Button>
           <Button fillMode="outline" onClick={() => setHelpOpen((current) => !current)}>
             Need Help?
           </Button>
@@ -453,37 +449,6 @@ export const PayrollOperationsModule = () => {
           </section>
         )}
       </article>
-
-      {walkthroughOpen && (
-        <section style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(15, 23, 42, 0.55)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 50,
-          padding: '1rem',
-        }}>
-          <article className="card" style={{ width: 'min(860px, 100%)', maxHeight: '85vh', overflowY: 'auto' }}>
-            <header className="card-head">
-              <h3 className="card-title">Payroll Walkthrough</h3>
-              <p className="card-subtitle">Replay this guide anytime from the Payroll page.</p>
-            </header>
-            <div style={{ display: 'grid', gap: '0.6rem' }}>
-              {payrollWalkthroughSteps.map((step) => (
-                <article key={step.title} style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '0.65rem' }}>
-                  <p style={{ margin: 0, fontWeight: 600 }}>{step.title}</p>
-                  <p className="card-subtitle" style={{ marginBottom: 0 }}>{step.detail}</p>
-                </article>
-              ))}
-            </div>
-            <div style={{ marginTop: '0.8rem', display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-              <Button fillMode="outline" onClick={() => setWalkthroughOpen(false)}>Close</Button>
-            </div>
-          </article>
-        </section>
-      )}
 
       {activePage === 'overview' && (
         <PayrollOverviewPage periods={periods} runs={runs} capabilities={capabilities} />

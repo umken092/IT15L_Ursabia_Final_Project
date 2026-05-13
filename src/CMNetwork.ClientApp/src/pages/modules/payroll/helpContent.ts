@@ -88,30 +88,3 @@ export const payrollFaqItems: PayrollFaqItem[] = [
     answer: 'Draft: editable, Submitted: waiting for CFO, Rejected: needs correction, Approved/Processed: finalized by CFO, Paid/Posted: posted to accounting.',
   },
 ]
-
-export const payrollWalkthroughSteps: Array<{ title: string; detail: string }> = [
-  {
-    title: '1) Select Pay Period',
-    detail: 'Open Pay Periods and create/select the active period for payroll.',
-  },
-  {
-    title: '2) Load Setup',
-    detail: 'In Processing, choose period then click Load Setup to fetch employee lines.',
-  },
-  {
-    title: '3) Enter Hours and Calculate',
-    detail: 'Fill regular/overtime/absence/deductions then click Calculate to generate totals.',
-  },
-  {
-    title: '4) Submit for Review',
-    detail: 'Click Submit to send the run to CFO. Use Withdraw for pre-approval corrections.',
-  },
-  {
-    title: '5) CFO Decision',
-    detail: 'CFO approves or rejects. Reject loops back for edits; Re-open is controlled and audited.',
-  },
-  {
-    title: '6) Post to GL',
-    detail: 'After approval/processed status, post to GL to complete accounting entries.',
-  },
-]
