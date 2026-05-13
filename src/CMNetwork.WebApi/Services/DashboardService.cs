@@ -34,9 +34,21 @@ public class DashboardService : IDashboardService
             var currentMonthPosted = postedLines
                 .Where(x => x.JournalEntry!.EntryDate >= monthStartDate);
 
-            decimal currentRevenue = currentMonthPosted
+            decimal currentRevenueFromJournals = currentMonthPosted
                 .Where(x => x.Account != null && x.Account.Type == AccountType.Revenue)
                 .Sum(x => x.Credit - x.Debit);
+
+            // Derive revenue from AR invoices (Sent, Approved, Paid) when no revenue journals exist.
+            // This handles the common case where AR invoices are the source of revenue but haven't been
+            // posted as GL journal entries yet.
+            var currentMonthArRevenue = await _dbContext.ARInvoices
+                .Where(x => !x.IsDeleted
+                    && (x.Status == ARInvoiceStatus.Sent || x.Status == ARInvoiceStatus.Approved || x.Status == ARInvoiceStatus.Paid)
+                    && x.InvoiceDate >= monthStart)
+                .SumAsync(x => (decimal?)x.TotalAmount) ?? 0m;
+
+            decimal currentRevenue = currentRevenueFromJournals > 0 ? currentRevenueFromJournals : currentMonthArRevenue;
+            string currentRevenueSource = currentRevenueFromJournals > 0 ? "Posted revenue journals" : "AR invoices issued";
 
             decimal currentExpenses = currentMonthPosted
                 .Where(x => x.Account != null && x.Account.Type == AccountType.Expense)
@@ -45,13 +57,14 @@ public class DashboardService : IDashboardService
             decimal netIncome = currentRevenue - currentExpenses;
 
             var cfoPeriodLabel = "MTD";
-            var cfoRevenueSubtitle = "Posted revenue journals this month";
+            var cfoRevenueSubtitle = $"{currentRevenueSource} this month";
             var cfoExpenseSubtitle = "Posted expense journals this month";
             var cfoRevenue = currentRevenue;
             var cfoExpenses = currentExpenses;
 
             if (normalizedRole == "cfo" && cfoRevenue == 0 && cfoExpenses == 0)
             {
+                // Fallback: find most recent month that has expense journal data
                 var fallbackMonth = postedLines
                     .Where(x => x.Account != null
                         && (x.Account.Type == AccountType.Revenue || x.Account.Type == AccountType.Expense))
@@ -60,24 +73,35 @@ public class DashboardService : IDashboardService
                     {
                         group.Key.Year,
                         group.Key.Month,
-                        Revenue = group
+                        RevenueFromJournals = group
                             .Where(x => x.Account != null && x.Account.Type == AccountType.Revenue)
                             .Sum(x => x.Credit - x.Debit),
                         Expenses = group
                             .Where(x => x.Account != null && x.Account.Type == AccountType.Expense)
                             .Sum(x => x.Debit - x.Credit),
                     })
-                    .Where(x => x.Revenue != 0 || x.Expenses != 0)
+                    .Where(x => x.RevenueFromJournals != 0 || x.Expenses != 0)
                     .OrderByDescending(x => x.Year)
                     .ThenByDescending(x => x.Month)
                     .FirstOrDefault();
 
                 if (fallbackMonth != null)
                 {
-                    cfoRevenue = fallbackMonth.Revenue;
-                    cfoExpenses = fallbackMonth.Expenses;
                     cfoPeriodLabel = new DateTime(fallbackMonth.Year, fallbackMonth.Month, 1, 0, 0, 0, DateTimeKind.Utc).ToString("MMM yyyy");
-                    cfoRevenueSubtitle = $"Posted revenue journals in {cfoPeriodLabel}";
+                    // Try AR invoices for that fallback month if no revenue journals
+                    var fallbackArRevenue = fallbackMonth.RevenueFromJournals == 0
+                        ? (await _dbContext.ARInvoices
+                            .Where(x => !x.IsDeleted
+                                && (x.Status == ARInvoiceStatus.Sent || x.Status == ARInvoiceStatus.Approved || x.Status == ARInvoiceStatus.Paid)
+                                && x.InvoiceDate >= new DateTime(fallbackMonth.Year, fallbackMonth.Month, 1, 0, 0, 0, DateTimeKind.Utc)
+                                && x.InvoiceDate < new DateTime(fallbackMonth.Year, fallbackMonth.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(1))
+                            .SumAsync(x => (decimal?)x.TotalAmount) ?? 0m)
+                        : fallbackMonth.RevenueFromJournals;
+
+                    cfoRevenue = fallbackArRevenue;
+                    cfoExpenses = fallbackMonth.Expenses;
+                    var fallbackRevenueSource = fallbackMonth.RevenueFromJournals == 0 ? "AR invoices issued" : "Posted revenue journals";
+                    cfoRevenueSubtitle = $"{fallbackRevenueSource} in {cfoPeriodLabel}";
                     cfoExpenseSubtitle = $"Posted expense journals in {cfoPeriodLabel}";
                 }
             }
@@ -161,40 +185,56 @@ public class DashboardService : IDashboardService
     {
         try
         {
-            var year = 2026;
-            var months = Enumerable.Range(1, 6).Select(m => new DateOnly(year, m, 1)).ToList();
+            var now = DateTime.UtcNow;
+            var year = now.Year;
+            var currentMonth = now.Month;
+            // Show up to the current month
+            var months = Enumerable.Range(1, currentMonth).Select(m => new DateOnly(year, m, 1)).ToList();
 
             var postedLines = await _dbContext.JournalEntryLines
                 .Include(x => x.Account)
                 .Include(x => x.JournalEntry)
                 .Where(x => x.JournalEntry != null && x.JournalEntry.Status == JournalEntryStatus.Posted)
-                .Where(x => x.JournalEntry!.EntryDate.Year == year && x.JournalEntry.EntryDate.Month <= 6)
+                .Where(x => x.JournalEntry!.EntryDate.Year == year && x.JournalEntry.EntryDate.Month <= currentMonth)
                 .ToListAsync();
 
-            var data = months.Select(month =>
-            {
-                var monthLines = postedLines
-                    .Where(x => x.JournalEntry!.EntryDate.Month == month.Month)
-                    .ToList();
-
-                var revenue = monthLines
-                    .Where(x => x.Account != null && x.Account.Type == AccountType.Revenue)
-                    .Sum(x => x.Credit - x.Debit);
-
-                var expenses = monthLines
-                    .Where(x => x.Account != null && x.Account.Type == AccountType.Expense)
-                    .Sum(x => x.Debit - x.Credit);
-
-                return new ChartDataPoint
+            // Load AR invoice totals per month for revenue fallback
+            var arInvoices = await _dbContext.ARInvoices
+                .Where(x => !x.IsDeleted
+                    && (x.Status == ARInvoiceStatus.Sent || x.Status == ARInvoiceStatus.Approved || x.Status == ARInvoiceStatus.Paid)
+                    && x.InvoiceDate.Year == year && x.InvoiceDate.Month <= currentMonth)
+                .Select(x => new { x.InvoiceDate.Month, x.TotalAmount })
+                .ToListAsync();
+                var data = months.Select(month =>
                 {
-                    Label = month.ToString("MMM"),
-                    Series = new List<SeriesData>
+                    var monthLines = postedLines
+                        .Where(x => x.JournalEntry != null && x.JournalEntry.EntryDate.Month == month.Month)
+                        .ToList();
+
+                    var revenueFromJournals = monthLines
+                        .Where(x => x.Account != null && x.Account.Type == AccountType.Revenue)
+                        .Sum(x => x.Credit - x.Debit);
+
+                    var revenueFromAr = arInvoices
+                        .Where(x => x.Month == month.Month)
+                        .Sum(x => x.TotalAmount);
+
+                    var revenue = revenueFromJournals > 0 ? revenueFromJournals : revenueFromAr;
+
+                    var expenses = monthLines
+                        .Where(x => x.Account != null && x.Account.Type == AccountType.Expense)
+                        .Sum(x => x.Debit - x.Credit);
+
+                    return new ChartDataPoint
                     {
-                        new() { Name = "Revenue", Values = new List<double> { (double)revenue } },
-                        new() { Name = "Expenses", Values = new List<double> { (double)expenses } },
-                    }
-                };
-            }).ToList();
+                        Label = month.ToString("MMM"),
+                        Series = new List<SeriesData>
+                        {
+                            new() { Name = "Revenue", Values = new List<double> { (double)revenue } },
+                            new() { Name = "Expenses", Values = new List<double> { (double)expenses } },
+                        }
+                    };
+                }).ToList();
 
             return new ChartDataResponse
             {
