@@ -62,7 +62,7 @@ public class DashboardService : IDashboardService
             var cfoRevenue = currentRevenue;
             var cfoExpenses = currentExpenses;
 
-            if (normalizedRole == "cfo" && cfoRevenue == 0 && cfoExpenses == 0)
+            if (normalizedRole == "cfo" && (cfoRevenue == 0 || cfoExpenses == 0))
             {
                 // Fallback: find most recent month that has expense journal data
                 var fallbackMonth = postedLines
