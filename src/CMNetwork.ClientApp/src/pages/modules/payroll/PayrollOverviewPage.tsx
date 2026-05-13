@@ -1,12 +1,13 @@
-import type { PayPeriodDto, PayrollRunDto } from './types'
+import type { PayPeriodDto, PayrollIntegrationCapabilitiesDto, PayrollRunDto } from './types'
 import { formatCurrency, periodStatusLabel, runStatusLabel } from './types'
 
 interface PayrollOverviewPageProps {
   periods: PayPeriodDto[]
   runs: PayrollRunDto[]
+  capabilities: PayrollIntegrationCapabilitiesDto | null
 }
 
-export const PayrollOverviewPage = ({ periods, runs }: PayrollOverviewPageProps) => {
+export const PayrollOverviewPage = ({ periods, runs, capabilities }: PayrollOverviewPageProps) => {
   const openPeriods = periods.filter((period) => period.status !== 2).length
   const submittedRuns = runs.filter((run) => run.status === 2).length
   const postedRuns = runs.filter((run) => run.status === 6).length
@@ -32,6 +33,15 @@ export const PayrollOverviewPage = ({ periods, runs }: PayrollOverviewPageProps)
           <p style={{ fontSize: '1.5rem', margin: '0.25rem 0 0 0' }}>{postedRuns}</p>
         </div>
       </div>
+
+      <article className="card" style={{ marginBottom: '1rem' }}>
+        <p className="card-subtitle" style={{ marginTop: 0 }}>
+          Currency Scope: <strong>{capabilities?.currencyMode === 'PHP_ONLY' ? 'PHP only (MVP)' : capabilities?.currencyMode ?? 'PHP only (MVP)'}</strong>
+        </p>
+        <p className="card-subtitle" style={{ marginBottom: 0 }}>
+          Future Integrations: Bank Export ({capabilities?.supportsBankFileExport ? 'Enabled' : 'Planned'}), BIR Export ({capabilities?.supportsBirExport ? 'Enabled' : 'Planned'}), Government Contribution Export ({capabilities?.supportsGovContributionExport ? 'Enabled' : 'Planned'}).
+        </p>
+      </article>
 
       <div style={{ overflowX: 'auto' }}>
         <table className="table-like" style={{ width: '100%', marginBottom: '0.75rem' }}>

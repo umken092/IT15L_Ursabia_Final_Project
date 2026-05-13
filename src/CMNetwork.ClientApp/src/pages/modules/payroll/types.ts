@@ -1,5 +1,14 @@
 export type PayrollRunStatus = 'Draft' | 'Submitted' | 'Approved' | 'Rejected' | 'Processed' | 'Posted'
 
+export const payrollFlowSteps: Array<{ status: number; label: string }> = [
+  { status: 1, label: 'Draft' },
+  { status: 2, label: 'Submitted' },
+  { status: 4, label: 'Rejected' },
+  { status: 3, label: 'Approved' },
+  { status: 5, label: 'Processed' },
+  { status: 6, label: 'Paid/Posted' },
+]
+
 export interface PayPeriodDto {
   id: string
   year: number
@@ -80,6 +89,16 @@ export interface PayslipSummaryDto {
   generatedAtUtc: string
 }
 
+export interface PayrollIntegrationCapabilitiesDto {
+  currencyMode: string
+  supportsDisplayOnlyCurrencyConversion: boolean
+  supportsForeignCurrencyPayrollProcessing: boolean
+  supportsBankFileExport: boolean
+  supportsBirExport: boolean
+  supportsGovContributionExport: boolean
+  notes: string
+}
+
 export const formatCurrency = (value: number) =>
   new Intl.NumberFormat('en-PH', {
     style: 'currency',
@@ -107,3 +126,12 @@ export const runStatusLabel = (status: number): PayrollRunStatus => {
       return 'Draft'
   }
 }
+
+export const canEditPayrollInputs = (status?: number): boolean =>
+  !status || status === 1 || status === 4
+
+export const canSubmitPayrollRun = (status?: number): boolean =>
+  status === 1 || status === 4
+
+export const canPostToGl = (status?: number): boolean =>
+  status === 3 || status === 5

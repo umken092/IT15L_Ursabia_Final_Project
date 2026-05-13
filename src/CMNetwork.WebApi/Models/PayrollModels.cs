@@ -61,6 +61,19 @@ public class RejectPayrollRequest
     public string RejectionReason { get; set; } = string.Empty;
 }
 
+public class WithdrawPayrollRequest
+{
+    [MaxLength(512)]
+    public string? WithdrawalReason { get; set; }
+}
+
+public class ReopenPayrollRequest
+{
+    [Required]
+    [MaxLength(512)]
+    public string ReopenReason { get; set; } = string.Empty;
+}
+
 public class CreateTaxTableRequest
 {
     [Required]
@@ -186,4 +199,15 @@ public class TaxTableDto
     public string Description { get; set; } = string.Empty;
     public DateOnly EffectiveFrom { get; set; }
     public DateOnly? EffectiveTo { get; set; }
+}
+
+public class PayrollIntegrationCapabilitiesDto
+{
+    public string CurrencyMode { get; set; } = "PHP_ONLY";
+    public bool SupportsDisplayOnlyCurrencyConversion { get; set; }
+    public bool SupportsForeignCurrencyPayrollProcessing { get; set; }
+    public bool SupportsBankFileExport { get; set; }
+    public bool SupportsBirExport { get; set; }
+    public bool SupportsGovContributionExport { get; set; }
+    public string Notes { get; set; } = string.Empty;
 }

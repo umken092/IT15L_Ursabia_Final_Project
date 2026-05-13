@@ -113,6 +113,29 @@ public class PayrollController : ControllerBase
         }
     }
 
+    [HttpPost("runs/{payrollRunId:guid}/withdraw")]
+    [Authorize(Roles = "accountant,super-admin")]
+    public async Task<IActionResult> WithdrawPayroll(Guid payrollRunId, [FromBody] WithdrawPayrollRequest? request)
+    {
+        try
+        {
+            var result = await _payrollService.WithdrawPayrollAsync(
+                payrollRunId,
+                GetCurrentUserId(),
+                User.IsInRole("super-admin"),
+                request?.WithdrawalReason);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+    }
+
     [HttpGet("runs/{payrollRunId:guid}/register")]
     [Authorize(Roles = "cfo,super-admin")]
     public async Task<IActionResult> GetPayrollRegister(Guid payrollRunId)
@@ -164,6 +187,35 @@ public class PayrollController : ControllerBase
         try
         {
             var result = await _payrollService.RejectPayrollAsync(payrollRunId, request, GetCurrentUserId());
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("runs/{payrollRunId:guid}/re-open")]
+    [Authorize(Roles = "cfo,super-admin")]
+    public async Task<IActionResult> ReopenPayroll(Guid payrollRunId, [FromBody] ReopenPayrollRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        try
+        {
+            var result = await _payrollService.ReopenPayrollAsync(
+                payrollRunId,
+                request,
+                GetCurrentUserId(),
+                User.IsInRole("super-admin"),
+                User.IsInRole("cfo"));
             return Ok(result);
         }
         catch (KeyNotFoundException ex)
@@ -249,6 +301,14 @@ public class PayrollController : ControllerBase
     public async Task<IActionResult> GetTaxTables([FromQuery] int? year = null, [FromQuery] TaxTableType? type = null)
     {
         var result = await _payrollService.GetTaxTablesAsync(year, type);
+        return Ok(result);
+    }
+
+    [HttpGet("integration-capabilities")]
+    [Authorize(Roles = "super-admin,accountant,cfo")]
+    public async Task<IActionResult> GetIntegrationCapabilities()
+    {
+        var result = await _payrollService.GetIntegrationCapabilitiesAsync();
         return Ok(result);
     }
 

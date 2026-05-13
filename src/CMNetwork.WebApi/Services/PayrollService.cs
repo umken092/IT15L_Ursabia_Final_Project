@@ -11,6 +11,7 @@ namespace CMNetwork.Services;
 
 public class PayrollService : IPayrollService
 {
+    private const string PayrollRunNotFoundMessage = "Payroll run not found.";
     private readonly CMNetworkDbContext _db;
 
     public PayrollService(CMNetworkDbContext db)
@@ -253,7 +254,7 @@ public class PayrollService : IPayrollService
 
         if (run is null)
         {
-            throw new KeyNotFoundException("Payroll run not found.");
+            throw new KeyNotFoundException(PayrollRunNotFoundMessage);
         }
 
         if (run.Status != PayrollRunStatus.Draft && run.Status != PayrollRunStatus.Rejected)
@@ -276,6 +277,40 @@ public class PayrollService : IPayrollService
         return MapRun(run, run.PayPeriod);
     }
 
+    public async Task<PayrollRunDto> WithdrawPayrollAsync(Guid payrollRunId, string requestedByUserId, bool isSuperAdmin, string? withdrawalReason)
+    {
+        var run = await _db.PayrollRuns
+            .Include(x => x.PayPeriod)
+            .FirstOrDefaultAsync(x => x.Id == payrollRunId && !x.IsDeleted);
+
+        if (run is null)
+        {
+            throw new KeyNotFoundException(PayrollRunNotFoundMessage);
+        }
+
+        if (run.Status != PayrollRunStatus.Submitted)
+        {
+            throw new InvalidOperationException("Only submitted payroll runs can be withdrawn.");
+        }
+
+        if (!isSuperAdmin && !string.Equals(run.SubmittedByUserId, requestedByUserId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Only the submitting accountant can withdraw this payroll run.");
+        }
+
+        run.Status = PayrollRunStatus.Draft;
+        run.RejectionReason = string.IsNullOrWhiteSpace(withdrawalReason)
+            ? "Withdrawn by accountant for correction."
+            : $"Withdrawn for correction: {withdrawalReason.Trim()}";
+        run.SubmittedAtUtc = null;
+        run.SubmittedByUserId = null;
+        run.LastModifiedByUserId = requestedByUserId;
+        run.LastModifiedUtc = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return MapRun(run, run.PayPeriod);
+    }
+
     public async Task<PayrollRegisterDto> GetPayrollRegisterAsync(Guid payrollRunId)
     {
         var run = await _db.PayrollRuns
@@ -285,7 +320,7 @@ public class PayrollService : IPayrollService
 
         if (run is null)
         {
-            throw new KeyNotFoundException("Payroll run not found.");
+            throw new KeyNotFoundException(PayrollRunNotFoundMessage);
         }
 
         var lineItems = run.LineItems
@@ -335,7 +370,7 @@ public class PayrollService : IPayrollService
 
         if (run is null)
         {
-            throw new KeyNotFoundException("Payroll run not found.");
+            throw new KeyNotFoundException(PayrollRunNotFoundMessage);
         }
 
         if (run.Status != PayrollRunStatus.Submitted)
@@ -362,7 +397,7 @@ public class PayrollService : IPayrollService
 
         if (run is null)
         {
-            throw new KeyNotFoundException("Payroll run not found.");
+            throw new KeyNotFoundException(PayrollRunNotFoundMessage);
         }
 
         if (run.Status != PayrollRunStatus.Submitted)
@@ -373,6 +408,59 @@ public class PayrollService : IPayrollService
         run.Status = PayrollRunStatus.Rejected;
         run.RejectionReason = request.RejectionReason;
         run.LastModifiedByUserId = rejectedByUserId;
+        run.LastModifiedUtc = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return MapRun(run, run.PayPeriod);
+    }
+
+    public async Task<PayrollRunDto> ReopenPayrollAsync(Guid payrollRunId, ReopenPayrollRequest request, string requestedByUserId, bool isSuperAdmin, bool isCfo)
+    {
+        var run = await _db.PayrollRuns
+            .Include(x => x.PayPeriod)
+            .FirstOrDefaultAsync(x => x.Id == payrollRunId && !x.IsDeleted);
+
+        if (run is null)
+        {
+            throw new KeyNotFoundException(PayrollRunNotFoundMessage);
+        }
+
+        if (run.Status is not PayrollRunStatus.Approved and not PayrollRunStatus.Processed)
+        {
+            throw new InvalidOperationException("Only approved or processed payroll runs can be reopened.");
+        }
+
+        if (!isSuperAdmin)
+        {
+            if (!isCfo)
+            {
+                throw new InvalidOperationException("You are not allowed to reopen this payroll run.");
+            }
+
+            if (!run.ApprovedAtUtc.HasValue)
+            {
+                throw new InvalidOperationException("Payroll run cannot be reopened because approval timestamp is missing.");
+            }
+
+            var reopenWindow = TimeSpan.FromHours(24);
+            if (DateTime.UtcNow - run.ApprovedAtUtc.Value > reopenWindow)
+            {
+                throw new InvalidOperationException("CFO reopen window has elapsed (24 hours after approval).");
+            }
+        }
+
+        if (run.Status == PayrollRunStatus.Posted || run.JournalEntryId.HasValue)
+        {
+            throw new InvalidOperationException("Payroll run cannot be reopened after posting/payment.");
+        }
+
+        run.Status = PayrollRunStatus.Draft;
+        run.RejectionReason = $"Re-opened for correction: {request.ReopenReason.Trim()}";
+        run.ApprovedAtUtc = null;
+        run.ApprovedByUserId = null;
+        run.SubmittedAtUtc = null;
+        run.SubmittedByUserId = null;
+        run.LastModifiedByUserId = requestedByUserId;
         run.LastModifiedUtc = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -565,6 +653,20 @@ public class PayrollService : IPayrollService
             .ThenBy(x => x.MinIncome)
             .Select(x => MapTaxTable(x))
             .ToListAsync();
+    }
+
+    public Task<PayrollIntegrationCapabilitiesDto> GetIntegrationCapabilitiesAsync()
+    {
+        return Task.FromResult(new PayrollIntegrationCapabilitiesDto
+        {
+            CurrencyMode = "PHP_ONLY",
+            SupportsDisplayOnlyCurrencyConversion = false,
+            SupportsForeignCurrencyPayrollProcessing = false,
+            SupportsBankFileExport = false,
+            SupportsBirExport = false,
+            SupportsGovContributionExport = false,
+            Notes = "MVP is PHP-only payroll. Integration endpoints are reserved for future phases.",
+        });
     }
 
     private async Task GeneratePayslipsAsync(PayrollRun run, string generatedBy)
