@@ -16,12 +16,18 @@ public class AuthController : ControllerBase
     private readonly IAuthService _authService;
     private readonly IAuditEventLogger _audit;
     private readonly ILogger<AuthController> _logger;
+    private readonly RuntimeHealthStatus _runtimeHealth;
 
-    public AuthController(IAuthService authService, IAuditEventLogger audit, ILogger<AuthController> logger)
+    public AuthController(
+        IAuthService authService,
+        IAuditEventLogger audit,
+        ILogger<AuthController> logger,
+        RuntimeHealthStatus runtimeHealth)
     {
         _authService = authService;
         _audit       = audit;
         _logger      = logger;
+        _runtimeHealth = runtimeHealth;
     }
 
     [HttpPost("login")]
@@ -211,5 +217,21 @@ public class AuthController : ControllerBase
 
     [HttpGet("health")]
     public IActionResult Health() =>
-        Ok(new { status = "Auth service is healthy", timestamp = DateTime.UtcNow });
+        Ok(new
+        {
+            status = _runtimeHealth.DatabaseAvailable ? "healthy" : "degraded",
+            service = "Auth service is running",
+            timestamp = DateTime.UtcNow,
+            startedUtc = _runtimeHealth.StartedUtc,
+            database = new
+            {
+                available = _runtimeHealth.DatabaseAvailable,
+                message = _runtimeHealth.DatabaseStatusMessage
+            },
+            hangfire = new
+            {
+                enabled = _runtimeHealth.HangfireEnabled,
+                started = _runtimeHealth.HangfireStarted
+            }
+        });
 }

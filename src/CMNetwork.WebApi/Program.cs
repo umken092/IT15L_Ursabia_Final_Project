@@ -35,6 +35,7 @@ var jwtSecret   = builder.Configuration["Jwt:Secret"]   ?? "fallback-secret-key-
 var jwtIssuer   = builder.Configuration["Jwt:Issuer"]   ?? "cmnetwork";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "cmnetwork-client";
 var hangfireEnabled = builder.Configuration.GetValue("Hangfire:Enabled", true);
+builder.Services.AddSingleton<RuntimeHealthStatus>();
 
 // ── Services ─────────────────────────────────────────────────────────────────
 builder.Services.AddControllers();
@@ -174,6 +175,12 @@ if (!builder.Environment.IsDevelopment())
 
 // ── Build ──────────────────────────────────────────────────────────────────────
 var app = builder.Build();
+var runtimeHealth = app.Services.GetRequiredService<RuntimeHealthStatus>();
+runtimeHealth.StartedUtc = DateTime.UtcNow;
+runtimeHealth.HangfireEnabled = hangfireEnabled;
+runtimeHealth.HangfireStarted = false;
+runtimeHealth.DatabaseAvailable = false;
+runtimeHealth.DatabaseStatusMessage = "Database initialization has not completed yet.";
 
 // ── Audit.NET EF provider mapping ─────────────────────────────────────────────
 // Ignore the AuditLogEntry table itself to prevent recursive auditing.
@@ -283,10 +290,17 @@ using (var scope = app.Services.CreateScope())
 
         // Database migration succeeded. Mark this for Hangfire startup later.
         hangfireStartedSuccessfully = true;
+        runtimeHealth.DatabaseAvailable = true;
+        runtimeHealth.DatabaseStatusMessage = "Database initialization and migrations completed.";
 
         if (hangfireEnabled && recurringJobManager is not null)
         {
             SystemMaintenanceJobs.RegisterRecurringJobs(recurringJobManager);
+            runtimeHealth.HangfireStarted = true;
+        }
+        else
+        {
+            runtimeHealth.HangfireStarted = false;
         }
     }
     catch (Exception ex) when (allowStartupWithoutDatabase && IsSqlConnectivityFailure(ex))
@@ -296,6 +310,9 @@ using (var scope = app.Services.CreateScope())
             "Database connectivity failed during startup. Continuing in degraded mode because Startup:AllowStartupWithoutDatabase={AllowStartupWithoutDatabase}.",
             allowStartupWithoutDatabase);
         hangfireStartedSuccessfully = false;
+        runtimeHealth.DatabaseAvailable = false;
+        runtimeHealth.HangfireStarted = false;
+        runtimeHealth.DatabaseStatusMessage = "Database connectivity failed during startup (degraded mode).";
     }
     catch (Exception ex) when (allowStartupWithoutDatabase)
     {
@@ -306,6 +323,9 @@ using (var scope = app.Services.CreateScope())
             ex.Message,
             allowStartupWithoutDatabase);
         hangfireStartedSuccessfully = false;
+        runtimeHealth.DatabaseAvailable = false;
+        runtimeHealth.HangfireStarted = false;
+        runtimeHealth.DatabaseStatusMessage = "Startup failed while initializing database services (degraded mode).";
     }
 }
 

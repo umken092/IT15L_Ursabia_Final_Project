@@ -224,6 +224,23 @@ Only accessible at `/hangfire` and only when the WebApi is running. Verify `UseH
 
 The `Jwt__Secret` environment variable is not set on MonsterAsp, or it changed between deployments (invalidating all existing tokens). Set a stable, high-entropy secret in the MonsterAsp dashboard.
 
+### SQL timeout (Error 258) on Render with service still running
+
+If logs show `Microsoft.Data.SqlClient.SqlException` with `Error Number:258` and the app reports `Now listening on`, the service is running in degraded mode and the issue is outbound network connectivity from Render to SQL Server.
+
+Use this checklist:
+
+1. Confirm Render env vars are set:
+  - `CMNETWORK_DB_MODE=MonsterAsp`
+  - `ConnectionStrings__MonsterAspConnection` points to `db49851.databaseasp.net,1433`
+  - `Startup__AllowStartupWithoutDatabase=true`
+  - `Hangfire__Enabled=false` (until DB connectivity is restored)
+2. Confirm the SQL host accepts remote TCP 1433 from Render egress IP ranges (provider firewall/allowlist).
+3. Confirm DNS resolution and route from the hosting network to `db49851.databaseasp.net`.
+4. Retry deploy and check startup logs for:
+  - `Database initialization and migrations completed.`
+  - no new `Error Number:258` entries.
+
 ### SPA returns 404 on page refresh
 
 `UseDefaultFiles()` and `UseStaticFiles()` must be in the pipeline, and the catch-all route `app.MapFallbackToFile("index.html")` must be registered. Check `Program.cs`.
