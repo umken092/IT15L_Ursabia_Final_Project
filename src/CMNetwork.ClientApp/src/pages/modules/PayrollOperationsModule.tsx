@@ -403,7 +403,7 @@ export const PayrollOperationsModule = () => {
           </p>
         )}
 
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
           {pageButtons.filter((button) => button.visible).map((button) => (
             <Button
               key={button.key}
@@ -414,41 +414,76 @@ export const PayrollOperationsModule = () => {
             </Button>
           ))}
 
-          <Button fillMode="outline" onClick={() => setHelpOpen((current) => !current)}>
-            Need Help?
-          </Button>
+          <span style={{ marginLeft: 'auto' }}>
+            <Button fillMode="outline" onClick={() => setHelpOpen((current) => !current)}>
+              Need Help?
+            </Button>
+          </span>
         </div>
+      </article>
 
-        {helpOpen && (
-          <section style={{ marginTop: '0.9rem', border: '1px solid #d1d5db', borderRadius: '0.6rem', padding: '0.8rem' }}>
-            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginBottom: '0.6rem' }}>
-              <strong>Help for {activePage}</strong>
+      {helpOpen && (
+        <>
+          <div
+            onClick={() => setHelpOpen(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(15, 23, 42, 0.35)',
+              zIndex: 40,
+            }}
+          />
+          <aside
+            style={{
+              position: 'fixed',
+              top: 0,
+              right: 0,
+              width: 'min(420px, 90vw)',
+              height: '100vh',
+              background: '#fff',
+              borderLeft: '1px solid #e5e7eb',
+              boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
+              zIndex: 50,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <header style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <strong style={{ flex: 1, textTransform: 'capitalize' }}>Help — {activePage}</strong>
+              <button
+                onClick={() => setHelpOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.25rem', lineHeight: 1, color: '#374151' }}
+                aria-label="Close help panel"
+              >
+                ✕
+              </button>
+            </header>
+            <div style={{ padding: '0.75rem 1.25rem', borderBottom: '1px solid #e5e7eb' }}>
               <input
                 type="search"
-                placeholder="Search help"
+                placeholder="Search help topics…"
                 value={helpQuery}
                 onChange={(e) => setHelpQuery(e.target.value)}
-                style={{ flex: 1 }}
+                style={{ width: '100%', boxSizing: 'border-box' }}
+                autoFocus
               />
             </div>
-
-            {contextualFaqs.length === 0 ? (
-              <p className="card-subtitle" style={{ margin: 0 }}>
-                No matching help topics. Try a different keyword or open Payroll Walkthrough.
-              </p>
-            ) : (
-              <div style={{ display: 'grid', gap: '0.6rem' }}>
-                {contextualFaqs.map((item) => (
-                  <article key={item.id} style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '0.6rem' }}>
-                    <p style={{ margin: 0, fontWeight: 600 }}>{item.question}</p>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0.75rem 1.25rem', display: 'grid', gap: '0.6rem', alignContent: 'start' }}>
+              {contextualFaqs.length === 0 ? (
+                <p className="card-subtitle" style={{ margin: 0 }}>No matching help topics for this page. Try a different keyword.</p>
+              ) : (
+                contextualFaqs.map((item) => (
+                  <article key={item.id} style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '0.65rem' }}>
+                    <p style={{ margin: '0 0 0.25rem', fontWeight: 600 }}>{item.question}</p>
                     <p className="card-subtitle" style={{ marginBottom: 0 }}>{item.answer}</p>
                   </article>
-                ))}
-              </div>
-            )}
-          </section>
-        )}
-      </article>
+                ))
+              )}
+            </div>
+          </aside>
+        </>
+      )}
 
       {activePage === 'overview' && (
         <PayrollOverviewPage periods={periods} runs={runs} capabilities={capabilities} />
