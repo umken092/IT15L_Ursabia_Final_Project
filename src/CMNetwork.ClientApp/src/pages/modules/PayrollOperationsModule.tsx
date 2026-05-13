@@ -424,15 +424,6 @@ export const PayrollOperationsModule = () => {
 
       {helpOpen && (
         <>
-          <div
-            onClick={() => setHelpOpen(false)}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(15, 23, 42, 0.35)',
-              zIndex: 40,
-            }}
-          />
           <aside
             style={{
               position: 'fixed',
