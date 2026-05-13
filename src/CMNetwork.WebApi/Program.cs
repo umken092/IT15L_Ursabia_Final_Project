@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -33,12 +34,16 @@ builder.Configuration.AddEnvironmentVariables();
 var jwtSecret   = builder.Configuration["Jwt:Secret"]   ?? "fallback-secret-key-change-in-production-here";
 var jwtIssuer   = builder.Configuration["Jwt:Issuer"]   ?? "cmnetwork";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "cmnetwork-client";
+var hangfireEnabled = builder.Configuration.GetValue("Hangfire:Enabled", true);
 
 // ── Services ─────────────────────────────────────────────────────────────────
 builder.Services.AddControllers();
 builder.Services.AddControllersWithViews();
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddHangfireServer();
+if (hangfireEnabled)
+{
+    builder.Services.AddHangfireServer();
+}
 
 // JWT token service (used by IdentityAuthService)
 builder.Services.AddScoped<JwtTokenService>();
@@ -235,10 +240,14 @@ Configuration.Setup()
 using (var scope = app.Services.CreateScope())
 {
     var db     = scope.ServiceProvider.GetRequiredService<CMNetworkDbContext>();
-    var recurringJobManager = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
+    var recurringJobManager = hangfireEnabled
+        ? scope.ServiceProvider.GetRequiredService<IRecurringJobManager>()
+        : null;
     var databaseSeeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
     var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
         .CreateLogger("CMNetwork.Startup");
+    var allowStartupWithoutDatabase = app.Configuration.GetValue<bool?>("Startup:AllowStartupWithoutDatabase")
+        ?? !app.Environment.IsDevelopment();
 
     // Safety guard: warn loudly if the Development environment is pointed at the production database.
     if (app.Environment.IsDevelopment())
@@ -252,21 +261,34 @@ using (var scope = app.Services.CreateScope())
         }
     }
 
-    await db.Database.MigrateAsync();
-    await databaseSeeder.EnsureRolesAsync();
-    
-    // Only seed demo data in Development environment
-    if (app.Environment.IsDevelopment())
+    try
     {
-        var seeder = scope.ServiceProvider.GetRequiredService<DemoDataSeeder>();
-        await seeder.SeedAsync();
+        await db.Database.MigrateAsync();
+        await databaseSeeder.EnsureRolesAsync();
+
+        // Only seed demo data in Development environment
+        if (app.Environment.IsDevelopment())
+        {
+            var seeder = scope.ServiceProvider.GetRequiredService<DemoDataSeeder>();
+            await seeder.SeedAsync();
+        }
+        else
+        {
+            await databaseSeeder.SeedProductionBootstrapAdminAsync(app.Configuration, startupLogger);
+        }
+
+        if (hangfireEnabled && recurringJobManager is not null)
+        {
+            SystemMaintenanceJobs.RegisterRecurringJobs(recurringJobManager);
+        }
     }
-    else
+    catch (Exception ex) when (allowStartupWithoutDatabase && IsSqlConnectivityFailure(ex))
     {
-        await databaseSeeder.SeedProductionBootstrapAdminAsync(app.Configuration, startupLogger);
+        startupLogger.LogCritical(
+            ex,
+            "Database connectivity failed during startup. Continuing in degraded mode because Startup:AllowStartupWithoutDatabase={AllowStartupWithoutDatabase}.",
+            allowStartupWithoutDatabase);
     }
-    
-    SystemMaintenanceJobs.RegisterRecurringJobs(recurringJobManager);
 }
 
 // ── Middleware Pipeline ───────────────────────────────────────────────────────
@@ -303,7 +325,10 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<ApiRequestLoggingMiddleware>();
-app.UseHangfireDashboard("/hangfire");
+if (hangfireEnabled)
+{
+    app.UseHangfireDashboard("/hangfire");
+}
 app.UseDefaultFiles();
 app.UseStaticFiles(new StaticFileOptions
 {
@@ -325,3 +350,19 @@ app.MapControllers();
 app.MapFallbackToFile("index.html");
 
 await app.RunAsync();
+
+static bool IsSqlConnectivityFailure(Exception ex)
+{
+    if (ex is SqlException sqlEx)
+    {
+        // 258: timeout, 53: network path/server not found.
+        return sqlEx.Number is 258 or 53;
+    }
+
+    if (ex.InnerException is not null)
+    {
+        return IsSqlConnectivityFailure(ex.InnerException);
+    }
+
+    return false;
+}
