@@ -40,10 +40,8 @@ var hangfireEnabled = builder.Configuration.GetValue("Hangfire:Enabled", true);
 builder.Services.AddControllers();
 builder.Services.AddControllersWithViews();
 builder.Services.AddInfrastructure(builder.Configuration);
-if (hangfireEnabled)
-{
-    builder.Services.AddHangfireServer();
-}
+// NOTE: Do NOT call AddHangfireServer() here. It will be conditionally started
+// after we verify DB connectivity in the startup block below.
 
 // JWT token service (used by IdentityAuthService)
 builder.Services.AddScoped<JwtTokenService>();
@@ -237,6 +235,8 @@ Configuration.Setup()
         .IgnoreMatchedProperties(true));
 
 // ── Migrate & Seed ────────────────────────────────────────────────────────────
+var hangfireStartedSuccessfully = false;
+
 using (var scope = app.Services.CreateScope())
 {
     var db     = scope.ServiceProvider.GetRequiredService<CMNetworkDbContext>();
@@ -248,6 +248,10 @@ using (var scope = app.Services.CreateScope())
         .CreateLogger("CMNetwork.Startup");
     var allowStartupWithoutDatabase = app.Configuration.GetValue<bool?>("Startup:AllowStartupWithoutDatabase")
         ?? !app.Environment.IsDevelopment();
+
+    startupLogger.LogInformation(
+        "Starting initialization block. AllowStartupWithoutDatabase={AllowStartupWithoutDatabase}, HangfireEnabled={HangfireEnabled}",
+        allowStartupWithoutDatabase, hangfireEnabled);
 
     // Safety guard: warn loudly if the Development environment is pointed at the production database.
     if (app.Environment.IsDevelopment())
@@ -277,6 +281,9 @@ using (var scope = app.Services.CreateScope())
             await databaseSeeder.SeedProductionBootstrapAdminAsync(app.Configuration, startupLogger);
         }
 
+        // Database migration succeeded. Mark this for Hangfire startup later.
+        hangfireStartedSuccessfully = true;
+
         if (hangfireEnabled && recurringJobManager is not null)
         {
             SystemMaintenanceJobs.RegisterRecurringJobs(recurringJobManager);
@@ -288,6 +295,17 @@ using (var scope = app.Services.CreateScope())
             ex,
             "Database connectivity failed during startup. Continuing in degraded mode because Startup:AllowStartupWithoutDatabase={AllowStartupWithoutDatabase}.",
             allowStartupWithoutDatabase);
+        hangfireStartedSuccessfully = false;
+    }
+    catch (Exception ex) when (allowStartupWithoutDatabase)
+    {
+        // Catch-all for ANY startup error if we're allowed to degrade
+        startupLogger.LogCritical(
+            ex,
+            "Startup task failed: {Message}. Continuing in degraded mode because Startup:AllowStartupWithoutDatabase={AllowStartupWithoutDatabase}.",
+            ex.Message,
+            allowStartupWithoutDatabase);
+        hangfireStartedSuccessfully = false;
     }
 }
 
@@ -325,7 +343,9 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<ApiRequestLoggingMiddleware>();
-if (hangfireEnabled)
+
+// Only configure Hangfire dashboard if DB connectivity was successful
+if (hangfireEnabled && hangfireStartedSuccessfully)
 {
     app.UseHangfireDashboard("/hangfire");
 }
