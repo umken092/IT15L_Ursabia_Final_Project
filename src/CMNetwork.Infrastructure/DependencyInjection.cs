@@ -7,6 +7,7 @@ using CMNetwork.Infrastructure.Services;
 using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -40,6 +41,9 @@ public static class DependencyInjection
         var connectionString = useMonsterAsp && !string.IsNullOrWhiteSpace(monsterAspConnectionString)
             ? monsterAspConnectionString
             : localConnectionString;
+
+        // Some hosted SQL Server providers require explicit TCP + port (e.g., databaseasp.net) in Linux containers.
+        connectionString = NormalizeSqlConnectionString(connectionString);
 
         services.AddApplication();
 
@@ -87,5 +91,38 @@ public static class DependencyInjection
                 }));
 
         return services;
+    }
+
+    private static string NormalizeSqlConnectionString(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString)) return connectionString;
+
+        try
+        {
+            var builder = new SqlConnectionStringBuilder(connectionString);
+            var dataSource = builder.DataSource?.Trim();
+            if (string.IsNullOrWhiteSpace(dataSource)) return connectionString;
+
+            var isDatabaseAspHost = dataSource.Contains("databaseasp.net", StringComparison.OrdinalIgnoreCase);
+            var hasPort = dataSource.Contains(',');
+            var isExplicitTcp = dataSource.StartsWith("tcp:", StringComparison.OrdinalIgnoreCase);
+
+            if (isDatabaseAspHost && !hasPort)
+            {
+                var host = isExplicitTcp ? dataSource[4..] : dataSource;
+                builder.DataSource = $"tcp:{host},1433";
+                if (!builder.ContainsKey("Connect Timeout") || builder.ConnectTimeout < 30)
+                {
+                    builder.ConnectTimeout = 30;
+                }
+                return builder.ConnectionString;
+            }
+        }
+        catch
+        {
+            // Keep original connection string when parsing fails.
+        }
+
+        return connectionString;
     }
 }
