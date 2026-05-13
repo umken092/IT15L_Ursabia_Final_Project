@@ -18,6 +18,11 @@ public class ApplicationUser : IdentityUser<Guid>
     public bool InAppNotificationsEnabled { get; set; } = true;
     public bool IsActive { get; set; } = true;
     public DateOnly JoinDate { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
+    public decimal? HourlyRate { get; set; }
+    public decimal? OvertimeMultiplier { get; set; } = 1.25m;
+    public string BankAccount { get; set; } = string.Empty;
+    public string TinNumber { get; set; } = string.Empty;
+    public DateTime? LastPayrollProcessed { get; set; }
     public string? AuthenticatorKey { get; set; }
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
     public DateTime? LastLoginUtc { get; set; }

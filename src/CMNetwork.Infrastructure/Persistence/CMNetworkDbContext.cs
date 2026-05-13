@@ -39,6 +39,11 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
     public DbSet<ApprovalQueue> ApprovalQueue => Set<ApprovalQueue>();
     public DbSet<Payslip> Payslips => Set<Payslip>();
     public DbSet<BudgetReallocationRequest> BudgetReallocationRequests => Set<BudgetReallocationRequest>();
+    public DbSet<PayPeriod> PayPeriods => Set<PayPeriod>();
+    public DbSet<PayrollRun> PayrollRuns => Set<PayrollRun>();
+    public DbSet<PayrollLineItem> PayrollLineItems => Set<PayrollLineItem>();
+    public DbSet<TaxTable> TaxTables => Set<TaxTable>();
+    public DbSet<DeductionConfig> DeductionConfigs => Set<DeductionConfig>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -74,6 +79,10 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
             entity.Property(x => x.TIN).HasMaxLength(32);
             entity.Property(x => x.SSS).HasMaxLength(32);
             entity.Property(x => x.AuthenticatorKey).HasMaxLength(256);
+            entity.Property(x => x.HourlyRate).HasPrecision(18, 2);
+            entity.Property(x => x.OvertimeMultiplier).HasPrecision(5, 2).HasDefaultValue(1.25m);
+            entity.Property(x => x.BankAccount).HasMaxLength(128);
+            entity.Property(x => x.TinNumber).HasMaxLength(32);
             entity.Property(x => x.EmailNotificationsEnabled).HasDefaultValue(true);
             entity.Property(x => x.SmsNotificationsEnabled).HasDefaultValue(false);
             entity.Property(x => x.InAppNotificationsEnabled).HasDefaultValue(true);
@@ -500,6 +509,76 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
                 .WithMany()
                 .HasForeignKey(x => x.TargetDepartmentId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── Payroll ───────────────────────────────────────────────────────────
+        modelBuilder.Entity<PayPeriod>(entity =>
+        {
+            entity.Property(x => x.CreatedByUserId).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.LastModifiedByUserId).HasMaxLength(256);
+            entity.HasIndex(x => new { x.Year, x.Month, x.Frequency, x.IsDeleted });
+        });
+
+        modelBuilder.Entity<PayrollRun>(entity =>
+        {
+            entity.Property(x => x.TotalGrossPay).HasPrecision(18, 2);
+            entity.Property(x => x.TotalNetPay).HasPrecision(18, 2);
+            entity.Property(x => x.TotalDeductions).HasPrecision(18, 2);
+            entity.Property(x => x.CreatedByUserId).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.SubmittedByUserId).HasMaxLength(256);
+            entity.Property(x => x.ApprovedByUserId).HasMaxLength(256);
+            entity.Property(x => x.RejectionReason).HasMaxLength(512);
+            entity.Property(x => x.LastModifiedByUserId).HasMaxLength(256);
+            entity.HasOne(x => x.PayPeriod)
+                .WithMany(x => x.PayrollRuns)
+                .HasForeignKey(x => x.PayPeriodId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.JournalEntry)
+                .WithMany()
+                .HasForeignKey(x => x.JournalEntryId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(x => new { x.PayPeriodId, x.IsDeleted });
+        });
+
+        modelBuilder.Entity<PayrollLineItem>(entity =>
+        {
+            entity.Property(x => x.EmployeeName).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.Department).HasMaxLength(128);
+            entity.Property(x => x.RegularHours).HasPrecision(9, 2);
+            entity.Property(x => x.OvertimeHours).HasPrecision(9, 2);
+            entity.Property(x => x.AbsenceHours).HasPrecision(9, 2);
+            entity.Property(x => x.RegularRate).HasPrecision(18, 2);
+            entity.Property(x => x.OvertimeRate).HasPrecision(18, 2);
+            entity.Property(x => x.GrossPay).HasPrecision(18, 2);
+            entity.Property(x => x.TrainTax).HasPrecision(18, 2);
+            entity.Property(x => x.SssFee).HasPrecision(18, 2);
+            entity.Property(x => x.PhilHealthFee).HasPrecision(18, 2);
+            entity.Property(x => x.PagIbigFee).HasPrecision(18, 2);
+            entity.Property(x => x.OtherDeductions).HasPrecision(18, 2);
+            entity.Property(x => x.TotalDeductions).HasPrecision(18, 2);
+            entity.Property(x => x.NetPay).HasPrecision(18, 2);
+            entity.Property(x => x.ManualAdjustmentNote).HasMaxLength(256);
+            entity.HasOne(x => x.PayrollRun)
+                .WithMany(x => x.LineItems)
+                .HasForeignKey(x => x.PayrollRunId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.PayrollRunId, x.EmployeeId, x.IsDeleted });
+        });
+
+        modelBuilder.Entity<TaxTable>(entity =>
+        {
+            entity.Property(x => x.MinIncome).HasPrecision(18, 2);
+            entity.Property(x => x.MaxIncome).HasPrecision(18, 2);
+            entity.Property(x => x.Rate).HasPrecision(9, 6);
+            entity.Property(x => x.Description).HasMaxLength(256).IsRequired();
+            entity.HasIndex(x => new { x.Type, x.Year, x.MinIncome, x.IsDeleted });
+        });
+
+        modelBuilder.Entity<DeductionConfig>(entity =>
+        {
+            entity.Property(x => x.Name).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.DefaultAmount).HasPrecision(18, 2);
+            entity.HasIndex(x => new { x.Name, x.IsDeleted }).IsUnique();
         });
     }
 

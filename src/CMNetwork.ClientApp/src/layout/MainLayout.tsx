@@ -30,6 +30,7 @@ const baseSidebarIconByPath: Record<string, SVGIcon> = {
   '/module/user-management': usersOutlineIcon,
   '/module/system-settings': gearIcon,
   '/module/general-ledger': dashboardOutlineIcon,
+  '/module/payroll': banknoteOutlineIcon,
   '/module/accounts-payable': arrowDownIcon,
   '/module/accounts-receivable': arrowUpIcon,
   '/module/bank-reconciliation': arrowsSwapIcon,
@@ -71,11 +72,16 @@ const breadcrumbLabelByPath: Partial<Record<Role, Record<string, string[]>>> = {
   },
   accountant: {
     '/dashboard/accountant': ['Workspace'],
+    '/module/payroll': ['Workspace', 'Payroll'],
     '/module/general-ledger': ['Workspace', 'Ledger'],
     '/module/accounts-payable': ['Workspace', 'Payables'],
     '/module/accounts-receivable': ['Workspace', 'Receivables'],
     '/module/bank-reconciliation': ['Workspace', 'Reconciliation'],
     '/module/reports': ['Workspace', 'Reports'],
+  },
+  cfo: {
+    '/dashboard/cfo': ['Workspace'],
+    '/module/payroll': ['Workspace', 'Payroll'],
   },
   'faculty-admin': {
     '/dashboard/faculty-admin': ['Workspace'],

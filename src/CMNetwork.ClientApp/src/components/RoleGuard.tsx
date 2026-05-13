@@ -59,6 +59,7 @@ export const moduleRoleMap: Record<string, Role[]> = {
   'accounts-payable': ['accountant'],
   'accounts-receivable': ['accountant'],
   'bank-reconciliation': ['accountant'],
+  payroll: ['accountant', 'cfo', 'super-admin'],
 
   // Faculty admin modules
   'dept-reports': ['faculty-admin'],

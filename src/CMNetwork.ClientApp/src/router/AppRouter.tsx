@@ -59,6 +59,7 @@ const modulePageTitles: Record<string, string> = {
   'system-health': 'System Health',
   'admin-reports': 'Admin Reports',
   'bank-directory': 'Bank Directory',
+  payroll: 'Payroll',
 }
 
 const labelize = (value: string) =>

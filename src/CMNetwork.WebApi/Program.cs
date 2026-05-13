@@ -54,6 +54,7 @@ builder.Services.AddScoped<IClaimsTransformation, RoleNormalizationTransformatio
 // Replace mock auth with Identity-backed implementation
 builder.Services.AddScoped<IAuthService, IdentityAuthService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IPayrollService, PayrollService>();
 builder.Services.AddScoped<IInvoicePostingService, InvoicePostingService>();
 builder.Services.AddScoped<SystemMaintenanceJobs>();
 

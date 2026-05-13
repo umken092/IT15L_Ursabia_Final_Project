@@ -49,6 +49,7 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
   ],
   accountant: [
     { label: 'Dashboard', path: dashboardPath('accountant') },
+    { label: 'Payroll', path: '/module/payroll' },
     { label: 'General Ledger', path: '/module/general-ledger' },
     { label: 'Accounts Payable', path: '/module/accounts-payable' },
     { label: 'Accounts Receivable', path: '/module/accounts-receivable' },
@@ -127,6 +128,7 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
   ],
   cfo: [
     { label: 'Dashboard', path: dashboardPath('cfo') },
+    { label: 'Payroll', path: '/module/payroll' },
     { label: 'Approval Inbox', path: '/module/approvals-inbox' },
     { label: 'Budget Control', path: '/module/budget-control' },
     { label: 'Reports', path: '/module/reports' },

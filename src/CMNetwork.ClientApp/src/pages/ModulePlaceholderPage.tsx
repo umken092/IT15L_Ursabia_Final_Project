@@ -21,6 +21,7 @@ import { FinancialReportsModule } from './modules/FinancialReportsModule'
 import { FiscalPeriodsModule } from './modules/FiscalPeriodsModule'
 import { IntegrationSettingsModule } from './modules/IntegrationSettingsModule'
 import { JobQueueModule } from './modules/JobQueueModule'
+import { PayrollOperationsModule } from './modules/PayrollOperationsModule'
 import { RolesPermissionsModule } from './modules/RolesPermissionsModule'
 import { SecurityPolicyModule } from './modules/SecurityPolicyModule'
 import { SystemHealthModule } from './modules/SystemHealthModule'
@@ -56,6 +57,10 @@ function renderSpecialModule(moduleKey: string): ReactElement | null {
 
   if (moduleKey === 'general-ledger' || moduleKey === 'bank-reconciliation') {
     return <RoleGuard allowedRoles={moduleRoleMap[moduleKey]}><AccountantOperationsModule moduleKey={moduleKey} /></RoleGuard>
+  }
+
+  if (moduleKey === 'payroll') {
+    return <RoleGuard allowedRoles={moduleRoleMap[moduleKey]}><PayrollOperationsModule /></RoleGuard>
   }
 
   if (moduleKey === 'financial-reports' || moduleKey === 'reports') {
