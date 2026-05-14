@@ -216,13 +216,23 @@ public class AdminJobDto
 
 public class SmtpSettingsDto
 {
+    /// <summary>Email provider: smtp | sendgrid</summary>
+    public string Provider { get; set; } = "smtp";
+    
+    // SMTP settings
     public string Host { get; set; } = string.Empty;
     public int Port { get; set; } = 587;
     public string Username { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
+    
+    // SendGrid settings
+    public string ApiKey { get; set; } = string.Empty;
+    
+    // Common settings
     public string FromEmail { get; set; } = string.Empty;
     public string FromName { get; set; } = "CMNetwork";
-    /// <summary>Accepted values: none | ssl | starttls</summary>
+    
+    /// <summary>Accepted values for SMTP: none | ssl | starttls</summary>
     public string Security { get; set; } = "starttls";
 }
 

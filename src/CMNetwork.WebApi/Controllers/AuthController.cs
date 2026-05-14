@@ -29,7 +29,7 @@ public class AuthController : ControllerBase
     private readonly RuntimeHealthStatus _runtimeHealth;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly CMNetworkDbContext _dbContext;
-    private readonly IEmailService _emailService;
+    private readonly IEmailServiceFactory _emailServiceFactory;
 
     public AuthController(
         IAuthService authService,
@@ -38,7 +38,7 @@ public class AuthController : ControllerBase
         RuntimeHealthStatus runtimeHealth,
         UserManager<ApplicationUser> userManager,
         CMNetworkDbContext dbContext,
-        IEmailService emailService)
+        IEmailServiceFactory emailServiceFactory)
     {
         _authService = authService;
         _audit       = audit;
@@ -46,7 +46,7 @@ public class AuthController : ControllerBase
         _runtimeHealth = runtimeHealth;
         _userManager = userManager;
         _dbContext = dbContext;
-        _emailService = emailService;
+        _emailServiceFactory = emailServiceFactory;
     }
 
     [HttpPost("login")]
@@ -265,7 +265,8 @@ public class AuthController : ControllerBase
                            If you did not request this, you can ignore this email.
                            """;
 
-                var sendResult = await _emailService.SendEmailAsync(
+                var emailService = _emailServiceFactory.GetEmailService(smtpSettings);
+                var sendResult = await emailService.SendEmailAsync(
                     smtpSettings,
                     recipientEmail: normalizedEmail,
                     subject: "CMNetwork password reset",

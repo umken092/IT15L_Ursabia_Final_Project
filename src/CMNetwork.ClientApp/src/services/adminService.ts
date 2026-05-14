@@ -8,6 +8,7 @@ export type AdminJobType = 'recurring' | 'scheduled' | 'ad-hoc'
 export type AdminJobStatus = 'running' | 'scheduled' | 'succeeded' | 'failed' | 'recurring'
 
 export interface SmtpSettings {
+  provider?: 'smtp' | 'sendgrid'
   host: string
   port: number
   username: string
@@ -15,6 +16,7 @@ export interface SmtpSettings {
   fromEmail: string
   fromName: string
   security: 'none' | 'ssl' | 'starttls'
+  apiKey?: string
 }
 
 export interface SmtpConnectionTestResult {
@@ -485,12 +487,12 @@ export const adminService = {
     return response.data
   },
 
-  async updateSmtpSettings(payload: SmtpSettings): Promise<SmtpSettings> {
+  async updateSmtpSettings(payload: SmtpSettings | Record<string, unknown>): Promise<SmtpSettings> {
     const response = await apiClient.put<SmtpSettings>('/admin/smtp-settings', payload)
     return response.data
   },
 
-  async testSmtpSettings(payload: SmtpSettings): Promise<SmtpConnectionTestResult> {
+  async testSmtpSettings(payload: SmtpSettings | Record<string, unknown>): Promise<SmtpConnectionTestResult> {
     try {
       const response = await apiClient.post<SmtpConnectionTestResult>('/admin/smtp-settings/test', payload, {
         timeout: 30000,

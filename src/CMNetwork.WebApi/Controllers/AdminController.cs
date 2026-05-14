@@ -539,7 +539,8 @@ public class AdminController : ControllerBase
         var recipientEmail = request.FromEmail;
         var recipientName = request.FromName;
 
-        var emailService = HttpContext.RequestServices.GetRequiredService<IEmailService>();
+        var factory = HttpContext.RequestServices.GetRequiredService<IEmailServiceFactory>();
+        var emailService = factory.GetEmailService(request);
         var result = await emailService.SendTestEmailAsync(request, recipientEmail, recipientName);
         var payload = new SmtpConnectionTestResultDto
         {
@@ -552,7 +553,7 @@ public class AdminController : ControllerBase
             action: result.Success ? "Tested" : "TestFailed",
             category: AuditCategories.System,
             recordId: SmtpSettingsPolicyId.ToString(),
-            details: new { recipientEmail, request.Host, request.Port, request.Security, result.Success });
+            details: new { recipientEmail, request.Host, request.Port, request.Security, request.Provider, result.Success });
 
         return result.Success ? Ok(payload) : BadRequest(payload);
     }
@@ -649,6 +650,25 @@ public class AdminController : ControllerBase
 
     private static string? ValidateSmtpSettings(SmtpSettingsDto request)
     {
+        var provider = string.IsNullOrWhiteSpace(request.Provider) ? "smtp" : request.Provider.ToLowerInvariant().Trim();
+
+        // Common validation
+        if (string.IsNullOrWhiteSpace(request.FromEmail))
+        {
+            return "From email is required.";
+        }
+
+        // Provider-specific validation
+        if (provider == "sendgrid")
+        {
+            if (string.IsNullOrWhiteSpace(request.ApiKey))
+            {
+                return "SendGrid API key is required.";
+            }
+            return null;
+        }
+
+        // SMTP validation
         if (string.IsNullOrWhiteSpace(request.Host))
         {
             return "SMTP host is required.";
@@ -667,11 +687,6 @@ public class AdminController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Password))
         {
             return "SMTP password is required.";
-        }
-
-        if (string.IsNullOrWhiteSpace(request.FromEmail))
-        {
-            return "From email is required.";
         }
 
         if (!string.Equals(request.Security, "none", StringComparison.OrdinalIgnoreCase)

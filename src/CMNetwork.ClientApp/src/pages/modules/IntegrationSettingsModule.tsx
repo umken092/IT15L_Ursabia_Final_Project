@@ -6,6 +6,7 @@ import { useNotificationStore } from '../../store/notificationStore'
 
 type ConnectionStatus = 'idle' | 'testing' | 'ok' | 'error'
 type SmtpSecurity = 'none' | 'ssl' | 'starttls'
+type EmailProvider = 'smtp' | 'sendgrid'
 
 interface PayMongoConfig {
   publicKey: string
@@ -17,14 +18,19 @@ interface PayMongoConfig {
   connectionMessage: string
 }
 
-interface SmtpConfig {
+interface EmailConfig {
+  provider: EmailProvider
+  // SMTP fields
   host: string
   port: string
   username: string
   password: string
+  security: SmtpSecurity
+  // SendGrid fields
+  apiKey: string
+  // Common fields
   fromEmail: string
   fromName: string
-  security: SmtpSecurity
   connectionStatus: ConnectionStatus
   connectionMessage: string
 }
@@ -41,14 +47,16 @@ const INITIAL_PAYMONGO: PayMongoConfig = {
   connectionMessage: '',
 }
 
-const INITIAL_SMTP: SmtpConfig = {
+const INITIAL_EMAIL: EmailConfig = {
+  provider: 'smtp',
   host: '',
   port: '587',
   username: '',
   password: '',
+  security: 'starttls',
+  apiKey: '',
   fromEmail: '',
   fromName: 'CMNetwork',
-  security: 'starttls',
   connectionStatus: 'idle',
   connectionMessage: '',
 }
@@ -106,11 +114,11 @@ export const IntegrationSettingsModule = () => {
   const pushToast = useNotificationStore((state) => state.push)
 
   const [paymongo, setPaymongo] = useState<PayMongoConfig>(INITIAL_PAYMONGO)
-  const [smtp, setSmtp] = useState<SmtpConfig>(INITIAL_SMTP)
+  const [email, setEmail] = useState<EmailConfig>(INITIAL_EMAIL)
   const [integrations, setIntegrations] = useState<IntegrationSetting[]>([])
   const [loadingIntegrations, setLoadingIntegrations] = useState(false)
   const [savingPm, setSavingPm] = useState(false)
-  const [savingSmtp, setSavingSmtp] = useState(false)
+  const [savingEmail, setSavingEmail] = useState(false)
 
   useEffect(() => {
     const loadIntegrations = async () => {
@@ -129,19 +137,21 @@ export const IntegrationSettingsModule = () => {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const [smtpData, pmData] = await Promise.all([
+        const [emailData, pmData] = await Promise.all([
           adminService.getSmtpSettings(),
           adminService.getPayMongoSettings(),
         ])
-        setSmtp((s) => ({
-          ...s,
-          host: smtpData.host,
-          port: String(smtpData.port),
-          username: smtpData.username,
-          password: smtpData.password,
-          fromEmail: smtpData.fromEmail,
-          fromName: smtpData.fromName || 'CMNetwork',
-          security: smtpData.security,
+        setEmail((e) => ({
+          ...e,
+          provider: emailData.provider || 'smtp',
+          host: emailData.host,
+          port: String(emailData.port),
+          username: emailData.username,
+          password: emailData.password,
+          fromEmail: emailData.fromEmail,
+          fromName: emailData.fromName || 'CMNetwork',
+          security: emailData.security,
+          apiKey: emailData.apiKey || '',
         }))
         setPaymongo((p) => ({
           ...p,
@@ -208,51 +218,67 @@ export const IntegrationSettingsModule = () => {
     }
   }
 
-  // ── SMTP ──────────────────────────────────────────────────────────────────
+  // ── Email (SMTP/SendGrid) ─────────────────────────────────────────────
 
-  const handleTestSmtp = async () => {
-    setSmtp((s) => ({ ...s, connectionStatus: 'testing', connectionMessage: '' }))
+  const handleTestEmail = async () => {
+    setEmail((e) => ({ ...e, connectionStatus: 'testing', connectionMessage: '' }))
     try {
-      const result = await adminService.testSmtpSettings({
-        host: smtp.host,
-        port: parseInt(smtp.port, 10) || 587,
-        username: smtp.username,
-        password: smtp.password,
-        fromEmail: smtp.fromEmail,
-        fromName: smtp.fromName,
-        security: smtp.security,
-      })
-      setSmtp((s) => ({
-        ...s,
+      const payload: Record<string, unknown> = {
+        provider: email.provider,
+        fromEmail: email.fromEmail,
+        fromName: email.fromName,
+      }
+
+      if (email.provider === 'sendgrid') {
+        payload.apiKey = email.apiKey
+      } else {
+        payload.host = email.host
+        payload.port = parseInt(email.port, 10) || 587
+        payload.username = email.username
+        payload.password = email.password
+        payload.security = email.security
+      }
+
+      const result = await adminService.testSmtpSettings(payload)
+      setEmail((e) => ({
+        ...e,
         connectionStatus: result.success ? 'ok' : 'error',
         connectionMessage: result.message,
       }))
     } catch {
-      setSmtp((s) => ({
-        ...s,
+      setEmail((e) => ({
+        ...e,
         connectionStatus: 'error',
-        connectionMessage: 'Unable to test SMTP connection right now.',
+        connectionMessage: 'Unable to test connection right now.',
       }))
     }
   }
 
-  const handleSaveSmtp = async () => {
-    setSavingSmtp(true)
+  const handleSaveEmail = async () => {
+    setSavingEmail(true)
     try {
-      await adminService.updateSmtpSettings({
-        host: smtp.host,
-        port: parseInt(smtp.port, 10) || 587,
-        username: smtp.username,
-        password: smtp.password,
-        fromEmail: smtp.fromEmail,
-        fromName: smtp.fromName,
-        security: smtp.security,
-      })
-      pushToast('success', 'SMTP settings saved.')
+      const payload: Record<string, unknown> = {
+        provider: email.provider,
+        fromEmail: email.fromEmail,
+        fromName: email.fromName,
+      }
+
+      if (email.provider === 'sendgrid') {
+        payload.apiKey = email.apiKey
+      } else {
+        payload.host = email.host
+        payload.port = parseInt(email.port, 10) || 587
+        payload.username = email.username
+        payload.password = email.password
+        payload.security = email.security
+      }
+
+      await adminService.updateSmtpSettings(payload)
+      pushToast('success', 'Email settings saved.')
     } catch {
-      pushToast('error', 'Failed to save SMTP settings.')
+      pushToast('error', 'Failed to save email settings.')
     } finally {
-      setSavingSmtp(false)
+      setSavingEmail(false)
     }
   }
 
@@ -395,122 +421,170 @@ export const IntegrationSettingsModule = () => {
       <div className="is-card">
         <SectionHeader
           icon="✉️"
-          title="SMTP / Email"
-          sub="Configure the outbound email server for system notifications, password resets, and report sharing."
+          title="Email"
+          sub="Configure email delivery for system notifications, password resets, and report sharing."
         />
 
+        {/* Provider selector */}
+        <div className="is-field">
+          <label className="is-label" htmlFor="email-provider">
+            Provider
+          </label>
+          <select
+            id="email-provider"
+            className="is-select"
+            value={email.provider}
+            onChange={(e) => setEmail((s) => ({ ...s, provider: e.target.value as EmailProvider, connectionStatus: 'idle' }))}
+          >
+            <option value="smtp">SMTP Server</option>
+            <option value="sendgrid">SendGrid (API)</option>
+          </select>
+        </div>
+
+        {/* SMTP fields */}
+        {email.provider === 'smtp' && (
+          <div className="is-field-grid">
+            <div className="is-field is-field-wide">
+              <label className="is-label" htmlFor="smtp-host">
+                SMTP Host
+              </label>
+              <input
+                id="smtp-host"
+                className="is-input"
+                placeholder="smtp.example.com"
+                value={email.host}
+                onChange={(e) => setEmail((s) => ({ ...s, host: e.target.value }))}
+              />
+            </div>
+            <div className="is-field">
+              <label className="is-label" htmlFor="smtp-port">
+                Port
+              </label>
+              <input
+                id="smtp-port"
+                className="is-input"
+                placeholder="587"
+                value={email.port}
+                onChange={(e) => setEmail((s) => ({ ...s, port: e.target.value }))}
+              />
+            </div>
+            <div className="is-field">
+              <label className="is-label" htmlFor="smtp-security">
+                Security
+              </label>
+              <select
+                id="smtp-security"
+                className="is-select"
+                value={email.security}
+                onChange={(e) => setEmail((s) => ({ ...s, security: e.target.value as SmtpSecurity }))}
+              >
+                <option value="none">None</option>
+                <option value="ssl">SSL / TLS</option>
+                <option value="starttls">STARTTLS</option>
+              </select>
+            </div>
+            <div className="is-field">
+              <label className="is-label" htmlFor="smtp-user">
+                Username
+              </label>
+              <input
+                id="smtp-user"
+                className="is-input"
+                placeholder="smtp-user@example.com"
+                value={email.username}
+                onChange={(e) => setEmail((s) => ({ ...s, username: e.target.value }))}
+              />
+            </div>
+            <div className="is-field">
+              <label className="is-label" htmlFor="smtp-pass">
+                Password
+              </label>
+              <input
+                id="smtp-pass"
+                type="password"
+                className="is-input is-secret"
+                placeholder="••••••••"
+                value={email.password}
+                onChange={(e) => setEmail((s) => ({ ...s, password: e.target.value }))}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* SendGrid fields */}
+        {email.provider === 'sendgrid' && (
+          <div className="is-field-grid">
+            <div className="is-field is-field-wide">
+              <label className="is-label" htmlFor="sendgrid-key">
+                SendGrid API Key
+              </label>
+              <input
+                id="sendgrid-key"
+                type="password"
+                className="is-input is-secret"
+                placeholder="SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                value={email.apiKey}
+                onChange={(e) => setEmail((s) => ({ ...s, apiKey: e.target.value }))}
+              />
+              <small className="is-muted">
+                Get your API key from{' '}
+                <a href="https://app.sendgrid.com/settings/api_keys" target="_blank" rel="noreferrer">
+                  SendGrid dashboard
+                </a>
+              </small>
+            </div>
+          </div>
+        )}
+
+        {/* Common fields */}
         <div className="is-field-grid">
-          <div className="is-field is-field-wide">
-            <label className="is-label" htmlFor="smtp-host">
-              SMTP Host
-            </label>
-            <input
-              id="smtp-host"
-              className="is-input"
-              placeholder="smtp.example.com"
-              value={smtp.host}
-              onChange={(e) => setSmtp((s) => ({ ...s, host: e.target.value }))}
-            />
-          </div>
           <div className="is-field">
-            <label className="is-label" htmlFor="smtp-port">
-              Port
-            </label>
-            <input
-              id="smtp-port"
-              className="is-input"
-              placeholder="587"
-              value={smtp.port}
-              onChange={(e) => setSmtp((s) => ({ ...s, port: e.target.value }))}
-            />
-          </div>
-          <div className="is-field">
-            <label className="is-label" htmlFor="smtp-security">
-              Security
-            </label>
-            <select
-              id="smtp-security"
-              className="is-select"
-              value={smtp.security}
-              onChange={(e) => setSmtp((s) => ({ ...s, security: e.target.value as SmtpSecurity }))}
-            >
-              <option value="none">None</option>
-              <option value="ssl">SSL / TLS</option>
-              <option value="starttls">STARTTLS</option>
-            </select>
-          </div>
-          <div className="is-field">
-            <label className="is-label" htmlFor="smtp-user">
-              Username
-            </label>
-            <input
-              id="smtp-user"
-              className="is-input"
-              placeholder="smtp-user@example.com"
-              value={smtp.username}
-              onChange={(e) => setSmtp((s) => ({ ...s, username: e.target.value }))}
-            />
-          </div>
-          <div className="is-field">
-            <label className="is-label" htmlFor="smtp-pass">
-              Password
-            </label>
-            <input
-              id="smtp-pass"
-              type="password"
-              className="is-input is-secret"
-              placeholder="••••••••"
-              value={smtp.password}
-              onChange={(e) => setSmtp((s) => ({ ...s, password: e.target.value }))}
-            />
-          </div>
-          <div className="is-field">
-            <label className="is-label" htmlFor="smtp-from-name">
+            <label className="is-label" htmlFor="email-from-name">
               From Name
             </label>
             <input
-              id="smtp-from-name"
+              id="email-from-name"
               className="is-input"
               placeholder="CMNetwork"
-              value={smtp.fromName}
-              onChange={(e) => setSmtp((s) => ({ ...s, fromName: e.target.value }))}
+              value={email.fromName}
+              onChange={(e) => setEmail((s) => ({ ...s, fromName: e.target.value }))}
             />
           </div>
           <div className="is-field is-field-wide">
-            <label className="is-label" htmlFor="smtp-from-email">
+            <label className="is-label" htmlFor="email-from-address">
               From Email
             </label>
             <input
-              id="smtp-from-email"
+              id="email-from-address"
               type="email"
               className="is-input"
               placeholder="noreply@cmnetwork.example.com"
-              value={smtp.fromEmail}
-              onChange={(e) => setSmtp((s) => ({ ...s, fromEmail: e.target.value }))}
+              value={email.fromEmail}
+              onChange={(e) => setEmail((s) => ({ ...s, fromEmail: e.target.value }))}
             />
           </div>
         </div>
 
         <div className="is-card-footer">
-          <ConnBadge status={smtp.connectionStatus} message={smtp.connectionMessage} />
+          <ConnBadge status={email.connectionStatus} message={email.connectionMessage} />
           <div className="is-action-row">
             <button
               className="is-btn-ghost"
-              disabled={smtp.connectionStatus === 'testing'}
+              disabled={email.connectionStatus === 'testing'}
               onClick={() => {
-                void handleTestSmtp()
+                void handleTestEmail()
               }}
             >
-              Send Test Email
+              Test Connection
             </button>
             <button
               className="is-btn-primary"
-              disabled={savingSmtp}
+              disabled={savingEmail}
               onClick={() => {
-                void handleSaveSmtp()
+                void handleSaveEmail()
               }}
             >
-              {savingSmtp ? 'Saving…' : 'Save'}
+              {savingEmail ? 'Saving…' : 'Save'}
             </button>
           </div>
         </div>
