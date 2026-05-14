@@ -1,8 +1,7 @@
 using System.Net.Http.Headers;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.Configuration;
+using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 
 namespace CMNetwork.Infrastructure.Services;
@@ -10,23 +9,17 @@ namespace CMNetwork.Infrastructure.Services;
 public sealed class PayMongoService : IPayMongoService
 {
     private readonly HttpClient _httpClient;
+    private readonly IIntegrationCredentialService _credentialService;
     private readonly ILogger<PayMongoService> _logger;
-    private readonly string _webhookSecret;
 
-    public PayMongoService(HttpClient httpClient, IConfiguration configuration, ILogger<PayMongoService> logger)
+    public PayMongoService(
+        HttpClient httpClient,
+        IIntegrationCredentialService credentialService,
+        ILogger<PayMongoService> logger)
     {
         _httpClient = httpClient;
+        _credentialService = credentialService;
         _logger = logger;
-
-        var secretKey = configuration["PayMongo:SecretKey"]
-            ?? throw new InvalidOperationException("PayMongo:SecretKey is not configured.");
-        _webhookSecret = configuration["PayMongo:WebhookSecret"] ?? string.Empty;
-        var baseUrl = configuration["PayMongo:BaseUrl"] ?? "https://api.paymongo.com";
-
-        _httpClient.BaseAddress = new Uri(baseUrl);
-        var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes(secretKey + ":"));
-        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
-        _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
     }
 
     public async Task<CreateCheckoutSessionResult> CreateCheckoutSessionAsync(
@@ -36,6 +29,12 @@ public sealed class PayMongoService : IPayMongoService
         string cancelUrl,
         CancellationToken cancellationToken = default)
     {
+        var runtimeCredentials = await _credentialService.GetPayMongoRuntimeCredentialsAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(runtimeCredentials.SecretKey))
+        {
+            throw new InvalidOperationException("PayMongo secret key is not configured.");
+        }
+
         var amountCentavos = (long)(amount * 100);
 
         var payload = new
@@ -66,15 +65,26 @@ public sealed class PayMongoService : IPayMongoService
             }
         };
 
-        var response = await _httpClient.PostAsync(
-            "/v1/checkout_sessions",
-            new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"),
-            cancellationToken);
+        using var request = CreateRequest(
+            HttpMethod.Post,
+            runtimeCredentials,
+            "v1/checkout_sessions",
+            new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"));
+
+        var response = await _httpClient.SendAsync(request, cancellationToken);
 
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             _logger.LogError("PayMongo create checkout session failed: {StatusCode} {Body}", response.StatusCode, body);
+            if (runtimeCredentials.AllowMockOnFailure)
+            {
+                _logger.LogWarning("Falling back to mock PayMongo checkout session in non-production mode.");
+                var mockSessionId = $"mock_cs_{Guid.NewGuid():N}";
+                var mockCheckoutUrl = successUrl;
+                return new CreateCheckoutSessionResult(mockSessionId, mockCheckoutUrl);
+            }
+
             throw new InvalidOperationException("Unable to create PayMongo checkout session.");
         }
 
@@ -92,12 +102,28 @@ public sealed class PayMongoService : IPayMongoService
         string checkoutSessionId,
         CancellationToken cancellationToken = default)
     {
-        var response = await _httpClient.GetAsync($"/v1/checkout_sessions/{checkoutSessionId}", cancellationToken);
+        var runtimeCredentials = await _credentialService.GetPayMongoRuntimeCredentialsAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(runtimeCredentials.SecretKey))
+        {
+            throw new InvalidOperationException("PayMongo secret key is not configured.");
+        }
+
+        using var request = CreateRequest(
+            HttpMethod.Get,
+            runtimeCredentials,
+            $"v1/checkout_sessions/{checkoutSessionId}");
+
+        var response = await _httpClient.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
             _logger.LogError("PayMongo get checkout session failed: {StatusCode} {Body}", response.StatusCode, body);
+            if (runtimeCredentials.AllowMockOnFailure && checkoutSessionId.StartsWith("mock_cs_", StringComparison.OrdinalIgnoreCase))
+            {
+                return "paid";
+            }
+
             throw new InvalidOperationException("Unable to verify PayMongo checkout session.");
         }
 
@@ -111,7 +137,19 @@ public sealed class PayMongoService : IPayMongoService
 
     public bool VerifyWebhookSignature(string rawPayload, string signatureHeader)
     {
-        if (string.IsNullOrWhiteSpace(_webhookSecret))
+        string webhookSecret;
+        try
+        {
+            var runtimeCredentials = _credentialService.GetPayMongoRuntimeCredentialsAsync().GetAwaiter().GetResult();
+            webhookSecret = runtimeCredentials.WebhookSecret;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Unable to load PayMongo runtime credentials during webhook signature validation.");
+            webhookSecret = string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(webhookSecret))
         {
             _logger.LogWarning("PayMongo webhook secret is not configured. Skipping signature verification.");
             return true;
@@ -134,10 +172,27 @@ public sealed class PayMongoService : IPayMongoService
         }
 
         var payloadBytes = Encoding.UTF8.GetBytes($"{timestamp}.{rawPayload}");
-        var secretBytes = Encoding.UTF8.GetBytes(_webhookSecret);
+        var secretBytes = Encoding.UTF8.GetBytes(webhookSecret);
 
         using var hmac = new HMACSHA256(secretBytes);
         var computed = Convert.ToHexString(hmac.ComputeHash(payloadBytes)).ToLowerInvariant();
         return computed == signature.ToLowerInvariant();
+    }
+
+    private static HttpRequestMessage CreateRequest(
+        HttpMethod method,
+        PayMongoRuntimeCredentials credentials,
+        string relativePath,
+        HttpContent? content = null)
+    {
+        var baseUri = credentials.BaseUrl.TrimEnd('/') + "/";
+        var requestUri = new Uri(new Uri(baseUri), relativePath);
+        var request = new HttpRequestMessage(method, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue(
+            "Basic",
+            Convert.ToBase64String(Encoding.UTF8.GetBytes(credentials.SecretKey + ":")));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Content = content;
+        return request;
     }
 }

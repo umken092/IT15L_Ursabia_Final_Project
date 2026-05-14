@@ -20,7 +20,24 @@ export interface SmtpSettings {
 export interface PayMongoSettings {
   publicKey: string
   secretKey: string
+  webhookSecret?: string
   mode: 'test' | 'live'
+  secretKeyConfigured?: boolean
+  webhookSecretConfigured?: boolean
+  baseUrl?: string
+  version?: number
+  updatedAtUtc?: string
+  updatedByUserId?: string
+}
+
+export interface PayMongoConnectionTestPayload {
+  secretKey: string
+  baseUrl?: string
+}
+
+export interface PayMongoConnectionTestResult {
+  success: boolean
+  message: string
 }
 
 export interface AdminUser {
@@ -478,6 +495,19 @@ export const adminService = {
   async updatePayMongoSettings(payload: PayMongoSettings): Promise<PayMongoSettings> {
     const response = await apiClient.put<PayMongoSettings>('/admin/paymongo-settings', payload)
     return response.data
+  },
+
+  async testPayMongoSettings(payload: PayMongoConnectionTestPayload): Promise<PayMongoConnectionTestResult> {
+    try {
+      const response = await apiClient.post<PayMongoConnectionTestResult>('/admin/paymongo-settings/test', payload)
+      return response.data
+    } catch (error) {
+      const axiosError = error as AxiosError<PayMongoConnectionTestResult>
+      if (axiosError.response?.data) {
+        return axiosError.response.data
+      }
+      throw error
+    }
   },
 
   // ── Role Permissions ────────────────────────────────────────────────────

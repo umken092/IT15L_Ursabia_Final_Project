@@ -17,6 +17,7 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<SecurityPolicy> SecurityPolicies => Set<SecurityPolicy>();
     public DbSet<IntegrationSetting> IntegrationSettings => Set<IntegrationSetting>();
+    public DbSet<IntegrationCredential> IntegrationCredentials => Set<IntegrationCredential>();
     public DbSet<AuditLogEntry> AuditLogs => Set<AuditLogEntry>();
     public DbSet<EvidenceArchive> EvidenceArchives => Set<EvidenceArchive>();
     public DbSet<BackupRecord> BackupRecords => Set<BackupRecord>();
@@ -140,6 +141,20 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
             entity.Property(x => x.Name).HasMaxLength(128).IsRequired();
             entity.Property(x => x.Status).HasMaxLength(64).IsRequired();
             entity.Property(x => x.Endpoint).HasMaxLength(512).IsRequired();
+        });
+
+        modelBuilder.Entity<IntegrationCredential>(entity =>
+        {
+            entity.Property(x => x.Provider).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.Mode).HasMaxLength(16).IsRequired();
+            entity.Property(x => x.PublicKey).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.SecretKeyEncrypted).HasMaxLength(4096).IsRequired();
+            entity.Property(x => x.WebhookSecretEncrypted).HasMaxLength(4096);
+            entity.Property(x => x.BaseUrl).HasMaxLength(512);
+            entity.Property(x => x.UpdatedByUserId).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.IsActive).HasDefaultValue(true);
+            entity.Property(x => x.Version).HasDefaultValue(1);
+            entity.HasIndex(x => x.Provider).IsUnique();
         });
 
         modelBuilder.Entity<AuditLogEntry>(entity =>

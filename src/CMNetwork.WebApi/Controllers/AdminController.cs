@@ -49,6 +49,7 @@ public class AdminController : ControllerBase
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IAuditEventLogger _audit;
     private readonly IConfiguration _configuration;
+    private readonly IIntegrationCredentialService _integrationCredentialService;
     private readonly IRecurringJobManager _recurringJobManager;
     private readonly JobStorage _jobStorage;
 
@@ -57,6 +58,7 @@ public class AdminController : ControllerBase
         UserManager<ApplicationUser> userManager,
         IAuditEventLogger audit,
         IConfiguration configuration,
+        IIntegrationCredentialService integrationCredentialService,
         IRecurringJobManager recurringJobManager,
         JobStorage jobStorage)
     {
@@ -64,6 +66,7 @@ public class AdminController : ControllerBase
         _userManager = userManager;
         _audit = audit;
         _configuration = configuration;
+        _integrationCredentialService = integrationCredentialService;
         _recurringJobManager = recurringJobManager;
         _jobStorage = jobStorage;
     }
@@ -511,29 +514,23 @@ public class AdminController : ControllerBase
 
     // ── PayMongo Settings ─────────────────────────────────────────────────
 
-    private const string PayMongoPolicyName = "paymongo-settings";
-    private static readonly Guid PayMongoPolicyId = Guid.Parse("40000000-0000-0000-0000-000000000002");
-
     [HttpGet("paymongo-settings")]
     public async Task<IActionResult> GetPayMongoSettings()
     {
-        var policy = await _dbContext.SecurityPolicies
-            .FirstOrDefaultAsync(x => x.Name == PayMongoPolicyName);
-        if (policy is null)
+        var settings = await _integrationCredentialService.GetPayMongoAdminSettingsAsync();
+        return Ok(new PayMongoSettingsDto
         {
-            return Ok(new PayMongoSettingsDto());
-        }
-
-        try
-        {
-            var dto = JsonSerializer.Deserialize<PayMongoSettingsDto>(policy.Value, SecurityPolicyJsonOptions)
-                      ?? new PayMongoSettingsDto();
-            return Ok(dto);
-        }
-        catch (JsonException)
-        {
-            return Ok(new PayMongoSettingsDto());
-        }
+            PublicKey = settings.PublicKey,
+            SecretKey = settings.SecretKeyConfigured ? "sk_****" : string.Empty,
+            WebhookSecret = settings.WebhookSecretConfigured ? "•••••" : string.Empty,
+            Mode = settings.Mode,
+            SecretKeyConfigured = settings.SecretKeyConfigured,
+            WebhookSecretConfigured = settings.WebhookSecretConfigured,
+            BaseUrl = settings.BaseUrl,
+            Version = settings.Version,
+            UpdatedAtUtc = settings.UpdatedAtUtc,
+            UpdatedByUserId = settings.UpdatedByUserId,
+        });
     }
 
     [HttpPut("paymongo-settings")]
@@ -544,32 +541,65 @@ public class AdminController : ControllerBase
             return BadRequest(new { message = "PayMongo settings payload is required." });
         }
 
-        var policy = await _dbContext.SecurityPolicies
-            .FirstOrDefaultAsync(x => x.Name == PayMongoPolicyName);
-
-        if (policy is null)
+        if (string.IsNullOrWhiteSpace(request.PublicKey))
         {
-            policy = new CMNetwork.Domain.Entities.SecurityPolicy
-            {
-                Id = PayMongoPolicyId,
-                Name = PayMongoPolicyName,
-                Description = "PayMongo payment gateway configuration.",
-                IsEnabled = true,
-            };
-            _dbContext.SecurityPolicies.Add(policy);
+            return BadRequest(new { message = "PayMongo public key is required." });
         }
 
-        policy.Value = JsonSerializer.Serialize(request, SecurityPolicyJsonOptions);
-        await _dbContext.SaveChangesAsync();
+        var current = await _integrationCredentialService.GetPayMongoAdminSettingsAsync();
+        if (!current.SecretKeyConfigured && string.IsNullOrWhiteSpace(request.SecretKey))
+        {
+            return BadRequest(new { message = "PayMongo secret key is required for initial setup." });
+        }
+
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue(ClaimTypes.Email)
+            ?? "system";
+
+        var updated = await _integrationCredentialService.UpsertPayMongoSettingsAsync(
+            publicKey: request.PublicKey,
+            secretKey: request.SecretKey,
+            mode: request.Mode,
+            webhookSecret: request.WebhookSecret,
+            baseUrl: request.BaseUrl,
+            updatedByUserId: userId);
 
         await _audit.LogAsync(
             entityName: "PayMongoSettings",
             action: "Updated",
             category: AuditCategories.System,
-            recordId: policy.Id.ToString(),
-            details: new { request.Mode });
+            recordId: "paymongo",
+            details: new { updated.Mode, updated.Version, updated.UpdatedByUserId });
 
-        return Ok(request);
+        return Ok(new PayMongoSettingsDto
+        {
+            PublicKey = updated.PublicKey,
+            SecretKey = updated.SecretKeyConfigured ? "sk_****" : string.Empty,
+            WebhookSecret = updated.WebhookSecretConfigured ? "•••••" : string.Empty,
+            Mode = updated.Mode,
+            SecretKeyConfigured = updated.SecretKeyConfigured,
+            WebhookSecretConfigured = updated.WebhookSecretConfigured,
+            BaseUrl = updated.BaseUrl,
+            Version = updated.Version,
+            UpdatedAtUtc = updated.UpdatedAtUtc,
+            UpdatedByUserId = updated.UpdatedByUserId,
+        });
+    }
+
+    [HttpPost("paymongo-settings/test")]
+    public async Task<IActionResult> TestPayMongoSettings([FromBody] PayMongoConnectionTestDto? request)
+    {
+        var result = await _integrationCredentialService.TestPayMongoConnectionAsync(
+            request?.SecretKey,
+            request?.BaseUrl);
+
+        var payload = new PayMongoConnectionTestResultDto
+        {
+            Success = result.Success,
+            Message = result.Message,
+        };
+
+        return result.Success ? Ok(payload) : BadRequest(payload);
     }
 
     // ── Role Permissions ──────────────────────────────────────────────────

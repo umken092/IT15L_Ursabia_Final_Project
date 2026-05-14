@@ -56,6 +56,7 @@ public static class DependencyInjection
         services.AddScoped<ICurrentCustomerService, CurrentCustomerService>();
         services.AddScoped<IAuditEventLogger, AuditEventLogger>();
         services.AddScoped<IAutoJournalService, AutoJournalService>();
+        services.AddScoped<IIntegrationCredentialService, IntegrationCredentialService>();
         services.AddHttpClient<IPayMongoService, PayMongoService>();
 
         services.AddHangfire(config =>

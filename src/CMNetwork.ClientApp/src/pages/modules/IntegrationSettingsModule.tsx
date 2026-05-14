@@ -11,6 +11,8 @@ interface PayMongoConfig {
   publicKey: string
   secretKey: string
   mode: 'test' | 'live'
+  secretKeyConfigured: boolean
+  baseUrl: string
   connectionStatus: ConnectionStatus
   connectionMessage: string
 }
@@ -33,6 +35,8 @@ const INITIAL_PAYMONGO: PayMongoConfig = {
   publicKey: '',
   secretKey: '',
   mode: 'test',
+  secretKeyConfigured: false,
+  baseUrl: '',
   connectionStatus: 'idle',
   connectionMessage: '',
 }
@@ -142,8 +146,10 @@ export const IntegrationSettingsModule = () => {
         setPaymongo((p) => ({
           ...p,
           publicKey: pmData.publicKey,
-          secretKey: pmData.secretKey,
+          secretKey: '',
           mode: pmData.mode as 'test' | 'live',
+          secretKeyConfigured: Boolean(pmData.secretKeyConfigured),
+          baseUrl: pmData.baseUrl || '',
         }))
       } catch {
         // Non-fatal — form stays at defaults if settings haven't been saved yet
@@ -156,24 +162,44 @@ export const IntegrationSettingsModule = () => {
 
   const handleTestPaymongo = async () => {
     setPaymongo((p) => ({ ...p, connectionStatus: 'testing', connectionMessage: '' }))
-    await new Promise<void>((r) => setTimeout(r, 1200))
-    const ok = paymongo.publicKey.trim().length > 0 && paymongo.secretKey.trim().length > 0
-    const successMsg = paymongo.mode === 'live' ? 'Live credentials verified.' : 'Test credentials verified.'
-    setPaymongo((p) => ({
-      ...p,
-      connectionStatus: ok ? 'ok' : 'error',
-      connectionMessage: ok ? successMsg : 'API keys appear empty or invalid.',
-    }))
+    try {
+      const result = await adminService.testPayMongoSettings({
+        secretKey: paymongo.secretKey,
+        baseUrl: paymongo.baseUrl || undefined,
+      })
+      setPaymongo((p) => ({
+        ...p,
+        connectionStatus: result.success ? 'ok' : 'error',
+        connectionMessage: result.message,
+      }))
+    } catch {
+      setPaymongo((p) => ({
+        ...p,
+        connectionStatus: 'error',
+        connectionMessage: 'Unable to test connection right now.',
+      }))
+    }
   }
 
   const handleSavePaymongo = async () => {
+    if (!paymongo.publicKey.trim()) {
+      pushToast('error', 'Public key is required.')
+      return
+    }
+    if (!paymongo.secretKeyConfigured && !paymongo.secretKey.trim()) {
+      pushToast('error', 'Secret key is required for initial setup.')
+      return
+    }
+
     setSavingPm(true)
     try {
       await adminService.updatePayMongoSettings({
         publicKey: paymongo.publicKey,
         secretKey: paymongo.secretKey,
         mode: paymongo.mode,
+        baseUrl: paymongo.baseUrl || undefined,
       })
+      setPaymongo((p) => ({ ...p, secretKey: '', secretKeyConfigured: true }))
       pushToast('success', 'PayMongo settings saved.')
     } catch {
       pushToast('error', 'Failed to save PayMongo settings.')
@@ -282,9 +308,25 @@ export const IntegrationSettingsModule = () => {
               id="pm-secret-key"
               className="is-input is-secret"
               type="password"
-              placeholder="sk_test_…"
+              placeholder={paymongo.secretKeyConfigured ? 'Configured (leave blank to keep existing)' : 'sk_test_…'}
               value={paymongo.secretKey}
               onChange={(e) => setPaymongo((p) => ({ ...p, secretKey: e.target.value }))}
+            />
+            {paymongo.secretKeyConfigured && !paymongo.secretKey && (
+              <small className="is-muted">A secret key is already configured.</small>
+            )}
+          </div>
+          <div className="is-field">
+            <label className="is-label" htmlFor="pm-base-url">
+              API Base URL (optional)
+            </label>
+            <input
+              id="pm-base-url"
+              className="is-input"
+              type="text"
+              placeholder="https://api.paymongo.com"
+              value={paymongo.baseUrl}
+              onChange={(e) => setPaymongo((p) => ({ ...p, baseUrl: e.target.value }))}
             />
           </div>
         </div>

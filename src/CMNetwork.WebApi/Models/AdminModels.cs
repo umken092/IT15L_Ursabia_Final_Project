@@ -230,8 +230,27 @@ public class PayMongoSettingsDto
 {
     public string PublicKey { get; set; } = string.Empty;
     public string SecretKey { get; set; } = string.Empty;
+    public string WebhookSecret { get; set; } = string.Empty;
     /// <summary>Accepted values: test | live</summary>
     public string Mode { get; set; } = "test";
+    public bool SecretKeyConfigured { get; set; }
+    public bool WebhookSecretConfigured { get; set; }
+    public string? BaseUrl { get; set; }
+    public int Version { get; set; }
+    public DateTime? UpdatedAtUtc { get; set; }
+    public string? UpdatedByUserId { get; set; }
+}
+
+public class PayMongoConnectionTestDto
+{
+    public string SecretKey { get; set; } = string.Empty;
+    public string? BaseUrl { get; set; }
+}
+
+public class PayMongoConnectionTestResultDto
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
 }
 
 public class RolePermissionSetDto
