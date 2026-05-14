@@ -26,6 +26,7 @@ public class ApplicationUser : IdentityUser<Guid>
     public string? AuthenticatorKey { get; set; }
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
     public DateTime? LastLoginUtc { get; set; }
+    public Guid? CustomerId { get; set; }
 
     public string FullName => $"{FirstName} {MiddleName} {LastName}".Trim().Replace("  ", " ");
 }

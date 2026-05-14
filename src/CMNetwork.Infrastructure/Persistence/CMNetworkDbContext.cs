@@ -31,6 +31,7 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
     public DbSet<APInvoiceLine> APInvoiceLines => Set<APInvoiceLine>();
     public DbSet<ARInvoice> ARInvoices => Set<ARInvoice>();
     public DbSet<ARInvoiceLine> ARInvoiceLines => Set<ARInvoiceLine>();
+    public DbSet<CustomerPayment> CustomerPayments => Set<CustomerPayment>();
     public DbSet<BankDirectoryEntry> BankDirectoryEntries => Set<BankDirectoryEntry>();
     public DbSet<BankStatement> BankStatements => Set<BankStatement>();
     public DbSet<BankTransaction> BankTransactions => Set<BankTransaction>();
@@ -86,6 +87,12 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
             entity.Property(x => x.EmailNotificationsEnabled).HasDefaultValue(true);
             entity.Property(x => x.SmsNotificationsEnabled).HasDefaultValue(false);
             entity.Property(x => x.InAppNotificationsEnabled).HasDefaultValue(true);
+            entity.Property(x => x.CustomerId);
+            entity.HasIndex(x => x.CustomerId);
+            entity.HasOne<Customer>()
+                .WithMany()
+                .HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // ── RefreshToken ─────────────────────────────────────────────────────────
@@ -334,6 +341,28 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
                 .WithMany()
                 .HasForeignKey(x => x.ChartOfAccountId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── CustomerPayment ───────────────────────────────────────────────────
+        modelBuilder.Entity<CustomerPayment>(entity =>
+        {
+            entity.Property(x => x.Amount).HasPrecision(18, 2);
+            entity.Property(x => x.PayMongoCheckoutSessionId).HasMaxLength(256);
+            entity.Property(x => x.IdempotencyKey).HasMaxLength(128);
+            entity.Property(x => x.CheckoutUrl).HasMaxLength(2048);
+            entity.Property(x => x.InvoiceIds).HasMaxLength(4000).IsRequired();
+            entity.Property(x => x.CreatedByUserId).HasMaxLength(256).IsRequired();
+            entity.HasIndex(x => x.PayMongoCheckoutSessionId)
+                .IsUnique()
+                .HasFilter("[PayMongoCheckoutSessionId] IS NOT NULL");
+            entity.HasIndex(x => new { x.CustomerId, x.IdempotencyKey })
+                .IsUnique()
+                .HasFilter("[IdempotencyKey] IS NOT NULL");
+            entity.HasOne(x => x.Customer)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(x => new { x.CustomerId, x.Status, x.CreatedAt });
         });
 
         // ── BankDirectoryEntry ───────────────────────────────────────────────

@@ -53,7 +53,10 @@ public static class DependencyInjection
         // ── Audit infrastructure ────────────────────────────────────────
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<ICurrentCustomerService, CurrentCustomerService>();
         services.AddScoped<IAuditEventLogger, AuditEventLogger>();
+        services.AddScoped<IAutoJournalService, AutoJournalService>();
+        services.AddHttpClient<IPayMongoService, PayMongoService>();
 
         services.AddHangfire(config =>
             config

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { type ReactElement, useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   customerPortalService,
   type CustomerInvoice,
@@ -37,26 +38,77 @@ const StatusBadge = ({ status }: { status: string }) => (
 
 export const CustomerPortalModule = () => {
   const pushToast = useNotificationStore((state) => state.push)
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [data, setData] = useState<CustomerInvoicesResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [downloadingStatement, setDownloadingStatement] = useState(false)
+  const [startingPayment, setStartingPayment] = useState(false)
+  const [paymentAttemptKey, setPaymentAttemptKey] = useState<string>('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('All')
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([])
+
+  const paymentRef = searchParams.get('refId') ?? searchParams.get('ref') ?? ''
+
+  const loadInvoices = useCallback(async () => {
+    setLoading(true)
+    try {
+      setData(await customerPortalService.getMyInvoices())
+    } catch {
+      pushToast('error', 'Unable to load your invoices. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }, [pushToast])
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true)
+    void loadInvoices()
+  }, [loadInvoices])
+
+  useEffect(() => {
+    const confirmFromReturnUrl = async () => {
+      if (!paymentRef) return
+
       try {
-        setData(await customerPortalService.getMyInvoices())
+        await customerPortalService.confirmPayment(paymentRef)
+        pushToast('success', 'Payment confirmed and applied successfully.')
+        setSearchParams({}, { replace: true })
+        await loadInvoices()
       } catch {
-        pushToast('error', 'Unable to load your invoices. Please try again.')
-      } finally {
-        setLoading(false)
+        pushToast('warning', 'Payment return detected, but verification is still pending. Please refresh in a few seconds.')
       }
     }
-    void load()
-  }, [pushToast])
+
+    void confirmFromReturnUrl()
+  }, [loadInvoices, paymentRef, pushToast, setSearchParams])
+
+  const toggleInvoiceSelection = (invoiceId: string, checked: boolean) => {
+    setSelectedInvoiceIds((current) => {
+      if (checked) {
+        return current.includes(invoiceId) ? current : [...current, invoiceId]
+      }
+      return current.filter((id) => id !== invoiceId)
+    })
+  }
+
+  const handlePayNow = async () => {
+    if (selectedInvoiceIds.length === 0) {
+      pushToast('warning', 'Select at least one invoice to continue.')
+      return
+    }
+
+    setStartingPayment(true)
+    try {
+      const key = paymentAttemptKey || globalThis.crypto?.randomUUID?.() || `${Date.now()}-${selectedInvoiceIds.join(',')}`
+      setPaymentAttemptKey(key)
+      const payment = await customerPortalService.createPaymentIntent(selectedInvoiceIds, undefined, key)
+      globalThis.location.href = payment.redirectUrl
+    } catch {
+      pushToast('error', 'Unable to start payment. Please try again.')
+      setStartingPayment(false)
+    }
+  }
 
   const handleDownloadStatement = async () => {
     setDownloadingStatement(true)
@@ -89,6 +141,69 @@ export const CustomerPortalModule = () => {
   const outstanding = (data?.invoices ?? [])
     .filter((inv) => inv.status !== 'Paid' && inv.status !== 'Void')
     .reduce((sum, inv) => sum + inv.totalAmount, 0)
+
+  const payableStatus = new Set(['Sent', 'Approved'])
+  const selectedTotal = filteredInvoices
+    .filter((inv) => selectedInvoiceIds.includes(inv.id))
+    .reduce((sum, inv) => sum + inv.totalAmount, 0)
+
+  let invoiceTableContent: ReactElement
+  if (loading) {
+    invoiceTableContent = <p style={{ color: '#6b7280', textAlign: 'center', padding: 40 }}>Loading invoices…</p>
+  } else if (filteredInvoices.length === 0) {
+    invoiceTableContent = <p style={{ color: '#6b7280', textAlign: 'center', padding: 40 }}>No invoices match your filter.</p>
+  } else {
+    invoiceTableContent = (
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+          <thead>
+            <tr style={{ borderBottom: '2px solid #e5e7eb', textAlign: 'left' }}>
+              <th style={{ padding: '10px 12px', color: '#6b7280', fontWeight: 600, textAlign: 'center' }}>Pay</th>
+              <th style={{ padding: '10px 12px', color: '#6b7280', fontWeight: 600 }}>Invoice #</th>
+              <th style={{ padding: '10px 12px', color: '#6b7280', fontWeight: 600 }}>Date</th>
+              <th style={{ padding: '10px 12px', color: '#6b7280', fontWeight: 600 }}>Due Date</th>
+              <th style={{ padding: '10px 12px', color: '#6b7280', fontWeight: 600, textAlign: 'right' }}>Amount</th>
+              <th style={{ padding: '10px 12px', color: '#6b7280', fontWeight: 600, textAlign: 'center' }}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredInvoices.map((inv, idx) => (
+              <tr
+                key={inv.id}
+                style={{
+                  borderBottom: '1px solid #f3f4f6',
+                  background: idx % 2 === 0 ? '#fff' : '#fafafa',
+                }}
+              >
+                <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                  {payableStatus.has(inv.status) ? (
+                    <input
+                      type="checkbox"
+                      checked={selectedInvoiceIds.includes(inv.id)}
+                      onChange={(e) => toggleInvoiceSelection(inv.id, e.target.checked)}
+                    />
+                  ) : (
+                    <span style={{ color: '#9ca3af', fontSize: 12 }}>-</span>
+                  )}
+                </td>
+                <td style={{ padding: '10px 12px', fontWeight: 600, color: '#1d4ed8' }}>
+                  {inv.invoiceNumber}
+                </td>
+                <td style={{ padding: '10px 12px', color: '#374151' }}>{inv.invoiceDate}</td>
+                <td style={{ padding: '10px 12px', color: '#374151' }}>{inv.dueDate}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>
+                  {formatCurrency(inv.totalAmount)}
+                </td>
+                <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                  <StatusBadge status={inv.status} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount)
@@ -124,6 +239,29 @@ export const CustomerPortalModule = () => {
           }}
         >
           {downloadingStatement ? '⏳ Generating…' : '⬇ Download Statement (PDF)'}
+        </button>
+      </div>
+
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 13, color: '#374151' }}>
+          Selected for payment: <strong>{selectedInvoiceIds.length}</strong>
+          {selectedInvoiceIds.length > 0 && <> · <strong>{formatCurrency(selectedTotal)}</strong></>}
+        </div>
+        <button
+          onClick={() => { void handlePayNow() }}
+          disabled={startingPayment || selectedInvoiceIds.length === 0}
+          style={{
+            border: 'none',
+            borderRadius: 8,
+            background: selectedInvoiceIds.length === 0 ? '#9ca3af' : '#16a34a',
+            color: '#fff',
+            padding: '8px 14px',
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: selectedInvoiceIds.length === 0 ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {startingPayment ? 'Redirecting to PayMongo...' : 'Pay Selected Invoices'}
         </button>
       </div>
 
@@ -195,48 +333,7 @@ export const CustomerPortalModule = () => {
       </div>
 
       {/* Invoice table */}
-      {loading ? (
-        <p style={{ color: '#6b7280', textAlign: 'center', padding: 40 }}>Loading invoices…</p>
-      ) : filteredInvoices.length === 0 ? (
-        <p style={{ color: '#6b7280', textAlign: 'center', padding: 40 }}>No invoices match your filter.</p>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #e5e7eb', textAlign: 'left' }}>
-                <th style={{ padding: '10px 12px', color: '#6b7280', fontWeight: 600 }}>Invoice #</th>
-                <th style={{ padding: '10px 12px', color: '#6b7280', fontWeight: 600 }}>Date</th>
-                <th style={{ padding: '10px 12px', color: '#6b7280', fontWeight: 600 }}>Due Date</th>
-                <th style={{ padding: '10px 12px', color: '#6b7280', fontWeight: 600, textAlign: 'right' }}>Amount</th>
-                <th style={{ padding: '10px 12px', color: '#6b7280', fontWeight: 600, textAlign: 'center' }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredInvoices.map((inv, idx) => (
-                <tr
-                  key={inv.id}
-                  style={{
-                    borderBottom: '1px solid #f3f4f6',
-                    background: idx % 2 === 0 ? '#fff' : '#fafafa',
-                  }}
-                >
-                  <td style={{ padding: '10px 12px', fontWeight: 600, color: '#1d4ed8' }}>
-                    {inv.invoiceNumber}
-                  </td>
-                  <td style={{ padding: '10px 12px', color: '#374151' }}>{inv.invoiceDate}</td>
-                  <td style={{ padding: '10px 12px', color: '#374151' }}>{inv.dueDate}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>
-                    {formatCurrency(inv.totalAmount)}
-                  </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                    <StatusBadge status={inv.status} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {invoiceTableContent}
     </div>
   )
 }

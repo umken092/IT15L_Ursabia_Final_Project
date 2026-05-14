@@ -38,6 +38,15 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                 table: "APInvoices",
                 columns: new[] { "VendorId", "Status", "InvoiceDate" });
 
+            // Data hardening: remove orphan claims that reference users no longer present.
+            // This allows the new FK to be applied safely in existing environments.
+            migrationBuilder.Sql("""
+                DELETE ec
+                FROM [ExpenseClaims] ec
+                LEFT JOIN [AspNetUsers] u ON ec.[EmployeeId] = u.[Id]
+                WHERE u.[Id] IS NULL;
+                """);
+
             migrationBuilder.AddForeignKey(
                 name: "FK_ExpenseClaims_AspNetUsers_EmployeeId",
                 table: "ExpenseClaims",

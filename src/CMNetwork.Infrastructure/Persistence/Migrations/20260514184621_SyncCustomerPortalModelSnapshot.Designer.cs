@@ -4,6 +4,7 @@ using CMNetwork.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CMNetwork.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(CMNetworkDbContext))]
-    partial class CMNetworkDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260514184621_SyncCustomerPortalModelSnapshot")]
+    partial class SyncCustomerPortalModelSnapshot
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -86,7 +89,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("VendorId", "Status", "InvoiceDate");
 
-                    b.ToTable("APInvoices", (string)null);
+                    b.ToTable("APInvoices");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.APInvoiceLine", b =>
@@ -131,7 +134,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ChartOfAccountId");
 
-                    b.ToTable("APInvoiceLines", (string)null);
+                    b.ToTable("APInvoiceLines");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.ARInvoice", b =>
@@ -195,7 +198,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CustomerId", "Status", "InvoiceDate");
 
-                    b.ToTable("ARInvoices", (string)null);
+                    b.ToTable("ARInvoices");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.ARInvoiceLine", b =>
@@ -240,7 +243,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ChartOfAccountId");
 
-                    b.ToTable("ARInvoiceLines", (string)null);
+                    b.ToTable("ARInvoiceLines");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.ApprovalQueue", b =>
@@ -306,7 +309,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Status", "RequiredApproverRole");
 
-                    b.ToTable("ApprovalQueue", (string)null);
+                    b.ToTable("ApprovalQueue");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.AuditLogEntry", b =>
@@ -379,7 +382,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("UserEmail");
 
-                    b.ToTable("AuditLogs", (string)null);
+                    b.ToTable("AuditLogs");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.BackupRecord", b =>
@@ -405,7 +408,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("BackupRecords", (string)null);
+                    b.ToTable("BackupRecords");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.BankDirectoryEntry", b =>
@@ -461,7 +464,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("BankDirectoryEntries", (string)null);
+                    b.ToTable("BankDirectoryEntries");
 
                     b.HasData(
                         new
@@ -547,7 +550,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     b.HasIndex("BankStatementId")
                         .IsUnique();
 
-                    b.ToTable("BankReconciliations", (string)null);
+                    b.ToTable("BankReconciliations");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.BankStatement", b =>
@@ -596,7 +599,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("FiscalPeriodId");
 
-                    b.ToTable("BankStatements", (string)null);
+                    b.ToTable("BankStatements");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.BankTransaction", b =>
@@ -646,7 +649,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("MatchedJournalEntryLineId");
 
-                    b.ToTable("BankTransactions", (string)null);
+                    b.ToTable("BankTransactions");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.BudgetReallocationRequest", b =>
@@ -719,7 +722,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TargetDepartmentId");
 
-                    b.ToTable("BudgetReallocationRequests", (string)null);
+                    b.ToTable("BudgetReallocationRequests");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.ChartOfAccount", b =>
@@ -757,7 +760,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ParentAccountId");
 
-                    b.ToTable("ChartOfAccounts", (string)null);
+                    b.ToTable("ChartOfAccounts");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.Customer", b =>
@@ -836,7 +839,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     b.HasIndex("CustomerCode")
                         .IsUnique();
 
-                    b.ToTable("Customers", (string)null);
+                    b.ToTable("Customers");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.CustomerPayment", b =>
@@ -895,7 +898,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CustomerId", "Status", "CreatedAt");
 
-                    b.ToTable("CustomerPayments", (string)null);
+                    b.ToTable("CustomerPayments");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.DeductionConfig", b =>
@@ -936,7 +939,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     b.HasIndex("Name", "IsDeleted")
                         .IsUnique();
 
-                    b.ToTable("DeductionConfigs", (string)null);
+                    b.ToTable("DeductionConfigs");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.Department", b =>
@@ -968,7 +971,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("Departments", (string)null);
+                    b.ToTable("Departments");
 
                     b.HasData(
                         new
@@ -1066,7 +1069,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("GeneratedUtc");
 
-                    b.ToTable("EvidenceArchives", (string)null);
+                    b.ToTable("EvidenceArchives");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.ExpenseClaim", b =>
@@ -1144,7 +1147,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("EmployeeId");
 
-                    b.ToTable("ExpenseClaims", (string)null);
+                    b.ToTable("ExpenseClaims");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.FiscalPeriod", b =>
@@ -1175,7 +1178,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("FiscalPeriods", (string)null);
+                    b.ToTable("FiscalPeriods");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.IntegrationSetting", b =>
@@ -1204,7 +1207,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("IntegrationSettings", (string)null);
+                    b.ToTable("IntegrationSettings");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.JournalEntry", b =>
@@ -1255,7 +1258,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     b.HasIndex("EntryNumber")
                         .IsUnique();
 
-                    b.ToTable("JournalEntries", (string)null);
+                    b.ToTable("JournalEntries");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.JournalEntryLine", b =>
@@ -1288,7 +1291,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("JournalEntryId");
 
-                    b.ToTable("JournalEntryLines", (string)null);
+                    b.ToTable("JournalEntryLines");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.PayPeriod", b =>
@@ -1337,7 +1340,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Year", "Month", "Frequency", "IsDeleted");
 
-                    b.ToTable("PayPeriods", (string)null);
+                    b.ToTable("PayPeriods");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.PayrollLineItem", b =>
@@ -1434,7 +1437,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("PayrollRunId", "EmployeeId", "IsDeleted");
 
-                    b.ToTable("PayrollLineItems", (string)null);
+                    b.ToTable("PayrollLineItems");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.PayrollRun", b =>
@@ -1506,7 +1509,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("PayPeriodId", "IsDeleted");
 
-                    b.ToTable("PayrollRuns", (string)null);
+                    b.ToTable("PayrollRuns");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.Payslip", b =>
@@ -1582,7 +1585,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("[PayrollRunId] IS NOT NULL");
 
-                    b.ToTable("Payslips", (string)null);
+                    b.ToTable("Payslips");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.SecurityPolicy", b =>
@@ -1611,7 +1614,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("SecurityPolicies", (string)null);
+                    b.ToTable("SecurityPolicies");
 
                     b.HasData(
                         new
@@ -1677,7 +1680,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Type", "Year", "MinIncome", "IsDeleted");
 
-                    b.ToTable("TaxTables", (string)null);
+                    b.ToTable("TaxTables");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.Vendor", b =>
@@ -1756,7 +1759,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     b.HasIndex("VendorCode")
                         .IsUnique();
 
-                    b.ToTable("Vendors", (string)null);
+                    b.ToTable("Vendors");
                 });
 
             modelBuilder.Entity("CMNetwork.Infrastructure.Identity.ApplicationUser", b =>
@@ -1967,7 +1970,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("RefreshTokens", (string)null);
+                    b.ToTable("RefreshTokens");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>

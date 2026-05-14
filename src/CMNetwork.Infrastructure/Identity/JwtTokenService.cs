@@ -33,6 +33,7 @@ public class JwtTokenService
             new("fullName",     user.FullName),
             new("role",         primaryRole),
             new("departmentId", user.DepartmentId?.ToString() ?? string.Empty),
+            new("customerId",   user.CustomerId?.ToString() ?? string.Empty),
         };
 
         foreach (var role in roles)
