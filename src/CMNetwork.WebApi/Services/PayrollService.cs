@@ -741,8 +741,6 @@ public class PayrollService : IPayrollService
                 user.LastPayrollProcessed = DateTime.UtcNow;
             }
         }
-
-        run.Status = PayrollRunStatus.Processed;
     }
 
     private async Task<string> GeneratePayslipNumberAsync()

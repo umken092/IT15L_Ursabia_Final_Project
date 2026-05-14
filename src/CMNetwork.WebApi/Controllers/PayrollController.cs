@@ -152,6 +152,7 @@ public class PayrollController : ControllerBase
     }
 
     [HttpPost("runs/{payrollRunId:guid}/approve")]
+    [HttpPost("runs/{payrollRunId:guid}/approval")]
     [Authorize(Roles = "cfo,super-admin")]
     public async Task<IActionResult> ApprovePayroll(Guid payrollRunId, [FromBody] ApprovePayrollRequest request)
     {

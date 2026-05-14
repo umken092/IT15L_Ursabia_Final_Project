@@ -282,7 +282,7 @@ export const PayrollOperationsModule = () => {
     setLoading(true)
     setError('')
     try {
-      await apiClient.post(`/payroll/runs/${registerRunId}/approve`, { approverNotes: '' })
+      await apiClient.post(`/payroll/runs/${registerRunId}/approval`, { approverNotes: '' })
       await loadRuns()
       await loadMyPayslips()
       await loadRegister()
