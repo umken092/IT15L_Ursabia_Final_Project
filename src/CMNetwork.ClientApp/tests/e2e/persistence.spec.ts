@@ -61,7 +61,6 @@ test.describe('Save and refresh persistence regressions', () => {
     // Create a fresh employee in-test to avoid any dependency on demo/seed data.
     const firstName = `E2EEdit${runId.slice(0, 4)}`;
     const lastName = `Target${runId.slice(-4)}`;
-    const originalDepartment = 'Finance';
     const newDepartment = `Finance-QA-${runId.slice(-4)}`;
 
     // Step 1: create the employee

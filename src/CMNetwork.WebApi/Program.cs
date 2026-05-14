@@ -388,6 +388,15 @@ app.UseStaticFiles(new StaticFileOptions
 });
 app.MapStaticAssets();
 app.MapControllers();
+
+// Return 404 for any unmatched /api/* routes so that POST requests don't get 405
+// from the GET-only SPA fallback endpoint below.
+app.MapFallback("/api/{**rest}", async (HttpContext ctx) =>
+{
+    ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+    await ctx.Response.WriteAsJsonAsync(new { message = "API endpoint not found." });
+});
+
 app.MapFallbackToFile("index.html");
 
 await app.RunAsync();
