@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Button } from '@progress/kendo-react-buttons'
 import { apiClient } from '../../services/apiClient'
 import { useAuthStore } from '../../store/authStore'
@@ -391,18 +392,7 @@ export const PayrollOperationsModule = () => {
 
   return (
     <section className="page-fade-in">
-      {/* Subtle dim backdrop — pointer-events: none keeps main content fully interactive */}
-      {helpOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.28)',
-            zIndex: 40,
-            pointerEvents: 'none',
-          }}
-        />
-      )}
+      {/* Off-canvas and dim backdrop are portalled to document.body to escape any parent overflow/transform */}
 
       <article className="card" style={{ padding: 0, overflow: 'hidden' }}>
         {/* Header row */}
@@ -535,57 +525,70 @@ export const PayrollOperationsModule = () => {
         </div>
       </article>
 
-      {/* Off-canvas help drawer — slides in from right, overlays content */}
-      {helpOpen && (
-        <aside
-          style={{
-            position: 'fixed',
-            top: 0,
-            right: 0,
-            width: 'min(420px, 90vw)',
-            height: '100vh',
-            background: '#fff',
-            borderLeft: '1px solid #e5e7eb',
-            boxShadow: '-6px 0 32px rgba(0,0,0,0.15)',
-            zIndex: 50,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-          }}
-        >
-          <header style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <strong style={{ flex: 1, fontSize: '1rem', textTransform: 'capitalize' }}>Help — {activePage}</strong>
-            <button
-              onClick={() => setHelpOpen(false)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.25rem', lineHeight: 1, color: '#374151' }}
-              aria-label="Close help panel"
-            >
-              ✕
-            </button>
-          </header>
-          <div style={{ padding: '0.75rem 1.25rem', borderBottom: '1px solid #e5e7eb' }}>
-            <input
-              type="search"
-              placeholder="Search help topics…"
-              value={helpQuery}
-              onChange={(e) => setHelpQuery(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box' }}
-              autoFocus
-            />
-          </div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '0.75rem 1.25rem', display: 'grid', gap: '0.6rem', alignContent: 'start' }}>
-            {contextualFaqs.length === 0 ? (
-              <p className="card-subtitle" style={{ margin: 0 }}>No matching help topics for this page. Try a different keyword.</p>
-            ) : (
-              contextualFaqs.map((item) => (
-                <article key={item.id} style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '0.65rem' }}>
-                  <p style={{ margin: '0 0 0.25rem', fontWeight: 600 }}>{item.question}</p>
-                  <p className="card-subtitle" style={{ marginBottom: 0 }}>{item.answer}</p>
-                </article>
-              ))
-            )}
-          </div>
-        </aside>
+      {helpOpen && createPortal(
+        <>
+          {/* Dim backdrop — pointer-events: none so main content stays clickable */}
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(15, 23, 42, 0.28)',
+              zIndex: 40,
+              pointerEvents: 'none',
+            }}
+          />
+          {/* Off-canvas help drawer */}
+          <aside
+            style={{
+              position: 'fixed',
+              top: 0,
+              right: 0,
+              width: 'min(420px, 90vw)',
+              height: '100vh',
+              background: '#fff',
+              borderLeft: '1px solid #e5e7eb',
+              boxShadow: '-6px 0 32px rgba(0,0,0,0.15)',
+              zIndex: 50,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <header style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <strong style={{ flex: 1, fontSize: '1rem', textTransform: 'capitalize' }}>Help — {activePage}</strong>
+              <button
+                onClick={() => setHelpOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.25rem', lineHeight: 1, color: '#374151' }}
+                aria-label="Close help panel"
+              >
+                ✕
+              </button>
+            </header>
+            <div style={{ padding: '0.75rem 1.25rem', borderBottom: '1px solid #e5e7eb' }}>
+              <input
+                type="search"
+                placeholder="Search help topics…"
+                value={helpQuery}
+                onChange={(e) => setHelpQuery(e.target.value)}
+                style={{ width: '100%', boxSizing: 'border-box' }}
+                autoFocus
+              />
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0.75rem 1.25rem', display: 'grid', gap: '0.6rem', alignContent: 'start' }}>
+              {contextualFaqs.length === 0 ? (
+                <p className="card-subtitle" style={{ margin: 0 }}>No matching help topics for this page. Try a different keyword.</p>
+              ) : (
+                contextualFaqs.map((item) => (
+                  <article key={item.id} style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '0.65rem' }}>
+                    <p style={{ margin: '0 0 0.25rem', fontWeight: 600 }}>{item.question}</p>
+                    <p className="card-subtitle" style={{ marginBottom: 0 }}>{item.answer}</p>
+                  </article>
+                ))
+              )}
+            </div>
+          </aside>
+        </>,
+        document.body,
       )}
     </section>
   )
