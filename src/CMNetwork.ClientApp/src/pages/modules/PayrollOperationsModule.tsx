@@ -390,148 +390,202 @@ export const PayrollOperationsModule = () => {
   }, [activePage, helpQuery, roleForHelp])
 
   return (
-    <section className="page-fade-in" style={{ marginRight: helpOpen ? 'min(420px, 90vw)' : 0, transition: 'margin-right 0.25s ease' }}>
-      <article className="card" style={{ marginBottom: '1rem' }}>
-        <header className="card-head">
-          <h2 className="card-title">Payroll Operations</h2>
-          <p className="card-subtitle">Five dedicated pages backed by live payroll records</p>
+    <section className="page-fade-in">
+      {/* Subtle dim backdrop — pointer-events: none keeps main content fully interactive */}
+      {helpOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.28)',
+            zIndex: 40,
+            pointerEvents: 'none',
+          }}
+        />
+      )}
+
+      <article className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        {/* Header row */}
+        <header
+          className="card-head"
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            padding: '1rem 1.25rem',
+            borderBottom: '1px solid #e5e7eb',
+            gap: '1rem',
+          }}
+        >
+          <div>
+            <h2 className="card-title" style={{ margin: 0 }}>Payroll Operations</h2>
+            <p className="card-subtitle" style={{ margin: '0.2rem 0 0' }}>Five dedicated pages backed by live payroll records</p>
+          </div>
+          <Button fillMode="outline" onClick={() => setHelpOpen((current) => !current)}>
+            Need Help?
+          </Button>
         </header>
 
         {error && (
-          <p style={{ color: '#9b1c1c', background: '#fee2e2', padding: '0.65rem', borderRadius: '0.5rem' }}>
-            {error}
-          </p>
+          <div style={{ padding: '0.5rem 1.25rem 0' }}>
+            <p style={{ color: '#9b1c1c', background: '#fee2e2', padding: '0.65rem', borderRadius: '0.5rem', margin: 0 }}>
+              {error}
+            </p>
+          </div>
         )}
 
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          {pageButtons.filter((button) => button.visible).map((button) => (
-            <Button
-              key={button.key}
-              onClick={() => setActivePage(button.key)}
-              fillMode={activePage === button.key ? 'solid' : 'outline'}
-            >
-              {button.label}
-            </Button>
-          ))}
+        {/* Two-column body: left sidebar nav + main content */}
+        <div style={{ display: 'flex', minHeight: '520px' }}>
+          {/* Left sidebar navigation */}
+          <nav
+            style={{
+              width: '175px',
+              flexShrink: 0,
+              borderRight: '1px solid #e5e7eb',
+              padding: '0.6rem 0',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.1rem',
+              background: '#fafafa',
+            }}
+          >
+            {pageButtons.filter((button) => button.visible).map((button) => (
+              <button
+                key={button.key}
+                onClick={() => setActivePage(button.key)}
+                style={{
+                  textAlign: 'left',
+                  padding: '0.55rem 1.1rem',
+                  background: activePage === button.key ? '#f0fdf4' : 'transparent',
+                  border: 'none',
+                  borderLeft: `3px solid ${activePage === button.key ? '#0f766e' : 'transparent'}`,
+                  color: activePage === button.key ? '#0f766e' : '#374151',
+                  fontWeight: activePage === button.key ? 600 : 400,
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  width: '100%',
+                  transition: 'background 0.15s, border-color 0.15s',
+                }}
+              >
+                {button.label}
+              </button>
+            ))}
+          </nav>
 
-          <span style={{ marginLeft: 'auto' }}>
-            <Button fillMode="outline" onClick={() => setHelpOpen((current) => !current)}>
-              Need Help?
-            </Button>
-          </span>
+          {/* Main page content */}
+          <div style={{ flex: 1, padding: '1rem 1.25rem', minWidth: 0, overflow: 'auto' }}>
+            {activePage === 'overview' && (
+              <PayrollOverviewPage periods={periods} runs={runs} capabilities={capabilities} />
+            )}
+
+            {activePage === 'periods' && isAccountant && (
+              <PayPeriodManagementPage
+                periods={periods}
+                createPeriod={createPeriod}
+                loading={loading}
+                onCreatePeriodChange={onCreatePeriodChange}
+                onCreatePeriod={onCreatePeriod}
+                onSelectPeriod={setSelectedPeriodId}
+                selectedPeriodId={selectedPeriodId}
+              />
+            )}
+
+            {activePage === 'processing' && isAccountant && (
+              <PayrollProcessingPage
+                loading={loading}
+                selectedPeriodId={selectedPeriodId}
+                periodOptions={periodOptions}
+                employees={employees}
+                lines={lines}
+                run={run}
+                onSelectPeriod={setSelectedPeriodId}
+                onLoadSetup={loadSetup}
+                onUpdateLine={updateLine}
+                onCalculate={onCalculate}
+                onSubmit={onSubmit}
+                onWithdraw={onWithdraw}
+                onPostToGl={onPostToGl}
+                canWithdraw={isAccountant}
+              />
+            )}
+
+            {activePage === 'approval' && isCfo && (
+              <PayrollApprovalPage
+                loading={loading}
+                runs={runs}
+                selectedRunId={registerRunId}
+                register={register}
+                onSelectRun={setRegisterRunId}
+                onLoadRegister={loadRegister}
+                onApprove={onApprove}
+                onReject={onReject}
+                onReopen={onReopen}
+                reopenGuidance={reopenGuidance}
+              />
+            )}
+
+            {activePage === 'payslips' && isEmployee && (
+              <MyPayslipsPage
+                payslips={myPayslips}
+                loading={loading}
+                onRefresh={loadMyPayslips}
+              />
+            )}
+          </div>
         </div>
       </article>
 
+      {/* Off-canvas help drawer — slides in from right, overlays content */}
       {helpOpen && (
-        <>
-          <aside
-            style={{
-              position: 'fixed',
-              top: 0,
-              right: 0,
-              width: 'min(420px, 90vw)',
-              height: '100vh',
-              background: '#fff',
-              borderLeft: '1px solid #e5e7eb',
-              boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
-              zIndex: 50,
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            <header style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <strong style={{ flex: 1, textTransform: 'capitalize' }}>Help — {activePage}</strong>
-              <button
-                onClick={() => setHelpOpen(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.25rem', lineHeight: 1, color: '#374151' }}
-                aria-label="Close help panel"
-              >
-                ✕
-              </button>
-            </header>
-            <div style={{ padding: '0.75rem 1.25rem', borderBottom: '1px solid #e5e7eb' }}>
-              <input
-                type="search"
-                placeholder="Search help topics…"
-                value={helpQuery}
-                onChange={(e) => setHelpQuery(e.target.value)}
-                style={{ width: '100%', boxSizing: 'border-box' }}
-                autoFocus
-              />
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '0.75rem 1.25rem', display: 'grid', gap: '0.6rem', alignContent: 'start' }}>
-              {contextualFaqs.length === 0 ? (
-                <p className="card-subtitle" style={{ margin: 0 }}>No matching help topics for this page. Try a different keyword.</p>
-              ) : (
-                contextualFaqs.map((item) => (
-                  <article key={item.id} style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '0.65rem' }}>
-                    <p style={{ margin: '0 0 0.25rem', fontWeight: 600 }}>{item.question}</p>
-                    <p className="card-subtitle" style={{ marginBottom: 0 }}>{item.answer}</p>
-                  </article>
-                ))
-              )}
-            </div>
-          </aside>
-        </>
-      )}
-
-      {activePage === 'overview' && (
-        <PayrollOverviewPage periods={periods} runs={runs} capabilities={capabilities} />
-      )}
-
-      {activePage === 'periods' && isAccountant && (
-        <PayPeriodManagementPage
-          periods={periods}
-          createPeriod={createPeriod}
-          loading={loading}
-          onCreatePeriodChange={onCreatePeriodChange}
-          onCreatePeriod={onCreatePeriod}
-          onSelectPeriod={setSelectedPeriodId}
-          selectedPeriodId={selectedPeriodId}
-        />
-      )}
-
-      {activePage === 'processing' && isAccountant && (
-        <PayrollProcessingPage
-          loading={loading}
-          selectedPeriodId={selectedPeriodId}
-          periodOptions={periodOptions}
-          employees={employees}
-          lines={lines}
-          run={run}
-          onSelectPeriod={setSelectedPeriodId}
-          onLoadSetup={loadSetup}
-          onUpdateLine={updateLine}
-          onCalculate={onCalculate}
-          onSubmit={onSubmit}
-          onWithdraw={onWithdraw}
-          onPostToGl={onPostToGl}
-          canWithdraw={isAccountant}
-        />
-      )}
-
-      {activePage === 'approval' && isCfo && (
-        <PayrollApprovalPage
-          loading={loading}
-          runs={runs}
-          selectedRunId={registerRunId}
-          register={register}
-          onSelectRun={setRegisterRunId}
-          onLoadRegister={loadRegister}
-          onApprove={onApprove}
-          onReject={onReject}
-          onReopen={onReopen}
-          reopenGuidance={reopenGuidance}
-        />
-      )}
-
-      {activePage === 'payslips' && isEmployee && (
-        <MyPayslipsPage
-          payslips={myPayslips}
-          loading={loading}
-          onRefresh={loadMyPayslips}
-        />
+        <aside
+          style={{
+            position: 'fixed',
+            top: 0,
+            right: 0,
+            width: 'min(420px, 90vw)',
+            height: '100vh',
+            background: '#fff',
+            borderLeft: '1px solid #e5e7eb',
+            boxShadow: '-6px 0 32px rgba(0,0,0,0.15)',
+            zIndex: 50,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
+          <header style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <strong style={{ flex: 1, fontSize: '1rem', textTransform: 'capitalize' }}>Help — {activePage}</strong>
+            <button
+              onClick={() => setHelpOpen(false)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.25rem', lineHeight: 1, color: '#374151' }}
+              aria-label="Close help panel"
+            >
+              ✕
+            </button>
+          </header>
+          <div style={{ padding: '0.75rem 1.25rem', borderBottom: '1px solid #e5e7eb' }}>
+            <input
+              type="search"
+              placeholder="Search help topics…"
+              value={helpQuery}
+              onChange={(e) => setHelpQuery(e.target.value)}
+              style={{ width: '100%', boxSizing: 'border-box' }}
+              autoFocus
+            />
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '0.75rem 1.25rem', display: 'grid', gap: '0.6rem', alignContent: 'start' }}>
+            {contextualFaqs.length === 0 ? (
+              <p className="card-subtitle" style={{ margin: 0 }}>No matching help topics for this page. Try a different keyword.</p>
+            ) : (
+              contextualFaqs.map((item) => (
+                <article key={item.id} style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '0.65rem' }}>
+                  <p style={{ margin: '0 0 0.25rem', fontWeight: 600 }}>{item.question}</p>
+                  <p className="card-subtitle" style={{ marginBottom: 0 }}>{item.answer}</p>
+                </article>
+              ))
+            )}
+          </div>
+        </aside>
       )}
     </section>
   )
