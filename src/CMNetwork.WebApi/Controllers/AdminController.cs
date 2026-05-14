@@ -232,6 +232,10 @@ public class AdminController : ControllerBase
         user.LastName = request.LastName;
         user.IsActive = request.Status != "inactive";
         user.DepartmentId = await ResolveDepartmentIdAsync(request.Department);
+        if (request.HourlyRate.HasValue)
+            user.HourlyRate = request.HourlyRate.Value;
+        if (request.OvertimeMultiplier.HasValue)
+            user.OvertimeMultiplier = request.OvertimeMultiplier.Value;
 
         var updateResult = await _userManager.UpdateAsync(user);
         if (!updateResult.Succeeded)
@@ -1843,7 +1847,9 @@ public class AdminController : ControllerBase
                     : "Unassigned",
                 Role = primaryRole,
                 Status = user.IsActive ? "active" : "inactive",
-                JoinDate = user.JoinDate.ToString("yyyy-MM-dd")
+                JoinDate = user.JoinDate.ToString("yyyy-MM-dd"),
+                HourlyRate = user.HourlyRate,
+                OvertimeMultiplier = user.OvertimeMultiplier,
             });
         }
 

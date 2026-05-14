@@ -21,6 +21,8 @@ interface Employee {
   role: Role
   status: 'active' | 'inactive' | 'pending'
   joinDate: string
+  hourlyRate?: number | null
+  overtimeMultiplier?: number | null
 }
 
 interface EmployeeFormData {
@@ -36,6 +38,8 @@ interface EmployeeFormData {
   department: string
   role: Role
   status: 'active' | 'inactive' | 'pending'
+  hourlyRate: number | ''
+  overtimeMultiplier: number | ''
 }
 
 interface UserSummary {
@@ -81,6 +85,8 @@ const emptyFormData: EmployeeFormData = {
   department: '',
   role: 'employee',
   status: 'active',
+  hourlyRate: '',
+  overtimeMultiplier: '',
 }
 
 const calculateAge = (birthdate: string): number => {
@@ -578,6 +584,8 @@ export const UserManagementModule = () => {
       department: emp.department,
       role: emp.role,
       status: emp.status,
+      hourlyRate: emp.hourlyRate ?? '',
+      overtimeMultiplier: emp.overtimeMultiplier ?? '',
     })
     setShowEditDialog(true)
   }
@@ -683,6 +691,8 @@ export const UserManagementModule = () => {
         department: formData.department || null,
         role: formData.role,
         status: formData.status,
+        hourlyRate: formData.hourlyRate === '' ? null : Number(formData.hourlyRate),
+        overtimeMultiplier: formData.overtimeMultiplier === '' ? null : Number(formData.overtimeMultiplier),
       })
 
       await Promise.all([loadUsers(), loadUserSummary()])
@@ -1059,6 +1069,37 @@ export const UserManagementModule = () => {
                 <option value="pending">Pending</option>
                 <option value="inactive">Inactive</option>
               </select>
+            </div>
+            <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '12px' }}>
+              <p style={{ margin: '0 0 8px', fontSize: '0.8125rem', fontWeight: 600, color: '#374151' }}>Payroll Settings</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label htmlFor="edit-hourly-rate">Hourly Rate (₱)</label>
+                  <input
+                    id="edit-hourly-rate"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.hourlyRate}
+                    onChange={(e) => setFormData((current) => ({ ...current, hourlyRate: e.target.value === '' ? '' : Number(e.target.value) }))}
+                    placeholder="e.g. 125.00"
+                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.9375rem' }}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="edit-ot-multiplier">OT Multiplier</label>
+                  <input
+                    id="edit-ot-multiplier"
+                    type="number"
+                    min="1"
+                    step="0.05"
+                    value={formData.overtimeMultiplier}
+                    onChange={(e) => setFormData((current) => ({ ...current, overtimeMultiplier: e.target.value === '' ? '' : Number(e.target.value) }))}
+                    placeholder="e.g. 1.25"
+                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '0.9375rem' }}
+                  />
+                </div>
+              </div>
             </div>
           </div>
           <DialogActionsBar>

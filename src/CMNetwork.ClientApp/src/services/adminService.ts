@@ -31,6 +31,8 @@ export interface AdminUser {
   role: Role
   status: AdminUserStatus
   joinDate: string
+  hourlyRate?: number | null
+  overtimeMultiplier?: number | null
 }
 
 export interface DepartmentOption {
@@ -63,6 +65,8 @@ export interface UpdateAdminUserRequest {
   department: string | null
   role: Role
   status: AdminUserStatus
+  hourlyRate?: number | null
+  overtimeMultiplier?: number | null
 }
 
 export interface ResetAdminUserPasswordRequest {

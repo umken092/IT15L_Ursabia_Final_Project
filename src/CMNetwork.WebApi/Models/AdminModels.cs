@@ -9,6 +9,8 @@ public class AdminUserDto
     public string Role { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string JoinDate { get; set; } = string.Empty;
+    public decimal? HourlyRate { get; set; }
+    public decimal? OvertimeMultiplier { get; set; }
 }
 
 public class CreateAdminUserRequest
@@ -36,6 +38,8 @@ public class UpdateAdminUserRequest
     public string? Department { get; set; }
     public string Role { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+    public decimal? HourlyRate { get; set; }
+    public decimal? OvertimeMultiplier { get; set; }
 }
 
 public class ResetAdminUserPasswordRequest
