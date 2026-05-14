@@ -13,6 +13,13 @@ export function extractApiError(error: unknown, fallback = 'An unexpected error 
     return serverMessage.trim()
   }
 
+  const status = axiosError.response?.status
+  const method = axiosError.config?.method?.toUpperCase()
+  const url = axiosError.config?.url
+  if (status && method && url) {
+    return `${fallback} ${method} ${url} returned ${status}.`
+  }
+
   if (error instanceof Error && error.message.trim().length > 0) {
     return error.message.trim()
   }
