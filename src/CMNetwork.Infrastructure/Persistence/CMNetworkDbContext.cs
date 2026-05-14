@@ -487,6 +487,11 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
             entity.Property(x => x.NetPay).HasPrecision(18, 2);
             entity.Property(x => x.GeneratedBy).HasMaxLength(256).IsRequired();
             entity.HasIndex(x => x.PayslipNumber).IsUnique();
+            entity.HasIndex(x => new { x.PayrollRunId, x.EmployeeId }).IsUnique().HasFilter("[PayrollRunId] IS NOT NULL");
+            entity.HasOne(x => x.PayrollRun)
+                .WithMany(x => x.Payslips)
+                .HasForeignKey(x => x.PayrollRunId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // ── BudgetReallocationRequest ─────────────────────────────────────────

@@ -707,9 +707,8 @@ public class PayrollService : IPayrollService
         foreach (var line in run.LineItems.Where(x => !x.IsDeleted))
         {
             var exists = await _db.Payslips.AnyAsync(x =>
-                x.EmployeeId == line.EmployeeId
-                && x.PeriodStart == periodStart
-                && x.PeriodEnd == periodEnd);
+                x.PayrollRunId == run.Id
+                && x.EmployeeId == line.EmployeeId);
 
             if (exists)
             {
@@ -719,7 +718,8 @@ public class PayrollService : IPayrollService
             _db.Payslips.Add(new Payslip
             {
                 Id = Guid.NewGuid(),
-                PayslipNumber = await GeneratePayslipNumberAsync(),
+                PayrollRunId = run.Id,
+                PayslipNumber = GeneratePayslipNumber(line.Id, periodStart),
                 EmployeeId = line.EmployeeId,
                 EmployeeName = line.EmployeeName,
                 PeriodStart = periodStart,
@@ -743,11 +743,8 @@ public class PayrollService : IPayrollService
         }
     }
 
-    private async Task<string> GeneratePayslipNumberAsync()
-    {
-        var count = await _db.Payslips.CountAsync();
-        return $"PS-{DateTime.UtcNow:yyyyMM}-{count + 1:D4}";
-    }
+    private static string GeneratePayslipNumber(Guid payrollLineItemId, DateOnly periodStart) =>
+        $"PS-{periodStart:yyyyMM}-{payrollLineItemId:N}"[..32];
 
     private async Task<string> GenerateJournalNumberAsync()
     {

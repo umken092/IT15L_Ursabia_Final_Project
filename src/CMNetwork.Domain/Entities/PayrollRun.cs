@@ -33,4 +33,5 @@ public class PayrollRun
     public PayPeriod PayPeriod { get; set; } = null!;
     public JournalEntry? JournalEntry { get; set; }
     public ICollection<PayrollLineItem> LineItems { get; set; } = new List<PayrollLineItem>();
+    public ICollection<Payslip> Payslips { get; set; } = new List<Payslip>();
 }

@@ -3,6 +3,7 @@ namespace CMNetwork.Domain.Entities;
 public class Payslip
 {
     public Guid Id { get; set; }
+    public Guid? PayrollRunId { get; set; }
     public string PayslipNumber { get; set; } = string.Empty;
     public Guid EmployeeId { get; set; }
     public string EmployeeName { get; set; } = string.Empty;
@@ -17,4 +18,6 @@ public class Payslip
     public decimal NetPay { get; set; }
     public string GeneratedBy { get; set; } = string.Empty;
     public DateTime GeneratedAtUtc { get; set; } = DateTime.UtcNow;
+
+    public PayrollRun? PayrollRun { get; set; }
 }
