@@ -281,6 +281,7 @@ public class PayrollService : IPayrollService
     {
         var run = await _db.PayrollRuns
             .Include(x => x.PayPeriod)
+            .Include(x => x.Payslips)
             .FirstOrDefaultAsync(x => x.Id == payrollRunId && !x.IsDeleted);
 
         if (run is null)
@@ -452,6 +453,11 @@ public class PayrollService : IPayrollService
         if (run.Status == PayrollRunStatus.Posted || run.JournalEntryId.HasValue)
         {
             throw new InvalidOperationException("Payroll run cannot be reopened after posting/payment.");
+        }
+
+        if (run.Payslips.Count > 0)
+        {
+            _db.Payslips.RemoveRange(run.Payslips);
         }
 
         run.Status = PayrollRunStatus.Draft;
