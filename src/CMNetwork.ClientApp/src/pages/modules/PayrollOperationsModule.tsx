@@ -424,46 +424,32 @@ export const PayrollOperationsModule = () => {
           </div>
         )}
 
-        {/* Two-column body: left sidebar nav + main content */}
-        <div style={{ display: 'flex', minHeight: '520px' }}>
-          {/* Left sidebar navigation */}
-          <nav
-            style={{
-              width: '175px',
-              flexShrink: 0,
-              borderRight: '1px solid #e5e7eb',
-              padding: '0.6rem 0',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.1rem',
-              background: '#fafafa',
-            }}
-          >
-            {pageButtons.filter((button) => button.visible).map((button) => (
-              <button
-                key={button.key}
-                onClick={() => setActivePage(button.key)}
-                style={{
-                  textAlign: 'left',
-                  padding: '0.55rem 1.1rem',
-                  background: activePage === button.key ? '#f0fdf4' : 'transparent',
-                  border: 'none',
-                  borderLeft: `3px solid ${activePage === button.key ? '#0f766e' : 'transparent'}`,
-                  color: activePage === button.key ? '#0f766e' : '#374151',
-                  fontWeight: activePage === button.key ? 600 : 400,
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  width: '100%',
-                  transition: 'background 0.15s, border-color 0.15s',
-                }}
-              >
-                {button.label}
-              </button>
-            ))}
-          </nav>
+        {/* Top tab nav */}
+        <nav style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e5e7eb', background: '#fafafa' }}>
+          {pageButtons.filter((button) => button.visible).map((button) => (
+            <button
+              key={button.key}
+              onClick={() => setActivePage(button.key)}
+              style={{
+                padding: '0.6rem 1.1rem',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: `2px solid ${activePage === button.key ? '#0f766e' : 'transparent'}`,
+                color: activePage === button.key ? '#0f766e' : '#374151',
+                fontWeight: activePage === button.key ? 600 : 400,
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                transition: 'border-color 0.15s, color 0.15s',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {button.label}
+            </button>
+          ))}
+        </nav>
 
-          {/* Main page content */}
-          <div style={{ flex: 1, padding: '1rem 1.25rem', minWidth: 0, overflow: 'auto' }}>
+        {/* Main page content */}
+        <div style={{ padding: '1rem 1.25rem', minWidth: 0 }}>
             {activePage === 'overview' && (
               <PayrollOverviewPage periods={periods} runs={runs} capabilities={capabilities} />
             )}
@@ -522,7 +508,6 @@ export const PayrollOperationsModule = () => {
               />
             )}
           </div>
-        </div>
       </article>
 
       {helpOpen && createPortal(
