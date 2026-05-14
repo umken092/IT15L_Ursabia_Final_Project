@@ -71,6 +71,9 @@ public class DatabaseSeeder
         // 3. Seed baseline chart of accounts and fiscal period
         await SeedChartOfAccountsAsync();
         await SeedCurrentFiscalPeriodAsync();
+
+        // 4. Seed TRAIN / SSS / PhilHealth / Pag-IBIG tax tables
+        await SeedPayrollTaxTablesAsync();
     }
 
     public async Task EnsureRolesAsync()
@@ -192,6 +195,120 @@ public class DatabaseSeeder
             IsClosed = false,
             CreatedUtc = DateTime.UtcNow
         });
+
+        await _dbContext.SaveChangesAsync();
+    }
+
+    private async Task SeedPayrollTaxTablesAsync()
+    {
+        // Seed TRAIN, SSS, PhilHealth, Pag-IBIG brackets for the current year and next
+        // so payroll Calculate works on first use without manual setup.
+        var currentYear = DateTime.UtcNow.Year;
+        var years = new[] { currentYear - 1, currentYear, currentYear + 1 };
+
+        foreach (var year in years)
+        {
+            var hasTrainForYear = await _dbContext.TaxTables
+                .AnyAsync(x => x.Type == TaxTableType.Train && x.Year == year && !x.IsDeleted);
+
+            if (!hasTrainForYear)
+            {
+                // TRAIN law monthly income brackets (RA 10963 / 2023 onward)
+                // Rate is applied as a flat marginal rate on the gross for simplicity.
+                var trainBrackets = new[]
+                {
+                    (Min: 0m,        Max: (decimal?)20833m,  Rate: 0.00m, Desc: "TRAIN: ₱0 – ₱20,833/mo (tax-exempt)"),
+                    (Min: 20833.01m, Max: (decimal?)33333m,  Rate: 0.15m, Desc: "TRAIN: ₱20,833 – ₱33,333/mo (15%)"),
+                    (Min: 33333.01m, Max: (decimal?)66667m,  Rate: 0.20m, Desc: "TRAIN: ₱33,333 – ₱66,667/mo (20%)"),
+                    (Min: 66667.01m, Max: (decimal?)166667m, Rate: 0.25m, Desc: "TRAIN: ₱66,667 – ₱166,667/mo (25%)"),
+                    (Min: 166667.01m,Max: (decimal?)null,    Rate: 0.35m, Desc: "TRAIN: Over ₱166,667/mo (35%)"),
+                };
+
+                foreach (var b in trainBrackets)
+                {
+                    _dbContext.TaxTables.Add(new TaxTable
+                    {
+                        Id            = Guid.NewGuid(),
+                        Type          = TaxTableType.Train,
+                        Year          = year,
+                        MinIncome     = b.Min,
+                        MaxIncome     = b.Max,
+                        Rate          = b.Rate,
+                        Description   = b.Desc,
+                        EffectiveFrom = new DateOnly(year, 1, 1),
+                        EffectiveTo   = new DateOnly(year, 12, 31),
+                        IsDeleted     = false,
+                        CreatedUtc    = DateTime.UtcNow,
+                    });
+                }
+            }
+
+            var hasSssForYear = await _dbContext.TaxTables
+                .AnyAsync(x => x.Type == TaxTableType.Sss && x.Year == year && !x.IsDeleted);
+
+            if (!hasSssForYear)
+            {
+                // SSS: flat 4.5% employee share (2023+ schedule)
+                _dbContext.TaxTables.Add(new TaxTable
+                {
+                    Id            = Guid.NewGuid(),
+                    Type          = TaxTableType.Sss,
+                    Year          = year,
+                    MinIncome     = 0m,
+                    MaxIncome     = null,
+                    Rate          = 0.045m,
+                    Description   = $"SSS employee share {year} (4.5% of monthly salary credit)",
+                    EffectiveFrom = new DateOnly(year, 1, 1),
+                    EffectiveTo   = new DateOnly(year, 12, 31),
+                    IsDeleted     = false,
+                    CreatedUtc    = DateTime.UtcNow,
+                });
+            }
+
+            var hasPhilHealthForYear = await _dbContext.TaxTables
+                .AnyAsync(x => x.Type == TaxTableType.PhilHealth && x.Year == year && !x.IsDeleted);
+
+            if (!hasPhilHealthForYear)
+            {
+                // PhilHealth: 2.5% employee share (5% total, split 50/50) as of 2024
+                _dbContext.TaxTables.Add(new TaxTable
+                {
+                    Id            = Guid.NewGuid(),
+                    Type          = TaxTableType.PhilHealth,
+                    Year          = year,
+                    MinIncome     = 0m,
+                    MaxIncome     = null,
+                    Rate          = 0.025m,
+                    Description   = $"PhilHealth employee share {year} (2.5% of basic salary)",
+                    EffectiveFrom = new DateOnly(year, 1, 1),
+                    EffectiveTo   = new DateOnly(year, 12, 31),
+                    IsDeleted     = false,
+                    CreatedUtc    = DateTime.UtcNow,
+                });
+            }
+
+            var hasPagIbigForYear = await _dbContext.TaxTables
+                .AnyAsync(x => x.Type == TaxTableType.PagIbig && x.Year == year && !x.IsDeleted);
+
+            if (!hasPagIbigForYear)
+            {
+                // Pag-IBIG: 2% employee share (capped at ₱100/mo, but applied as rate here for simplicity)
+                _dbContext.TaxTables.Add(new TaxTable
+                {
+                    Id            = Guid.NewGuid(),
+                    Type          = TaxTableType.PagIbig,
+                    Year          = year,
+                    MinIncome     = 0m,
+                    MaxIncome     = null,
+                    Rate          = 0.02m,
+                    Description   = $"Pag-IBIG employee share {year} (2% of monthly compensation)",
+                    EffectiveFrom = new DateOnly(year, 1, 1),
+                    EffectiveTo   = new DateOnly(year, 12, 31),
+                    IsDeleted     = false,
+                    CreatedUtc    = DateTime.UtcNow,
+                });
+            }
+        }
 
         await _dbContext.SaveChangesAsync();
     }
