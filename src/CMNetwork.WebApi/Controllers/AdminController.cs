@@ -536,13 +536,8 @@ public class AdminController : ControllerBase
             });
         }
 
-        var recipientEmail = User.FindFirstValue(ClaimTypes.Email)
-            ?? User.Identity?.Name
-            ?? request.FromEmail;
-
-        var recipientName = User.FindFirstValue(ClaimTypes.Name)
-            ?? User.Identity?.Name
-            ?? request.FromName;
+        var recipientEmail = request.FromEmail;
+        var recipientName = request.FromName;
 
         var emailService = HttpContext.RequestServices.GetRequiredService<IEmailService>();
         var result = await emailService.SendTestEmailAsync(request, recipientEmail, recipientName);
