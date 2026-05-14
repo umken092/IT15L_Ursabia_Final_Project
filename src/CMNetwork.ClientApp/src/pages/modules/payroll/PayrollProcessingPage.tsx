@@ -70,87 +70,138 @@ export const PayrollProcessingPage = ({
     <>
       {runStatus === 5 && showSuccessBanner('Payroll processed successfully!')}
       {runStatus === 3 && showSuccessBanner('Payroll approved successfully!')}
-      <article className="card">
-        <header className="card-head">
-          <h3 className="card-title">Payroll Processing</h3>
-          <p className="card-subtitle">Calculate, submit, and post payroll runs using live records</p>
-        </header>
 
-        <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-          {payrollFlowSteps.map((step) => {
-            const isActive = runStatus === step.status
-            return (
-              <span
-                key={step.status}
-                style={{
-                  borderRadius: '999px',
-                  border: `1px solid ${isActive ? '#0f766e' : '#d1d5db'}`,
-                  background: isActive ? '#ccfbf1' : '#f9fafb',
-                  color: isActive ? '#134e4a' : '#374151',
-                  padding: '0.2rem 0.6rem',
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                }}
-              >
-                {step.label}
-              </span>
-            )
-          })}
+      {/* Status chip bar */}
+      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+        {payrollFlowSteps.map((step) => {
+          const isActive = runStatus === step.status
+          return (
+            <span
+              key={step.status}
+              style={{
+                borderRadius: '999px',
+                border: `1px solid ${isActive ? '#0f766e' : '#e5e7eb'}`,
+                background: isActive ? '#ccfbf1' : '#f9fafb',
+                color: isActive ? '#134e4a' : '#6b7280',
+                padding: '0.25rem 0.8rem',
+                fontSize: '0.78rem',
+                fontWeight: isActive ? 700 : 500,
+                letterSpacing: '0.02em',
+              }}
+            >
+              {step.label}
+            </span>
+          )
+        })}
+      </div>
+
+      {/* Selection row */}
+      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem', alignItems: 'center' }}>
+        <select
+          value={selectedPeriodId}
+          onChange={(e) => onSelectPeriod(e.target.value)}
+          style={{
+            flex: 1,
+            height: '2.5rem',
+            padding: '0 0.75rem',
+            border: '1.5px solid #d1d5db',
+            borderRadius: '0.375rem',
+            fontSize: '0.9375rem',
+            color: '#111827',
+            background: '#fff',
+          }}
+        >
+          <option value="">Select pay period</option>
+          {periodOptions.map((period) => (
+            <option key={period.id} value={period.id}>{period.label}</option>
+          ))}
+        </select>
+        <Button onClick={() => void onLoadSetup()} disabled={loading || !selectedPeriodId}>Load Setup</Button>
+      </div>
+
+      {/* Helper text */}
+      <p style={{ margin: '0 0 1rem', fontSize: '0.875rem', color: '#6b7280' }}>{helperText}</p>
+
+      {/* Action buttons */}
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+        <Button onClick={() => void onCalculate()} disabled={loading || lines.length === 0 || !allowEditing}>Calculate</Button>
+        <Button onClick={() => void onSubmit()} disabled={loading || !run || !canSubmitPayrollRun(run.status)}>Submit</Button>
+        <Button fillMode="outline" onClick={() => void onWithdraw()} disabled={loading || run?.status !== 2 || !canWithdraw}>Withdraw</Button>
+        <Button fillMode="outline" onClick={() => void onPostToGl()} disabled={loading || !run || !canPostToGl(run.status)}>Post To GL</Button>
+      </div>
+
+      {/* Run summary */}
+      {run && (
+        <div style={{ background: '#f0fdf4', border: '1px solid #a7f3d0', borderRadius: '0.5rem', padding: '0.65rem 1rem', marginBottom: '1.25rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', fontSize: '0.875rem', color: '#064e3b' }}>
+          <span><strong>Run:</strong> {run.id.slice(0, 8)}</span>
+          <span><strong>Period:</strong> {run.payPeriodLabel}</span>
+          <span><strong>Status:</strong> {runStatusLabel(run.status)}</span>
+          <span><strong>Gross:</strong> {formatCurrency(run.totalGrossPay)}</span>
+          <span><strong>Net:</strong> {formatCurrency(run.totalNetPay)}</span>
         </div>
+      )}
 
-        <p className="card-subtitle" style={{ marginTop: 0, marginBottom: '0.75rem' }}>{helperText}</p>
-
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-          <select value={selectedPeriodId} onChange={(e) => onSelectPeriod(e.target.value)} style={{ flex: 1 }}>
-            <option value="">Select pay period</option>
-            {periodOptions.map((period) => (
-              <option key={period.id} value={period.id}>{period.label}</option>
-            ))}
-          </select>
-          <Button onClick={() => void onLoadSetup()} disabled={loading || !selectedPeriodId}>Load Setup</Button>
-          <Button onClick={() => void onCalculate()} disabled={loading || lines.length === 0 || !allowEditing}>Calculate</Button>
-          <Button onClick={() => void onSubmit()} disabled={loading || !run || !canSubmitPayrollRun(run.status)}>Submit</Button>
-          <Button onClick={() => void onWithdraw()} disabled={loading || run?.status !== 2 || !canWithdraw}>Withdraw</Button>
-          <Button onClick={() => void onPostToGl()} disabled={loading || !run || !canPostToGl(run.status)}>Post To GL</Button>
-        </div>
-
-        {run && (
-          <p className="card-subtitle" style={{ marginTop: 0 }}>
-            Run {run.id.slice(0, 8)} | {run.payPeriodLabel} | {runStatusLabel(run.status)} | Gross {formatCurrency(run.totalGrossPay)} | Net {formatCurrency(run.totalNetPay)}
-          </p>
-        )}
-
-        {employees.length > 0 && (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="table-like" style={{ width: '100%' }}>
-              <thead>
-                <tr>
-                  <th>Employee</th>
-                  <th>Regular</th>
-                  <th>OT</th>
-                  <th>Absent</th>
-                  <th>Other Deductions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lines.map((line) => (
-                  <tr key={line.employeeId}>
-                    <td>{line.employeeName}</td>
-                    <td><input type="number" value={line.regularHours} disabled={!allowEditing} onChange={(e) => onUpdateLine(line.employeeId, 'regularHours', Number(e.target.value))} placeholder="Total regular hours" title="Enter total regular hours worked for the period (not PHP)" /></td>
-                    <td><input type="number" value={line.overtimeHours} disabled={!allowEditing} onChange={(e) => onUpdateLine(line.employeeId, 'overtimeHours', Number(e.target.value))} placeholder="Total OT hours" title="Enter total overtime hours worked for the period (not PHP)" /></td>
-                    <td><input type="number" value={line.absenceHours} disabled={!allowEditing} onChange={(e) => onUpdateLine(line.employeeId, 'absenceHours', Number(e.target.value))} placeholder="Total absent hours" title="Enter total hours absent for the period (not PHP)" /></td>
-                    <td><input type="number" value={line.otherDeductions} disabled={!allowEditing} onChange={(e) => onUpdateLine(line.employeeId, 'otherDeductions', Number(e.target.value))} placeholder="₱ deductions" title="Enter total other deductions in PHP (₱)" /></td>
-                  </tr>
+      {/* Data table */}
+      {employees.length > 0 && (
+        <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: '0.5rem' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+            <thead>
+              <tr style={{ background: '#f3f4f6' }}>
+                {[
+                  { label: 'Employee Name', align: 'left' as const },
+                  { label: 'Regular Hrs', align: 'right' as const },
+                  { label: 'OT Hrs', align: 'right' as const },
+                  { label: 'Absent Hrs', align: 'right' as const },
+                  { label: 'Other Deductions (₱)', align: 'right' as const },
+                ].map((col) => (
+                  <th
+                    key={col.label}
+                    style={{
+                      textAlign: col.align,
+                      padding: '0.75rem 1rem',
+                      fontWeight: 600,
+                      fontSize: '0.75rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      color: '#374151',
+                      borderBottom: '1px solid #e5e7eb',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {col.label}
+                  </th>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((line, idx) => (
+                <tr
+                  key={line.employeeId}
+                  style={{ background: idx % 2 === 0 ? '#fff' : '#fafafa', borderBottom: '1px solid #f3f4f6' }}
+                >
+                  <td style={{ padding: '0.875rem 1rem', color: '#111827', fontWeight: 500, whiteSpace: 'nowrap' }}>{line.employeeName}</td>
+                  <td style={{ padding: '0.875rem 1rem', textAlign: 'right' }}>
+                    <input type="number" value={line.regularHours} disabled={!allowEditing} onChange={(e) => onUpdateLine(line.employeeId, 'regularHours', Number(e.target.value))} placeholder="0" title="Total regular hours worked this period" style={{ width: '80px', textAlign: 'right' }} />
+                  </td>
+                  <td style={{ padding: '0.875rem 1rem', textAlign: 'right' }}>
+                    <input type="number" value={line.overtimeHours} disabled={!allowEditing} onChange={(e) => onUpdateLine(line.employeeId, 'overtimeHours', Number(e.target.value))} placeholder="0" title="Total overtime hours worked this period" style={{ width: '80px', textAlign: 'right' }} />
+                  </td>
+                  <td style={{ padding: '0.875rem 1rem', textAlign: 'right' }}>
+                    <input type="number" value={line.absenceHours} disabled={!allowEditing} onChange={(e) => onUpdateLine(line.employeeId, 'absenceHours', Number(e.target.value))} placeholder="0" title="Total hours absent this period" style={{ width: '80px', textAlign: 'right' }} />
+                  </td>
+                  <td style={{ padding: '0.875rem 1rem', textAlign: 'right' }}>
+                    <input type="number" value={line.otherDeductions} disabled={!allowEditing} onChange={(e) => onUpdateLine(line.employeeId, 'otherDeductions', Number(e.target.value))} placeholder="0.00" title="Other deductions in PHP (₱)" style={{ width: '100px', textAlign: 'right' }} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-        <p className="card-subtitle" style={{ marginTop: '0.75rem' }}>
-          Tip: Backward transitions are controlled. Use Withdraw for submitted runs that need correction.
-        </p>
-      </article>
+      <p style={{ marginTop: '0.75rem', fontSize: '0.8125rem', color: '#9ca3af' }}>
+        Tip: Backward transitions are controlled. Use Withdraw for submitted runs that need correction.
+      </p>
     </>
   )
 }

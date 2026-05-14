@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Button } from '@progress/kendo-react-buttons'
 import { apiClient } from '../../services/apiClient'
 import { useAuthStore } from '../../store/authStore'
 import { useNotificationStore } from '../../store/notificationStore'
@@ -391,124 +390,121 @@ export const PayrollOperationsModule = () => {
   }, [activePage, helpQuery, roleForHelp])
 
   return (
-    <section className="page-fade-in">
-      {/* Off-canvas and dim backdrop are portalled to document.body to escape any parent overflow/transform */}
-
-      <article className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        {/* Header row */}
-        <header
-          className="card-head"
+    <section className="page-fade-in" style={{ padding: '1.5rem 1.5rem 2rem' }}>
+      {/* Page header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem', gap: '1rem' }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 700, color: '#111827', lineHeight: 1.25 }}>Payroll Operations</h1>
+          <p style={{ margin: '0.35rem 0 0', color: '#6b7280', fontSize: '0.9375rem' }}>Manage pay periods, process runs, and approve payroll from a single workspace.</p>
+        </div>
+        <button
+          onClick={() => setHelpOpen((current) => !current)}
           style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            padding: '1rem 1.25rem',
-            borderBottom: '1px solid #e5e7eb',
-            gap: '1rem',
+            padding: '0.5rem 1rem',
+            background: helpOpen ? '#0f766e' : '#fff',
+            border: `1.5px solid ${helpOpen ? '#0f766e' : '#d1d5db'}`,
+            borderRadius: '0.4rem',
+            color: helpOpen ? '#fff' : '#374151',
+            fontWeight: 500,
+            cursor: 'pointer',
+            fontSize: '0.875rem',
+            whiteSpace: 'nowrap',
+            transition: 'all 0.15s',
           }}
         >
-          <div>
-            <h2 className="card-title" style={{ margin: 0 }}>Payroll Operations</h2>
-            <p className="card-subtitle" style={{ margin: '0.2rem 0 0' }}>Five dedicated pages backed by live payroll records</p>
-          </div>
-          <Button fillMode="outline" onClick={() => setHelpOpen((current) => !current)}>
-            Need Help?
-          </Button>
-        </header>
+          Need Help?
+        </button>
+      </div>
 
-        {error && (
-          <div style={{ padding: '0.5rem 1.25rem 0' }}>
-            <p style={{ color: '#9b1c1c', background: '#fee2e2', padding: '0.65rem', borderRadius: '0.5rem', margin: 0 }}>
-              {error}
-            </p>
-          </div>
+      {error && (
+        <p style={{ color: '#9b1c1c', background: '#fee2e2', padding: '0.65rem 1rem', borderRadius: '0.5rem', margin: '0 0 1rem', fontSize: '0.875rem' }}>
+          {error}
+        </p>
+      )}
+
+      {/* Toggle-style tab bar */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+        {pageButtons.filter((button) => button.visible).map((button) => (
+          <button
+            key={button.key}
+            onClick={() => setActivePage(button.key)}
+            style={{
+              padding: '0.5rem 1.25rem',
+              background: activePage === button.key ? '#0f766e' : '#fff',
+              border: `1.5px solid ${activePage === button.key ? '#0f766e' : '#d1d5db'}`,
+              borderRadius: '0.4rem',
+              color: activePage === button.key ? '#fff' : '#374151',
+              fontWeight: activePage === button.key ? 600 : 400,
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              transition: 'all 0.15s',
+            }}
+          >
+            {button.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Page content */}
+      <div>
+        {activePage === 'overview' && (
+          <PayrollOverviewPage periods={periods} runs={runs} capabilities={capabilities} />
         )}
 
-        {/* Top tab nav */}
-        <nav style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e5e7eb', background: '#fafafa' }}>
-          {pageButtons.filter((button) => button.visible).map((button) => (
-            <button
-              key={button.key}
-              onClick={() => setActivePage(button.key)}
-              style={{
-                padding: '0.6rem 1.1rem',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: `2px solid ${activePage === button.key ? '#0f766e' : 'transparent'}`,
-                color: activePage === button.key ? '#0f766e' : '#374151',
-                fontWeight: activePage === button.key ? 600 : 400,
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                transition: 'border-color 0.15s, color 0.15s',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {button.label}
-            </button>
-          ))}
-        </nav>
+        {activePage === 'periods' && isAccountant && (
+          <PayPeriodManagementPage
+            periods={periods}
+            createPeriod={createPeriod}
+            loading={loading}
+            onCreatePeriodChange={onCreatePeriodChange}
+            onCreatePeriod={onCreatePeriod}
+            onSelectPeriod={setSelectedPeriodId}
+            selectedPeriodId={selectedPeriodId}
+          />
+        )}
 
-        {/* Main page content */}
-        <div style={{ padding: '1rem 1.25rem', minWidth: 0 }}>
-            {activePage === 'overview' && (
-              <PayrollOverviewPage periods={periods} runs={runs} capabilities={capabilities} />
-            )}
+        {activePage === 'processing' && isAccountant && (
+          <PayrollProcessingPage
+            loading={loading}
+            selectedPeriodId={selectedPeriodId}
+            periodOptions={periodOptions}
+            employees={employees}
+            lines={lines}
+            run={run}
+            onSelectPeriod={setSelectedPeriodId}
+            onLoadSetup={loadSetup}
+            onUpdateLine={updateLine}
+            onCalculate={onCalculate}
+            onSubmit={onSubmit}
+            onWithdraw={onWithdraw}
+            onPostToGl={onPostToGl}
+            canWithdraw={isAccountant}
+          />
+        )}
 
-            {activePage === 'periods' && isAccountant && (
-              <PayPeriodManagementPage
-                periods={periods}
-                createPeriod={createPeriod}
-                loading={loading}
-                onCreatePeriodChange={onCreatePeriodChange}
-                onCreatePeriod={onCreatePeriod}
-                onSelectPeriod={setSelectedPeriodId}
-                selectedPeriodId={selectedPeriodId}
-              />
-            )}
+        {activePage === 'approval' && isCfo && (
+          <PayrollApprovalPage
+            loading={loading}
+            runs={runs}
+            selectedRunId={registerRunId}
+            register={register}
+            onSelectRun={setRegisterRunId}
+            onLoadRegister={loadRegister}
+            onApprove={onApprove}
+            onReject={onReject}
+            onReopen={onReopen}
+            reopenGuidance={reopenGuidance}
+          />
+        )}
 
-            {activePage === 'processing' && isAccountant && (
-              <PayrollProcessingPage
-                loading={loading}
-                selectedPeriodId={selectedPeriodId}
-                periodOptions={periodOptions}
-                employees={employees}
-                lines={lines}
-                run={run}
-                onSelectPeriod={setSelectedPeriodId}
-                onLoadSetup={loadSetup}
-                onUpdateLine={updateLine}
-                onCalculate={onCalculate}
-                onSubmit={onSubmit}
-                onWithdraw={onWithdraw}
-                onPostToGl={onPostToGl}
-                canWithdraw={isAccountant}
-              />
-            )}
-
-            {activePage === 'approval' && isCfo && (
-              <PayrollApprovalPage
-                loading={loading}
-                runs={runs}
-                selectedRunId={registerRunId}
-                register={register}
-                onSelectRun={setRegisterRunId}
-                onLoadRegister={loadRegister}
-                onApprove={onApprove}
-                onReject={onReject}
-                onReopen={onReopen}
-                reopenGuidance={reopenGuidance}
-              />
-            )}
-
-            {activePage === 'payslips' && isEmployee && (
-              <MyPayslipsPage
-                payslips={myPayslips}
-                loading={loading}
-                onRefresh={loadMyPayslips}
-              />
-            )}
-          </div>
-      </article>
+        {activePage === 'payslips' && isEmployee && (
+          <MyPayslipsPage
+            payslips={myPayslips}
+            loading={loading}
+            onRefresh={loadMyPayslips}
+          />
+        )}
+      </div>
 
       {helpOpen && createPortal(
         <>
