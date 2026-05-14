@@ -20,6 +20,8 @@ public interface IPayrollService
     Task<byte[]> GetPayslipPdfAsync(Guid payslipId, string requestingUserId, bool canViewAny);
     Task<IReadOnlyList<PayslipSummaryDto>> GetMyPayslipsAsync(string userId);
     Task<TaxTableDto> CreateTaxTableAsync(CreateTaxTableRequest request);
+    Task<TaxTableDto> UpdateTaxTableAsync(Guid id, CreateTaxTableRequest request);
+    Task DeleteTaxTableAsync(Guid id);
     Task<IReadOnlyList<TaxTableDto>> GetTaxTablesAsync(int? year = null, CMNetwork.Domain.Entities.TaxTableType? type = null);
     Task<PayrollIntegrationCapabilitiesDto> GetIntegrationCapabilitiesAsync();
 }
