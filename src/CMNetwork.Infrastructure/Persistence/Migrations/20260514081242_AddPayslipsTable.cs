@@ -12,43 +12,53 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
         {
             // The Payslips entity was added to the DbContext snapshot inside AddPayrollModule
             // but that migration's Up() method never issued the CREATE TABLE.
-            // This migration creates the missing table so the schema matches the model.
-            migrationBuilder.CreateTable(
-                name: "Payslips",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    PayslipNumber = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    EmployeeName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
-                    PeriodStart = table.Column<DateOnly>(type: "date", nullable: false),
-                    PeriodEnd = table.Column<DateOnly>(type: "date", nullable: false),
-                    GrossPay = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
-                    TaxDeduction = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
-                    SssDeduction = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
-                    PhilHealthDeduction = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
-                    PagIbigDeduction = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
-                    OtherDeductions = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
-                    NetPay = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
-                    GeneratedBy = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
-                    GeneratedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Payslips", x => x.Id);
-                });
+            // Production may already have the table from a failed startup attempt, so this
+            // must be idempotent to let EF record the migration in __EFMigrationsHistory.
+            migrationBuilder.Sql("""
+                IF OBJECT_ID(N'[dbo].[Payslips]', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE [dbo].[Payslips] (
+                        [Id] uniqueidentifier NOT NULL,
+                        [PayslipNumber] nvarchar(32) NOT NULL,
+                        [EmployeeId] uniqueidentifier NOT NULL,
+                        [EmployeeName] nvarchar(256) NOT NULL,
+                        [PeriodStart] date NOT NULL,
+                        [PeriodEnd] date NOT NULL,
+                        [GrossPay] decimal(18,2) NOT NULL,
+                        [TaxDeduction] decimal(18,2) NOT NULL,
+                        [SssDeduction] decimal(18,2) NOT NULL,
+                        [PhilHealthDeduction] decimal(18,2) NOT NULL,
+                        [PagIbigDeduction] decimal(18,2) NOT NULL,
+                        [OtherDeductions] decimal(18,2) NOT NULL,
+                        [NetPay] decimal(18,2) NOT NULL,
+                        [GeneratedBy] nvarchar(256) NOT NULL,
+                        [GeneratedAtUtc] datetime2 NOT NULL,
+                        CONSTRAINT [PK_Payslips] PRIMARY KEY ([Id])
+                    );
+                END;
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Payslips_PayslipNumber",
-                table: "Payslips",
-                column: "PayslipNumber",
-                unique: true);
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM sys.indexes
+                    WHERE [name] = N'IX_Payslips_PayslipNumber'
+                      AND [object_id] = OBJECT_ID(N'[dbo].[Payslips]')
+                )
+                BEGIN
+                    CREATE UNIQUE INDEX [IX_Payslips_PayslipNumber]
+                    ON [dbo].[Payslips] ([PayslipNumber]);
+                END;
+                """);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(name: "Payslips");
+            migrationBuilder.Sql("""
+                IF OBJECT_ID(N'[dbo].[Payslips]', N'U') IS NOT NULL
+                BEGIN
+                    DROP TABLE [dbo].[Payslips];
+                END;
+                """);
         }
     }
 }
