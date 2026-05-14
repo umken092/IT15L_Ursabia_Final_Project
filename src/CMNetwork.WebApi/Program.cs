@@ -346,9 +346,13 @@ app.Use(async (ctx, next) =>
     await next();
 });
 
+// NOTE: We intentionally do NOT call app.UseExceptionHandler("/Home/Error") here.
+// This is a JSON API + SPA, not an MVC view app. Re-executing as GET /Home/Error
+// turns POST/PUT/DELETE failures into spurious 405 responses (Allow: GET, HEAD)
+// and hides the real exception. GlobalExceptionMiddleware (registered above) already
+// returns proper JSON error payloads for unhandled exceptions.
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Home/Error");
     app.UseHsts();
 }
 
