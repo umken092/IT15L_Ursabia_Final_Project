@@ -390,7 +390,7 @@ export const PayrollOperationsModule = () => {
   }, [activePage, helpQuery, roleForHelp])
 
   return (
-    <section className="page-fade-in">
+    <section className="page-fade-in" style={{ marginRight: helpOpen ? 'min(420px, 90vw)' : 0, transition: 'margin-right 0.25s ease' }}>
       <article className="card" style={{ marginBottom: '1rem' }}>
         <header className="card-head">
           <h2 className="card-title">Payroll Operations</h2>
