@@ -17,7 +17,9 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     ALTER TABLE [dbo].[Payslips]
                     ADD [PayrollRunId] uniqueidentifier NULL;
                 END;
+                """);
 
+            migrationBuilder.Sql("""
                 IF NOT EXISTS (
                     SELECT 1
                     FROM sys.indexes
@@ -29,7 +31,9 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     ON [dbo].[Payslips] ([PayrollRunId], [EmployeeId])
                     WHERE [PayrollRunId] IS NOT NULL;
                 END;
+                """);
 
+            migrationBuilder.Sql("""
                 IF NOT EXISTS (
                     SELECT 1
                     FROM sys.foreign_keys
@@ -59,7 +63,9 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     ALTER TABLE [dbo].[Payslips]
                     DROP CONSTRAINT [FK_Payslips_PayrollRuns_PayrollRunId];
                 END;
+                """);
 
+            migrationBuilder.Sql("""
                 IF EXISTS (
                     SELECT 1
                     FROM sys.indexes
@@ -70,7 +76,9 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     DROP INDEX [IX_Payslips_PayrollRunId_EmployeeId]
                     ON [dbo].[Payslips];
                 END;
+                """);
 
+            migrationBuilder.Sql("""
                 IF COL_LENGTH(N'[dbo].[Payslips]', N'PayrollRunId') IS NOT NULL
                 BEGIN
                     ALTER TABLE [dbo].[Payslips]
