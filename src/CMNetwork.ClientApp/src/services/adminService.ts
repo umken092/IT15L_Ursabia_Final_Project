@@ -492,7 +492,9 @@ export const adminService = {
 
   async testSmtpSettings(payload: SmtpSettings): Promise<SmtpConnectionTestResult> {
     try {
-      const response = await apiClient.post<SmtpConnectionTestResult>('/admin/smtp-settings/test', payload)
+      const response = await apiClient.post<SmtpConnectionTestResult>('/admin/smtp-settings/test', payload, {
+        timeout: 30000,
+      })
       return response.data
     } catch (error) {
       const axiosError = error as AxiosError<SmtpConnectionTestResult>
@@ -517,7 +519,9 @@ export const adminService = {
 
   async testPayMongoSettings(payload: PayMongoConnectionTestPayload): Promise<PayMongoConnectionTestResult> {
     try {
-      const response = await apiClient.post<PayMongoConnectionTestResult>('/admin/paymongo-settings/test', payload)
+      const response = await apiClient.post<PayMongoConnectionTestResult>('/admin/paymongo-settings/test', payload, {
+        timeout: 30000,
+      })
       return response.data
     } catch (error) {
       const axiosError = error as AxiosError<PayMongoConnectionTestResult>
