@@ -655,6 +655,35 @@ public class PayrollService : IPayrollService
             .ToListAsync();
     }
 
+    public async Task DeleteTaxTableAsync(Guid id)
+    {
+        var entry = await _db.TaxTables.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted)
+            ?? throw new InvalidOperationException("Tax table entry not found.");
+        entry.IsDeleted = true;
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task<TaxTableDto> UpdateTaxTableAsync(Guid id, CreateTaxTableRequest request)
+    {
+        var entry = await _db.TaxTables.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted)
+            ?? throw new InvalidOperationException("Tax table entry not found.");
+
+        if (request.MaxIncome.HasValue && request.MaxIncome < request.MinIncome)
+            throw new InvalidOperationException("Max income must be greater than or equal to min income.");
+
+        entry.Type = request.Type;
+        entry.Year = request.Year;
+        entry.MinIncome = request.MinIncome;
+        entry.MaxIncome = request.MaxIncome;
+        entry.Rate = request.Rate;
+        entry.Description = request.Description.Trim();
+        entry.EffectiveFrom = request.EffectiveFrom;
+        entry.EffectiveTo = request.EffectiveTo;
+
+        await _db.SaveChangesAsync();
+        return MapTaxTable(entry);
+    }
+
     public Task<PayrollIntegrationCapabilitiesDto> GetIntegrationCapabilitiesAsync()
     {
         return Task.FromResult(new PayrollIntegrationCapabilitiesDto

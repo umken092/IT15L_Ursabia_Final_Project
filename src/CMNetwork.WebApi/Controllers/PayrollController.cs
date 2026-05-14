@@ -304,6 +304,39 @@ public class PayrollController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPut("tax-tables/{id:guid}")]
+    [Authorize(Roles = "super-admin")]
+    public async Task<IActionResult> UpdateTaxTable(Guid id, [FromBody] CreateTaxTableRequest request)
+    {
+        if (!ModelState.IsValid)
+            return ValidationProblem(ModelState);
+
+        try
+        {
+            var result = await _payrollService.UpdateTaxTableAsync(id, request);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpDelete("tax-tables/{id:guid}")]
+    [Authorize(Roles = "super-admin")]
+    public async Task<IActionResult> DeleteTaxTable(Guid id)
+    {
+        try
+        {
+            await _payrollService.DeleteTaxTableAsync(id);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
     [HttpGet("integration-capabilities")]
     [Authorize(Roles = "super-admin,accountant,cfo")]
     public async Task<IActionResult> GetIntegrationCapabilities()
