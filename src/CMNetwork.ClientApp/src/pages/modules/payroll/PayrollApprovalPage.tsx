@@ -15,6 +15,15 @@ interface PayrollApprovalPageProps {
   reopenGuidance: string
 }
 
+const STATUS_BADGE: Record<number, { label: string; bg: string; color: string; border: string }> = {
+  1: { label: 'Draft',       bg: '#f3f4f6', color: '#374151', border: '#d1d5db' },
+  2: { label: 'Submitted',   bg: '#fef9c3', color: '#854d0e', border: '#fde047' },
+  3: { label: 'Approved',    bg: '#dcfce7', color: '#166534', border: '#86efac' },
+  4: { label: 'Rejected',    bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' },
+  5: { label: 'Processed',   bg: '#dbeafe', color: '#1e3a8a', border: '#93c5fd' },
+  6: { label: 'Paid/Posted', bg: '#f3e8ff', color: '#6b21a8', border: '#c4b5fd' },
+}
+
 export const PayrollApprovalPage = ({
   loading,
   runs,
@@ -27,7 +36,10 @@ export const PayrollApprovalPage = ({
   onReopen,
   reopenGuidance,
 }: PayrollApprovalPageProps) => {
-  const approvalCandidates = runs.filter((run) => run.status === 2)
+  // Show all non-Draft runs so CFO can track submitted, approved, rejected, etc.
+  const approvalCandidates = runs.filter((run) => run.status !== 1)
+
+  const badge = register ? STATUS_BADGE[register.status] ?? STATUS_BADGE[1] : null
 
   const showSuccessBanner = (message: string) => (
     <div className="success-banner">
@@ -47,9 +59,11 @@ export const PayrollApprovalPage = ({
 
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
           <select value={selectedRunId} onChange={(e) => onSelectRun(e.target.value)} style={{ flex: 1 }}>
-            <option value="">Select submitted run</option>
+            <option value="">Select a payroll run</option>
             {approvalCandidates.map((run) => (
-              <option key={run.id} value={run.id}>{`${run.payPeriodLabel} | ${run.id.slice(0, 8)}`}</option>
+              <option key={run.id} value={run.id}>
+                {`${run.payPeriodLabel} | ${run.id.slice(0, 8)} — ${runStatusLabel(run.status)}`}
+              </option>
             ))}
           </select>
           <Button onClick={() => void onLoadRegister()} disabled={loading || !selectedRunId}>Load Register</Button>
@@ -57,6 +71,34 @@ export const PayrollApprovalPage = ({
 
         {register && (
           <>
+            {/* Prominent status badge */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+              {badge && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    borderRadius: '6px',
+                    border: `1.5px solid ${badge.border}`,
+                    background: badge.bg,
+                    color: badge.color,
+                    padding: '0.3rem 0.8rem',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  <span style={{ fontSize: '0.7rem' }}>&#9679;</span>
+                  {badge.label}
+                </span>
+              )}
+              <span className="card-subtitle" style={{ margin: 0 }}>
+                {register.payPeriod}
+              </span>
+            </div>
+
+            {/* Flow step pills */}
             <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
               {payrollFlowSteps.map((step) => {
                 const isActive = register.status === step.status
@@ -79,9 +121,6 @@ export const PayrollApprovalPage = ({
               })}
             </div>
 
-            <p className="card-subtitle" style={{ marginTop: 0 }}>
-              {register.payPeriod} | {runStatusLabel(register.status)}
-            </p>
             <div style={{ overflowX: 'auto' }}>
               <table className="table-like" style={{ width: '100%' }}>
                 <thead>
