@@ -18,29 +18,8 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        var dbModeOverride = Environment.GetEnvironmentVariable("CMNETWORK_DB_MODE");
-
-        var localConnectionString = configuration.GetConnectionString("DefaultConnection")
+        var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? "Server=(localdb)\\MSSQLLocalDB;Database=CMNetwork;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true";
-
-        var monsterAspConnectionString = configuration.GetConnectionString("MonsterAspConnection");
-        var useMonsterAsp = configuration.GetValue<bool>("Database:UseMonsterAsp");
-
-        if (!string.IsNullOrWhiteSpace(dbModeOverride))
-        {
-            if (string.Equals(dbModeOverride, "MonsterAsp", StringComparison.OrdinalIgnoreCase))
-            {
-                useMonsterAsp = true;
-            }
-            else if (string.Equals(dbModeOverride, "Local", StringComparison.OrdinalIgnoreCase))
-            {
-                useMonsterAsp = false;
-            }
-        }
-
-        var connectionString = useMonsterAsp && !string.IsNullOrWhiteSpace(monsterAspConnectionString)
-            ? monsterAspConnectionString
-            : localConnectionString;
 
         // Some hosted SQL Server providers require explicit TCP + port (e.g., databaseasp.net) in Linux containers.
         connectionString = NormalizeSqlConnectionString(connectionString);

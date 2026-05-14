@@ -9,11 +9,7 @@ services:
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
-      - key: CMNETWORK_DB_MODE
-        value: MonsterAsp
-      - key: Database__UseMonsterAsp
-        value: "true"
-      - key: ConnectionStrings__MonsterAspConnection
+      - key: ConnectionStrings__DefaultConnection
         sync: false
       - key: Jwt__Secret
         sync: false
