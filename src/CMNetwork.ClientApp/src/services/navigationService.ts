@@ -19,6 +19,7 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
         { label: 'Roles & Permissions', path: '/module/roles-permissions' },
       ],
     },
+    { label: 'Payroll', path: '/module/payroll' },
     {
       label: 'System Settings',
       path: '/module/system-settings',
