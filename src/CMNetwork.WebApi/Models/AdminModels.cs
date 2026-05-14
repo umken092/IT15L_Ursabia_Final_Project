@@ -226,6 +226,12 @@ public class SmtpSettingsDto
     public string Security { get; set; } = "starttls";
 }
 
+public class SmtpConnectionTestResultDto
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+}
+
 public class PayMongoSettingsDto
 {
     public string PublicKey { get; set; } = string.Empty;

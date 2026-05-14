@@ -56,6 +56,7 @@ builder.Services.AddScoped<IAuthService, IdentityAuthService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IPayrollService, PayrollService>();
 builder.Services.AddScoped<IInvoicePostingService, InvoicePostingService>();
+builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddScoped<SystemMaintenanceJobs>();
 
 // ── CORS ──────────────────────────────────────────────────────────────────────

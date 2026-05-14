@@ -5,6 +5,7 @@ import { roleLabels, type Role } from '../types/auth'
 const MainLayout = lazy(() => import('../layout/MainLayout').then((m) => ({ default: m.MainLayout })))
 const LandingPage = lazy(() => import('../pages/LandingPage').then((m) => ({ default: m.LandingPage })))
 const LoginPage = lazy(() => import('../pages/LoginPage').then((m) => ({ default: m.LoginPage })))
+const ResetPasswordPage = lazy(() => import('../pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })))
 const MfaVerifyPage = lazy(() => import('../pages/MfaVerifyPage').then((m) => ({ default: m.MfaVerifyPage })))
 const MfaSetupPage = lazy(() => import('../pages/MfaSetupPage').then((m) => ({ default: m.MfaSetupPage })))
 const ModulePlaceholderPage = lazy(() =>
@@ -80,6 +81,10 @@ const getPageTitle = (pathname: string) => {
     return `Sign In | ${APP_TITLE}`
   }
 
+  if (pathname === '/reset-password') {
+    return `Reset Password | ${APP_TITLE}`
+  }
+
   if (pathname === '/mfa/verify') {
     return `MFA Verification | ${APP_TITLE}`
   }
@@ -133,6 +138,7 @@ export const AppRouter = () => {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/mfa/verify" element={<MfaVerifyPage />} />
 
         <Route element={<PrivateRoute />}>

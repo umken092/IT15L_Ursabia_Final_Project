@@ -141,13 +141,13 @@ export const IntegrationSettingsModule = () => {
           password: smtpData.password,
           fromEmail: smtpData.fromEmail,
           fromName: smtpData.fromName || 'CMNetwork',
-          security: smtpData.security as SmtpSecurity,
+          security: smtpData.security,
         }))
         setPaymongo((p) => ({
           ...p,
           publicKey: pmData.publicKey,
           secretKey: '',
-          mode: pmData.mode as 'test' | 'live',
+          mode: pmData.mode,
           secretKeyConfigured: Boolean(pmData.secretKeyConfigured),
           baseUrl: pmData.baseUrl || '',
         }))
@@ -212,13 +212,28 @@ export const IntegrationSettingsModule = () => {
 
   const handleTestSmtp = async () => {
     setSmtp((s) => ({ ...s, connectionStatus: 'testing', connectionMessage: '' }))
-    await new Promise<void>((r) => setTimeout(r, 1400))
-    const ok = smtp.host.trim().length > 0 && smtp.port.trim().length > 0
-    setSmtp((s) => ({
-      ...s,
-      connectionStatus: ok ? 'ok' : 'error',
-      connectionMessage: ok ? `Connected to ${s.host}:${s.port}.` : 'Host is required.',
-    }))
+    try {
+      const result = await adminService.testSmtpSettings({
+        host: smtp.host,
+        port: parseInt(smtp.port, 10) || 587,
+        username: smtp.username,
+        password: smtp.password,
+        fromEmail: smtp.fromEmail,
+        fromName: smtp.fromName,
+        security: smtp.security,
+      })
+      setSmtp((s) => ({
+        ...s,
+        connectionStatus: result.success ? 'ok' : 'error',
+        connectionMessage: result.message,
+      }))
+    } catch {
+      setSmtp((s) => ({
+        ...s,
+        connectionStatus: 'error',
+        connectionMessage: 'Unable to test SMTP connection right now.',
+      }))
+    }
   }
 
   const handleSaveSmtp = async () => {

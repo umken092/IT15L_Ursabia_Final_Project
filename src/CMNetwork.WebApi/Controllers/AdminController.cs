@@ -484,6 +484,12 @@ public class AdminController : ControllerBase
             return BadRequest(new { message = "SMTP settings payload is required." });
         }
 
+        var validationError = ValidateSmtpSettings(request);
+        if (validationError is not null)
+        {
+            return BadRequest(new { message = validationError });
+        }
+
         var policy = await _dbContext.SecurityPolicies
             .FirstOrDefaultAsync(x => x.Name == SmtpSettingsPolicyName);
 
@@ -510,6 +516,50 @@ public class AdminController : ControllerBase
             details: new { request.Host, request.Port, request.FromEmail, request.Security });
 
         return Ok(request);
+    }
+
+    [HttpPost("smtp-settings/test")]
+    public async Task<IActionResult> TestSmtpSettings([FromBody] SmtpSettingsDto? request)
+    {
+        if (request is null)
+        {
+            return BadRequest(new { message = "SMTP settings payload is required." });
+        }
+
+        var validationError = ValidateSmtpSettings(request);
+        if (validationError is not null)
+        {
+            return BadRequest(new SmtpConnectionTestResultDto
+            {
+                Success = false,
+                Message = validationError,
+            });
+        }
+
+        var recipientEmail = User.FindFirstValue(ClaimTypes.Email)
+            ?? User.Identity?.Name
+            ?? request.FromEmail;
+
+        var recipientName = User.FindFirstValue(ClaimTypes.Name)
+            ?? User.Identity?.Name
+            ?? request.FromName;
+
+        var emailService = HttpContext.RequestServices.GetRequiredService<IEmailService>();
+        var result = await emailService.SendTestEmailAsync(request, recipientEmail, recipientName);
+        var payload = new SmtpConnectionTestResultDto
+        {
+            Success = result.Success,
+            Message = result.Message,
+        };
+
+        await _audit.LogAsync(
+            entityName: "SmtpSettings",
+            action: result.Success ? "Tested" : "TestFailed",
+            category: AuditCategories.System,
+            recordId: SmtpSettingsPolicyId.ToString(),
+            details: new { recipientEmail, request.Host, request.Port, request.Security, result.Success });
+
+        return result.Success ? Ok(payload) : BadRequest(payload);
     }
 
     // ── PayMongo Settings ─────────────────────────────────────────────────
@@ -600,6 +650,43 @@ public class AdminController : ControllerBase
         };
 
         return result.Success ? Ok(payload) : BadRequest(payload);
+    }
+
+    private static string? ValidateSmtpSettings(SmtpSettingsDto request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Host))
+        {
+            return "SMTP host is required.";
+        }
+
+        if (request.Port < 1 || request.Port > 65535)
+        {
+            return "SMTP port must be between 1 and 65535.";
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Username))
+        {
+            return "SMTP username is required.";
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Password))
+        {
+            return "SMTP password is required.";
+        }
+
+        if (string.IsNullOrWhiteSpace(request.FromEmail))
+        {
+            return "From email is required.";
+        }
+
+        if (!string.Equals(request.Security, "none", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(request.Security, "ssl", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(request.Security, "starttls", StringComparison.OrdinalIgnoreCase))
+        {
+            return "SMTP security must be none, ssl, or starttls.";
+        }
+
+        return null;
     }
 
     // ── Role Permissions ──────────────────────────────────────────────────

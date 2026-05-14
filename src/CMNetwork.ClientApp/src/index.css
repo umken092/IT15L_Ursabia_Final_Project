@@ -1412,6 +1412,21 @@ p {
   font-size: 0.9rem;
 }
 
+.link-button {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  color: var(--primary);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}
+
+.link-button:hover {
+  color: color-mix(in srgb, var(--primary) 82%, #000000);
+}
+
 .button-loader {
   display: inline-flex;
   align-items: center;

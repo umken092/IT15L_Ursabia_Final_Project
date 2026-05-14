@@ -21,6 +21,17 @@ export interface MfaSetupApiResponse {
   authenticatorUri: string
 }
 
+export interface ForgotPasswordRequest {
+  email: string
+  resetUrl?: string
+}
+
+export interface ResetPasswordRequest {
+  email: string
+  token: string
+  newPassword: string
+}
+
 export const authService = {
   login: async (credentials: LoginCredentials, recaptchaToken?: string): Promise<LoginApiResponse> => {
     const { data } = await apiClient.post<LoginApiResponse>('/auth/login', {
@@ -64,6 +75,14 @@ export const authService = {
 
   disableMfa: async (password: string): Promise<void> => {
     await apiClient.post('/auth/mfa/disable', { password })
+  },
+
+  forgotPassword: async (payload: ForgotPasswordRequest): Promise<void> => {
+    await apiClient.post('/auth/password/forgot', payload)
+  },
+
+  resetPassword: async (payload: ResetPasswordRequest): Promise<void> => {
+    await apiClient.post('/auth/password/reset', payload)
   },
 
   validateToken: async (token: string): Promise<boolean> => {

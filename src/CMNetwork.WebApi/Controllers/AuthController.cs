@@ -1,11 +1,18 @@
 using System.Security.Claims;
+using System.Text;
 using CMNetwork.Infrastructure.Services;
+using CMNetwork.Infrastructure.Identity;
+using CMNetwork.Infrastructure.Persistence;
 using CMNetwork.Models;
 using CMNetwork.Services;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using System.IdentityModel.Tokens.Jwt;
+using System.Text.Json;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.EntityFrameworkCore;
 
 namespace CMNetwork.Controllers;
 
@@ -13,21 +20,33 @@ namespace CMNetwork.Controllers;
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
+    private const string SmtpSettingsPolicyName = "smtp-settings";
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     private readonly IAuthService _authService;
     private readonly IAuditEventLogger _audit;
     private readonly ILogger<AuthController> _logger;
     private readonly RuntimeHealthStatus _runtimeHealth;
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly CMNetworkDbContext _dbContext;
+    private readonly IEmailService _emailService;
 
     public AuthController(
         IAuthService authService,
         IAuditEventLogger audit,
         ILogger<AuthController> logger,
-        RuntimeHealthStatus runtimeHealth)
+        RuntimeHealthStatus runtimeHealth,
+        UserManager<ApplicationUser> userManager,
+        CMNetworkDbContext dbContext,
+        IEmailService emailService)
     {
         _authService = authService;
         _audit       = audit;
         _logger      = logger;
         _runtimeHealth = runtimeHealth;
+        _userManager = userManager;
+        _dbContext = dbContext;
+        _emailService = emailService;
     }
 
     [HttpPost("login")]
@@ -215,6 +234,110 @@ public class AuthController : ControllerBase
         return Ok(new { message = "Two-factor authentication disabled." });
     }
 
+    [HttpPost("password/forgot")]
+    [EnableRateLimiting("login")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email))
+        {
+            return BadRequest(new { message = "Email is required." });
+        }
+
+        var normalizedEmail = request.Email.Trim();
+        var user = await _userManager.FindByEmailAsync(normalizedEmail);
+        if (user is not null && user.IsActive)
+        {
+            var smtpSettings = await GetSmtpSettingsAsync();
+            if (smtpSettings is not null)
+            {
+                var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+                var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+                var resetUrl = BuildResetUrl(request.ResetUrl, normalizedEmail, encodedToken);
+
+                var body = $"""
+                           Hello {user.FullName},
+
+                           We received a request to reset your CMNetwork password.
+                           Use the link below to continue:
+
+                           {resetUrl}
+
+                           If you did not request this, you can ignore this email.
+                           """;
+
+                var sendResult = await _emailService.SendEmailAsync(
+                    smtpSettings,
+                    recipientEmail: normalizedEmail,
+                    subject: "CMNetwork password reset",
+                    body: body,
+                    isBodyHtml: false,
+                    recipientName: user.FullName);
+
+                if (!sendResult.Success)
+                {
+                    _logger.LogWarning("Forgot-password email send failed for {Email}: {Message}", normalizedEmail, sendResult.Message);
+                }
+            }
+        }
+
+        await _audit.LogAsync(
+            entityName: "Auth",
+            action: "PasswordResetRequested",
+            category: AuditCategories.Security,
+            details: new { email = normalizedEmail },
+            performedByOverride: normalizedEmail,
+            userEmailOverride: normalizedEmail,
+            ipAddressOverride: HttpContext.Connection.RemoteIpAddress?.ToString());
+
+        return Ok(new { message = "If the account exists, a password reset email has been sent." });
+    }
+
+    [HttpPost("password/reset")]
+    [EnableRateLimiting("login")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email)
+            || string.IsNullOrWhiteSpace(request.Token)
+            || string.IsNullOrWhiteSpace(request.NewPassword))
+        {
+            return BadRequest(new { message = "Email, token, and new password are required." });
+        }
+
+        var user = await _userManager.FindByEmailAsync(request.Email.Trim());
+        if (user is null || !user.IsActive)
+        {
+            return BadRequest(new { message = "Invalid reset request." });
+        }
+
+        string decodedToken;
+        try
+        {
+            decodedToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(request.Token.Trim()));
+        }
+        catch
+        {
+            return BadRequest(new { message = "Invalid reset token." });
+        }
+
+        var result = await _userManager.ResetPasswordAsync(user, decodedToken, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            return BadRequest(new { message = string.Join(" ", result.Errors.Select(x => x.Description)) });
+        }
+
+        await _audit.LogAsync(
+            entityName: "Auth",
+            action: "PasswordReset",
+            category: AuditCategories.Security,
+            recordId: user.Id.ToString(),
+            details: new { email = user.Email },
+            performedByOverride: user.Id.ToString(),
+            userEmailOverride: user.Email,
+            ipAddressOverride: HttpContext.Connection.RemoteIpAddress?.ToString());
+
+        return Ok(new { message = "Password reset successful." });
+    }
+
     [HttpGet("health")]
     public IActionResult Health() =>
         Ok(new
@@ -234,4 +357,42 @@ public class AuthController : ControllerBase
                 started = _runtimeHealth.HangfireStarted
             }
         });
+
+    private async Task<SmtpSettingsDto?> GetSmtpSettingsAsync()
+    {
+        var policy = await _dbContext.SecurityPolicies
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Name == SmtpSettingsPolicyName);
+
+        if (policy is null || string.IsNullOrWhiteSpace(policy.Value))
+        {
+            return null;
+        }
+
+        try
+        {
+            var dto = JsonSerializer.Deserialize<SmtpSettingsDto>(policy.Value, JsonOptions);
+            if (dto is null || string.IsNullOrWhiteSpace(dto.Host) || string.IsNullOrWhiteSpace(dto.FromEmail))
+            {
+                return null;
+            }
+
+            return dto;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string BuildResetUrl(string? resetUrl, string email, string token)
+    {
+        if (string.IsNullOrWhiteSpace(resetUrl))
+        {
+            return $"https://example.invalid/reset-password?email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}";
+        }
+
+        var separator = resetUrl.Contains('?', StringComparison.Ordinal) ? "&" : "?";
+        return $"{resetUrl}{separator}email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}";
+    }
 }

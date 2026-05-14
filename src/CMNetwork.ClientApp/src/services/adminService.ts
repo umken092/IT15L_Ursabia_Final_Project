@@ -17,6 +17,11 @@ export interface SmtpSettings {
   security: 'none' | 'ssl' | 'starttls'
 }
 
+export interface SmtpConnectionTestResult {
+  success: boolean
+  message: string
+}
+
 export interface PayMongoSettings {
   publicKey: string
   secretKey: string
@@ -483,6 +488,19 @@ export const adminService = {
   async updateSmtpSettings(payload: SmtpSettings): Promise<SmtpSettings> {
     const response = await apiClient.put<SmtpSettings>('/admin/smtp-settings', payload)
     return response.data
+  },
+
+  async testSmtpSettings(payload: SmtpSettings): Promise<SmtpConnectionTestResult> {
+    try {
+      const response = await apiClient.post<SmtpConnectionTestResult>('/admin/smtp-settings/test', payload)
+      return response.data
+    } catch (error) {
+      const axiosError = error as AxiosError<SmtpConnectionTestResult>
+      if (axiosError.response?.data) {
+        return axiosError.response.data
+      }
+      throw error
+    }
   },
 
   // ── PayMongo Settings ───────────────────────────────────────────────────

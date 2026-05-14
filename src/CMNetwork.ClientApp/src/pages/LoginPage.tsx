@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { isTokenLikelyValid } from '../services/tokenUtils'
+import { authService } from '../services/authService'
 import { useGoogleReCaptcha } from 'react-google-recaptcha-v3'
 import { Button } from '@progress/kendo-react-buttons'
 import { Input, Checkbox } from '@progress/kendo-react-inputs'
@@ -39,6 +40,7 @@ export const LoginPage = () => {
   const {
     control,
     handleSubmit,
+    getValues,
     formState: { errors },
   } = useForm<LoginCredentials>({
     defaultValues: {
@@ -74,6 +76,24 @@ export const LoginPage = () => {
     const latestUser = useAuthStore.getState().user
     const fallback = roleDashboardPath(latestUser?.role ?? 'employee')
     navigate(from || fallback, { replace: true })
+  }
+
+  const handleForgotPassword = async () => {
+    const email = getValues('email')?.trim() ?? ''
+    if (!email) {
+      pushToast('warning', 'Enter your email first, then click Forgot password.')
+      return
+    }
+
+    try {
+      await authService.forgotPassword({
+        email,
+        resetUrl: `${globalThis.location.origin}/reset-password`,
+      })
+      pushToast('success', 'If the account exists, a password reset email has been sent.')
+    } catch {
+      pushToast('error', 'Unable to submit password reset right now.')
+    }
   }
 
   if (isAuthenticated && user && isTokenLikelyValid(token)) {
@@ -170,7 +190,9 @@ export const LoginPage = () => {
                   />
                 )}
               />
-              <a href="#">Forgot password?</a>
+              <button type="button" className="link-button" onClick={() => { void handleForgotPassword() }}>
+                Forgot password?
+              </button>
             </div>
 
             <Button type="submit" themeColor="primary" className="k-button" style={{ marginBottom: '0.75rem', width: '100%' }} disabled={loading}>
@@ -184,7 +206,14 @@ export const LoginPage = () => {
             </Button>
 
             <p className="helper-link" style={{ fontSize: '0.85rem', marginBottom: '0.75rem' }}>
-              No account yet? <a href="#">Create one</a>
+              No account yet?{' '}
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => pushToast('info', 'Registration flow will be enabled in the next step.')}
+              >
+                Create one
+              </button>
             </p>
 
             <div className="recaptcha-badge" style={{ fontSize: '0.75rem', color: '#888', marginTop: '0.5rem' }}>
