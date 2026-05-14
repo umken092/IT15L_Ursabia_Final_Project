@@ -313,7 +313,7 @@ using (var scope = app.Services.CreateScope())
         hangfireStartedSuccessfully = false;
         runtimeHealth.DatabaseAvailable = false;
         runtimeHealth.HangfireStarted = false;
-        runtimeHealth.DatabaseStatusMessage = "Database connectivity failed during startup (degraded mode).";
+        runtimeHealth.DatabaseStatusMessage = $"Database connectivity failed during startup (degraded mode): {ex.GetBaseException().Message}";
     }
     catch (Exception ex) when (allowStartupWithoutDatabase)
     {
@@ -326,7 +326,7 @@ using (var scope = app.Services.CreateScope())
         hangfireStartedSuccessfully = false;
         runtimeHealth.DatabaseAvailable = false;
         runtimeHealth.HangfireStarted = false;
-        runtimeHealth.DatabaseStatusMessage = "Startup failed while initializing database services (degraded mode).";
+        runtimeHealth.DatabaseStatusMessage = $"Startup failed while initializing database services (degraded mode): {ex.GetBaseException().Message}";
     }
 }
 
