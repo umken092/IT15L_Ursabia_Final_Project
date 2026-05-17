@@ -33,7 +33,6 @@ const EditProfilePage: React.FC = () => {
 
   const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault()
-    const _form = e.target as HTMLFormElement
     try {
       setSaving(true)
       setError(null)
