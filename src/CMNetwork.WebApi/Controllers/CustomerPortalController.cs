@@ -71,8 +71,23 @@ public class CustomerPortalController : ControllerBase
                 return null;
             }
 
-            return await _dbContext.Customers
-                .FirstOrDefaultAsync(c => c.Email != null && c.Email.ToLower() == email.ToLower());
+            var matchedCustomer = await _dbContext.Customers
+                .Where(c => c.Email != null && c.Email.ToLower() == email.ToLower())
+                .OrderByDescending(c => c.LastUpdatedUtc ?? c.CreatedUtc)
+                .FirstOrDefaultAsync();
+
+            // Auto-bind a stable CustomerId to the signed-in user to avoid ambiguous legacy email matches.
+            if (matchedCustomer is not null)
+            {
+                var user = await _userManager.GetUserAsync(User);
+                if (user is not null && user.CustomerId != matchedCustomer.Id)
+                {
+                    user.CustomerId = matchedCustomer.Id;
+                    await _userManager.UpdateAsync(user);
+                }
+            }
+
+            return matchedCustomer;
         }
         catch
         {
@@ -149,7 +164,9 @@ FROM Customers";
         }
 
         return await legacySafeQuery
-            .FirstOrDefaultAsync(c => c.Email != null && c.Email.ToLower() == email.ToLower());
+            .Where(c => c.Email != null && c.Email.ToLower() == email.ToLower())
+            .OrderByDescending(c => c.LastUpdatedUtc ?? c.CreatedUtc)
+            .FirstOrDefaultAsync();
     }
 
     private async Task<bool> HasExtendedCustomerProfileColumnsAsync()
@@ -607,6 +624,19 @@ SELECT CASE
 
         var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
         var hasDemographicColumns = await HasDemographicCustomerProfileColumnsAsync();
+        var user = await _userManager.GetUserAsync(User);
+
+        var responseBirthDate = hasDemographicColumns ? customer.BirthDate : user?.Birthdate;
+        var responseGender = hasDemographicColumns
+            ? customer.Gender
+            : (string.IsNullOrWhiteSpace(user?.Gender) ? null : user!.Gender);
+        var responseAge = hasDemographicColumns
+            ? customer.Age
+            : responseBirthDate.HasValue
+                ? Math.Max(0, DateTime.UtcNow.Year - responseBirthDate.Value.Year
+                    - ((DateTime.UtcNow.Month < responseBirthDate.Value.Month
+                        || (DateTime.UtcNow.Month == responseBirthDate.Value.Month && DateTime.UtcNow.Day < responseBirthDate.Value.Day)) ? 1 : 0))
+                : null;
 
         return Ok(new
         {
@@ -622,9 +652,9 @@ SELECT CASE
             country = customer.Country,
             postalCode = customer.PostalCode,
             zipCode = customer.PostalCode,
-            birthDate = hasDemographicColumns ? customer.BirthDate : null,
-            age = hasDemographicColumns ? customer.Age : null,
-            gender = hasDemographicColumns ? customer.Gender : null,
+            birthDate = responseBirthDate,
+            age = responseAge,
+            gender = responseGender,
             maritalStatus = hasDemographicColumns ? customer.MaritalStatus : null,
             tin = hasExtendedColumns ? customer.TIN : null,
             sss = hasExtendedColumns ? customer.SSS : null,
@@ -640,6 +670,7 @@ SELECT CASE
     {
         var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
         var hasDemographicColumns = await HasDemographicCustomerProfileColumnsAsync();
+        var user = await _userManager.GetUserAsync(User);
 
         // On legacy schemas, extended columns do not exist yet.
         // Ignore extended field validation so profile updates do not fail with 400.
@@ -707,6 +738,17 @@ SELECT CASE
             if (!string.IsNullOrWhiteSpace(request.MaritalStatus))
                 customer.MaritalStatus = request.MaritalStatus;
         }
+        else if (user is not null)
+        {
+            // Legacy fallback: preserve demographic info in AspNetUsers when Customers columns are unavailable.
+            if (request.BirthDate.HasValue)
+                user.Birthdate = request.BirthDate.Value;
+
+            if (!string.IsNullOrWhiteSpace(request.Gender))
+                user.Gender = request.Gender;
+
+            await _userManager.UpdateAsync(user);
+        }
 
         if (hasExtendedColumns)
         {
@@ -728,6 +770,18 @@ SELECT CASE
 
         await _dbContext.SaveChangesAsync();
 
+        var responseBirthDate = hasDemographicColumns ? customer.BirthDate : user?.Birthdate;
+        var responseGender = hasDemographicColumns
+            ? customer.Gender
+            : (string.IsNullOrWhiteSpace(user?.Gender) ? null : user!.Gender);
+        var responseAge = hasDemographicColumns
+            ? customer.Age
+            : responseBirthDate.HasValue
+                ? Math.Max(0, DateTime.UtcNow.Year - responseBirthDate.Value.Year
+                    - ((DateTime.UtcNow.Month < responseBirthDate.Value.Month
+                        || (DateTime.UtcNow.Month == responseBirthDate.Value.Month && DateTime.UtcNow.Day < responseBirthDate.Value.Day)) ? 1 : 0))
+                : null;
+
         return Ok(new
         {
             id = customer.Id,
@@ -742,9 +796,9 @@ SELECT CASE
             country = customer.Country,
             postalCode = customer.PostalCode,
             zipCode = customer.PostalCode,
-            birthDate = hasDemographicColumns ? customer.BirthDate : null,
-            age = hasDemographicColumns ? customer.Age : null,
-            gender = hasDemographicColumns ? customer.Gender : null,
+            birthDate = responseBirthDate,
+            age = responseAge,
+            gender = responseGender,
             maritalStatus = hasDemographicColumns ? customer.MaritalStatus : null,
             tin = hasExtendedColumns ? customer.TIN : null,
             sss = hasExtendedColumns ? customer.SSS : null,
