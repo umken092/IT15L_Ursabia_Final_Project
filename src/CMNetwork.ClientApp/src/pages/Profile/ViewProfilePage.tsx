@@ -7,28 +7,53 @@ type EditableProfile = Pick<
 >
 
 const emptyProfileForm: EditableProfile = {
-  firstName: '',
-  lastName: '',
-  phoneNumber: '',
-  companyName: '',
-  address: '',
-  city: '',
-  state: '',
-  country: '',
-  zipCode: '',
+  firstName: '', lastName: '', phoneNumber: '', companyName: '',
+  address: '', city: '', state: '', country: '', zipCode: '',
 }
 
-const inputCls =
-  'w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white'
+// ─── Shared input style ───────────────────────────────────────────────────────
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '9px 12px', border: '1px solid var(--border)',
+  borderRadius: 7, fontSize: 13, color: 'var(--text)', background: 'var(--card-bg)',
+  outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', transition: 'border-color 0.15s',
+}
+
+const FieldLabel = ({ children, required }: { children: React.ReactNode; required?: boolean }) => (
+  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+    {children}{required && <span style={{ color: '#dc2626', marginLeft: 3 }}>*</span>}
+  </label>
+)
 
 const VerifiedBadge = () => (
-  <span className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color: '#16a34a' }}>
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: '#059669' }}>
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12" />
     </svg>
     Verified
   </span>
 )
+
+const SectionDivider = ({ title }: { title: string }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 8, marginBottom: 16 }}>
+    <span style={{ width: 3, height: 16, borderRadius: 2, background: 'var(--primary)', display: 'block', flexShrink: 0 }} />
+    <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>{title}</p>
+    <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+  </div>
+)
+
+const Alert = ({ type, message }: { type: 'error' | 'success' | 'info'; message: string }) => {
+  const map = {
+    error: { bg: '#fef2f2', text: '#991b1b', border: '#fecaca' },
+    success: { bg: '#f0fdf4', text: '#166534', border: '#bbf7d0' },
+    info: { bg: '#eff6ff', text: '#1e40af', border: '#bfdbfe' },
+  }
+  const s = map[type]
+  return (
+    <div style={{ padding: '10px 14px', borderRadius: 7, fontSize: 13, background: s.bg, color: s.text, border: `1px solid ${s.border}` }}>
+      {message}
+    </div>
+  )
+}
 
 const ViewProfilePage: React.FC = () => {
   const formRef = useRef<HTMLFormElement>(null)
@@ -53,20 +78,13 @@ const ViewProfilePage: React.FC = () => {
         const data = await customerPortalService.getMyProfile()
         setProfile(data)
         setProfileForm({
-          firstName: data.firstName ?? '',
-          lastName: data.lastName ?? '',
-          phoneNumber: data.phoneNumber ?? '',
-          companyName: data.companyName ?? '',
-          address: data.address ?? '',
-          city: data.city ?? '',
-          state: data.state ?? '',
-          country: data.country ?? '',
-          zipCode: data.zipCode ?? '',
+          firstName: data.firstName ?? '', lastName: data.lastName ?? '',
+          phoneNumber: data.phoneNumber ?? '', companyName: data.companyName ?? '',
+          address: data.address ?? '', city: data.city ?? '',
+          state: data.state ?? '', country: data.country ?? '', zipCode: data.zipCode ?? '',
         })
-        setProfileError(null)
-      } catch (err) {
+      } catch {
         setProfileError('Unable to load profile information.')
-        console.error('Error loading profile:', err)
       } finally {
         setLoading(false)
       }
@@ -95,21 +113,15 @@ const ViewProfilePage: React.FC = () => {
       })
       setProfile(updated)
       setProfileForm({
-        firstName: updated.firstName ?? '',
-        lastName: updated.lastName ?? '',
-        phoneNumber: updated.phoneNumber ?? '',
-        companyName: updated.companyName ?? '',
-        address: updated.address ?? '',
-        city: updated.city ?? '',
-        state: updated.state ?? '',
-        country: updated.country ?? '',
-        zipCode: updated.zipCode ?? '',
+        firstName: updated.firstName ?? '', lastName: updated.lastName ?? '',
+        phoneNumber: updated.phoneNumber ?? '', companyName: updated.companyName ?? '',
+        address: updated.address ?? '', city: updated.city ?? '',
+        state: updated.state ?? '', country: updated.country ?? '', zipCode: updated.zipCode ?? '',
       })
       setProfileSuccess('Profile updated successfully.')
       setTimeout(() => setProfileSuccess(null), 3000)
-    } catch (err) {
+    } catch {
       setProfileError('Unable to update profile.')
-      console.error('Error updating profile:', err)
     } finally {
       setSavingProfile(false)
     }
@@ -117,66 +129,47 @@ const ViewProfilePage: React.FC = () => {
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!oldPassword || !newPassword || !confirmPassword) {
-      setPasswordError('All password fields are required.')
-      return
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordError('New passwords do not match.')
-      return
-    }
-    if (newPassword.length < 8) {
-      setPasswordError('Password must be at least 8 characters.')
-      return
-    }
+    if (!oldPassword || !newPassword || !confirmPassword) { setPasswordError('All password fields are required.'); return }
+    if (newPassword !== confirmPassword) { setPasswordError('New passwords do not match.'); return }
+    if (newPassword.length < 8) { setPasswordError('Password must be at least 8 characters.'); return }
     try {
       setSavingPassword(true)
       setPasswordError(null)
       await customerPortalService.changePassword(oldPassword, newPassword)
       setPasswordSuccess('Password changed successfully.')
-      setOldPassword('')
-      setNewPassword('')
-      setConfirmPassword('')
+      setOldPassword(''); setNewPassword(''); setConfirmPassword('')
       setShowPasswordForm(false)
       setTimeout(() => setPasswordSuccess(null), 4000)
-    } catch (err) {
+    } catch {
       setPasswordError('Incorrect current password or server error.')
-      console.error('Error changing password:', err)
     } finally {
       setSavingPassword(false)
     }
   }
 
-  // Profile strength: count non-empty editable fields out of 9
   const strengthFields = [
     profileForm.firstName, profileForm.lastName, profileForm.phoneNumber,
     profileForm.companyName, profileForm.address, profileForm.city,
     profileForm.state, profileForm.country, profileForm.zipCode,
   ]
   const filledCount = strengthFields.filter((v) => v.trim().length > 0).length
-  // email always counts as filled (required on backend)
-  const totalFields = strengthFields.length + 1
-  const strengthPct = Math.round(((filledCount + 1) / totalFields) * 100)
+  const strengthPct = Math.round(((filledCount + 1) / (strengthFields.length + 1)) * 100)
+  const strengthColor = strengthPct < 40 ? '#dc2626' : strengthPct < 70 ? '#ca8a04' : '#059669'
 
   if (loading) {
     return (
-      <div className="p-6 max-w-5xl animate-pulse space-y-4">
-        <div className="h-8 bg-gray-200 rounded w-1/3" />
-        <div className="grid grid-cols-3 gap-5">
-          <div className="col-span-2 h-80 bg-gray-200 rounded-xl" />
-          <div className="space-y-4">
-            <div className="h-40 bg-gray-200 rounded-xl" />
-            <div className="h-48 bg-gray-200 rounded-xl" />
-          </div>
-        </div>
+      <div style={{ padding: '24px 28px', maxWidth: 900, margin: '0 auto' }}>
+        {[1, 2, 3].map((i) => (
+          <div key={i} style={{ height: i === 1 ? 48 : 120, background: '#f1f5f9', borderRadius: 8, marginBottom: 16, opacity: 1 - i * 0.2 }} />
+        ))}
       </div>
     )
   }
 
   if (profileError && !profile) {
     return (
-      <div className="p-6">
-        <div className="px-4 py-3 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm">{profileError}</div>
+      <div style={{ padding: '24px 28px' }}>
+        <Alert type="error" message={profileError} />
       </div>
     )
   }
@@ -184,13 +177,27 @@ const ViewProfilePage: React.FC = () => {
   if (!profile) return null
 
   return (
-    <div className="p-6 max-w-5xl space-y-5">
+    <div style={{ padding: '24px 28px', maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-      {/* ── Page header ─────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4">
+      {/* ── Page Header ──────────────────────────────────────────────── */}
+      <div style={{
+        background: 'var(--card-bg)',
+        border: '1px solid var(--border)',
+        borderRadius: 10,
+        padding: '18px 24px',
+        boxShadow: 'var(--shadow)',
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 16,
+        flexWrap: 'wrap',
+      }}>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text)' }}>Profile Settings</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            <span style={{ width: 4, height: 26, borderRadius: 2, background: 'var(--primary)', display: 'block', flexShrink: 0 }} />
+            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Profile Settings</h1>
+          </div>
+          <p style={{ margin: '0 0 0 14px', fontSize: 12, color: 'var(--muted)' }}>
             Manage your account details and security preferences.
           </p>
         </div>
@@ -198,267 +205,208 @@ const ViewProfilePage: React.FC = () => {
           type="button"
           onClick={() => formRef.current?.requestSubmit()}
           disabled={savingProfile}
-          className="px-5 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 transition-opacity flex-shrink-0"
-          style={{ background: 'var(--primary)' }}
+          style={{
+            padding: '9px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+            color: '#fff', background: 'var(--primary)', border: 'none',
+            cursor: 'pointer', opacity: savingProfile ? 0.6 : 1,
+            boxShadow: '0 2px 6px rgba(29,99,193,0.25)',
+            transition: 'opacity 0.2s',
+          }}
         >
           {savingProfile ? 'Saving…' : 'Save Changes'}
         </button>
       </div>
 
-      {/* ── Feedback banners ────────────────────────────────────────── */}
-      {profileError && (
-        <div className="px-4 py-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200">{profileError}</div>
-      )}
-      {profileSuccess && (
-        <div className="px-4 py-3 rounded-lg text-sm bg-green-50 text-green-700 border border-green-200">{profileSuccess}</div>
-      )}
+      {/* Feedback */}
+      {profileError && <Alert type="error" message={profileError} />}
+      {profileSuccess && <Alert type="success" message={profileSuccess} />}
 
-      {/* ── Main 2-column layout ─────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+      {/* ── 2-Column Layout ──────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, alignItems: 'start' }}>
 
-        {/* LEFT — Account Details card */}
-        <div
-          className="lg:col-span-2 rounded-xl overflow-hidden"
-          style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}
-        >
-          <div className="px-6 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
-            <p className="font-semibold text-base" style={{ color: 'var(--text)' }}>Account Details</p>
+        {/* LEFT — Account Details */}
+        <div style={{
+          background: 'var(--card-bg)', border: '1px solid var(--border)',
+          borderRadius: 10, boxShadow: 'var(--shadow)', overflow: 'hidden',
+        }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface-container)' }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Account Details</p>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--muted)' }}>Update your personal and business information.</p>
           </div>
 
-          <form ref={formRef} onSubmit={handleProfileSubmit} className="px-6 py-5 space-y-4">
-            {/* Row 1 — Full Name */}
-            <div>
-              <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text)' }}>
-                Full Name
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="text"
-                  name="firstName"
-                  value={profileForm.firstName}
-                  onChange={handleProfileChange}
-                  placeholder="First name"
-                  className={inputCls}
-                  style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-                  required
-                />
-                <input
-                  type="text"
-                  name="lastName"
-                  value={profileForm.lastName}
-                  onChange={handleProfileChange}
-                  placeholder="Last name"
-                  className={inputCls}
-                  style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-                  required
-                />
+          <form ref={formRef} onSubmit={handleProfileSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <SectionDivider title="Personal Information" />
+
+            {/* Full Name */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <FieldLabel required>First Name</FieldLabel>
+                <input type="text" name="firstName" value={profileForm.firstName} onChange={handleProfileChange}
+                  placeholder="First name" style={inputStyle} required />
+              </div>
+              <div>
+                <FieldLabel required>Last Name</FieldLabel>
+                <input type="text" name="lastName" value={profileForm.lastName} onChange={handleProfileChange}
+                  placeholder="Last name" style={inputStyle} required />
               </div>
             </div>
 
-            {/* Row 2 — Email (read-only) */}
+            {/* Email */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-sm font-medium" style={{ color: 'var(--text)' }}>Email Address</label>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <FieldLabel>Email Address</FieldLabel>
                 <VerifiedBadge />
               </div>
-              <input
-                type="email"
-                value={profile.email}
-                readOnly
-                className={`${inputCls} cursor-default`}
-                style={{ borderColor: 'var(--border)', color: 'var(--muted)', background: 'var(--surface-container)' }}
-              />
+              <input type="email" value={profile.email} readOnly
+                style={{ ...inputStyle, background: 'var(--surface-container)', color: 'var(--muted)', cursor: 'default' }} />
             </div>
 
-            {/* Row 3 — Phone */}
+            {/* Phone */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-sm font-medium" style={{ color: 'var(--text)' }}>Phone Number</label>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <FieldLabel>Phone Number</FieldLabel>
                 {profileForm.phoneNumber && <VerifiedBadge />}
               </div>
-              <input
-                type="tel"
-                name="phoneNumber"
-                value={profileForm.phoneNumber}
-                onChange={handleProfileChange}
-                placeholder="+1 555-0000"
-                className={inputCls}
-                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-              />
+              <input type="tel" name="phoneNumber" value={profileForm.phoneNumber} onChange={handleProfileChange}
+                placeholder="+63 9XX XXX XXXX" style={inputStyle} />
             </div>
 
-            {/* ── Business Information ─────────────────────── */}
-            <div className="pt-2">
-              <p className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: 'var(--muted)' }}>
-                Business Information
-              </p>
+            <SectionDivider title="Business Information" />
 
-              {/* Company Name */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text)' }}>
-                  Company Name
-                </label>
-                <input
-                  type="text"
-                  name="companyName"
-                  value={profileForm.companyName}
-                  onChange={handleProfileChange}
-                  placeholder="Your company"
-                  className={inputCls}
-                  style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-                />
-              </div>
+            {/* Company */}
+            <div>
+              <FieldLabel>Company Name</FieldLabel>
+              <input type="text" name="companyName" value={profileForm.companyName} onChange={handleProfileChange}
+                placeholder="Your company or organization" style={inputStyle} />
+            </div>
 
-              {/* Office Address */}
+            {/* Address fields */}
+            <div>
+              <FieldLabel>Street Address</FieldLabel>
+              <input type="text" name="address" value={profileForm.address} onChange={handleProfileChange}
+                placeholder="Street address" style={inputStyle} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text)' }}>
-                  Office Address
-                </label>
-                <textarea
-                  name="address"
-                  value={[profileForm.address, profileForm.city, profileForm.state, profileForm.zipCode, profileForm.country].filter(Boolean).join('\n')}
-                  onChange={(e) => {
-                    // Split by newline and map back to fields
-                    const lines = e.target.value.split('\n')
-                    setProfileForm((prev) => ({
-                      ...prev,
-                      address: lines[0] ?? '',
-                      city: lines[1] ?? '',
-                      state: lines[2] ?? '',
-                      zipCode: lines[3] ?? '',
-                      country: lines[4] ?? '',
-                    }))
-                  }}
-                  rows={3}
-                  placeholder={'Street address\nCity, State ZIP\nCountry'}
-                  className={inputCls}
-                  style={{ borderColor: 'var(--border)', color: 'var(--text)', resize: 'vertical' }}
-                />
+                <FieldLabel>City</FieldLabel>
+                <input type="text" name="city" value={profileForm.city} onChange={handleProfileChange}
+                  placeholder="City" style={inputStyle} />
+              </div>
+              <div>
+                <FieldLabel>State / Province</FieldLabel>
+                <input type="text" name="state" value={profileForm.state} onChange={handleProfileChange}
+                  placeholder="State" style={inputStyle} />
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <FieldLabel>ZIP / Postal Code</FieldLabel>
+                <input type="text" name="zipCode" value={profileForm.zipCode} onChange={handleProfileChange}
+                  placeholder="ZIP Code" style={inputStyle} />
+              </div>
+              <div>
+                <FieldLabel>Country</FieldLabel>
+                <input type="text" name="country" value={profileForm.country} onChange={handleProfileChange}
+                  placeholder="Country" style={inputStyle} />
               </div>
             </div>
           </form>
         </div>
 
         {/* RIGHT — Sidebar panels */}
-        <div className="space-y-4">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          {/* Profile Strength card */}
-          <div
-            className="rounded-xl p-5"
-            style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--muted)' }}>
+          {/* Profile Strength */}
+          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10, padding: 18, boxShadow: 'var(--shadow)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 Profile Strength
               </p>
-              <p className="text-lg font-bold" style={{ color: 'var(--primary)' }}>{strengthPct}%</p>
+              <span style={{ fontSize: 18, fontWeight: 700, color: strengthColor }}>{strengthPct}%</span>
             </div>
-            <div className="h-2 rounded-full overflow-hidden mb-3" style={{ background: 'var(--border)' }}>
-              <div
-                className="h-2 rounded-full transition-all"
-                style={{ width: `${strengthPct}%`, background: 'var(--primary)' }}
-              />
+            <div style={{ height: 6, borderRadius: 999, background: 'var(--border)', marginBottom: 10, overflow: 'hidden' }}>
+              <div style={{ height: 6, borderRadius: 999, background: strengthColor, width: `${strengthPct}%`, transition: 'width 0.4s' }} />
             </div>
-            <p className="text-xs mb-4" style={{ color: 'var(--muted)' }}>
-              Complete your profile to unlock all features.
+            <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 12px' }}>
+              {strengthPct < 50 ? 'Complete your profile to unlock all features.' : strengthPct < 80 ? 'Looking good — a few more details to go.' : 'Your profile is complete!'}
             </p>
             <button
               type="button"
               onClick={() => formRef.current?.requestSubmit()}
-              className="w-full py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-gray-50"
-              style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+              style={{
+                width: '100%', padding: '8px 0', borderRadius: 7, fontSize: 12,
+                fontWeight: 600, color: 'var(--text)', background: 'transparent',
+                border: '1px solid var(--border)', cursor: 'pointer',
+              }}
             >
-              Complete Profile
+              Save Profile
             </button>
           </div>
 
-          {/* Account Security card */}
-          <div
-            className="rounded-xl overflow-hidden"
-            style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}
-          >
-            <div className="px-5 py-4 flex items-center gap-2 border-b" style={{ borderColor: 'var(--border)' }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--primary)' }}>
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          {/* Security */}
+          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
+            <div style={{
+              padding: '12px 18px', borderBottom: '1px solid var(--border)',
+              background: 'var(--surface-container)',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
-              <p className="font-semibold text-sm" style={{ color: 'var(--text)' }}>Account Security</p>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>Account Security</p>
             </div>
 
-            <div className="px-5 py-4 space-y-4">
+            <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
               {/* MFA */}
               <div>
-                <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Multi-Factor Authentication</p>
-                <p className="text-xs mt-0.5 mb-2" style={{ color: 'var(--muted)' }}>Not configured</p>
-                <a
-                  href="/module/profile#mfa"
-                  className="text-xs font-semibold"
-                  style={{ color: 'var(--primary)' }}
-                >
-                  Manage MFA
+                <p style={{ margin: '0 0 3px', fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Multi-Factor Authentication</p>
+                <p style={{ margin: '0 0 6px', fontSize: 12, color: 'var(--muted)' }}>Not configured — recommended for security.</p>
+                <a href="/module/profile#mfa" style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary)', textDecoration: 'none' }}>
+                  Manage MFA →
                 </a>
               </div>
 
-              <div style={{ borderTop: '1px solid var(--border)' }} />
+              <div style={{ height: 1, background: 'var(--border)' }} />
 
               {/* Password */}
               <div>
-                <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Password</p>
-                {passwordSuccess && (
-                  <p className="text-xs mt-0.5 mb-2" style={{ color: '#16a34a' }}>{passwordSuccess}</p>
-                )}
-                {!passwordSuccess && (
-                  <p className="text-xs mt-0.5 mb-3" style={{ color: 'var(--muted)' }}>
-                    Set a strong password to secure your account.
-                  </p>
-                )}
+                <p style={{ margin: '0 0 3px', fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Password</p>
+                {passwordSuccess && <p style={{ margin: '0 0 8px', fontSize: 12, color: '#059669' }}>{passwordSuccess}</p>}
+                {!passwordSuccess && <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--muted)' }}>Set a strong password to secure your account.</p>}
 
                 {showPasswordForm ? (
-                  <form onSubmit={handlePasswordSubmit} className="space-y-3 mt-2">
-                    {passwordError && (
-                      <p className="text-xs text-red-600">{passwordError}</p>
-                    )}
-                    <input
-                      type="password"
-                      value={oldPassword}
-                      onChange={(e) => setOldPassword(e.target.value)}
-                      placeholder="Current password"
-                      className={inputCls}
-                      style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-                      required
-                    />
-                    <input
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="New password"
-                      className={inputCls}
-                      style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-                      required
-                    />
-                    <input
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Confirm new password"
-                      className={inputCls}
-                      style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-                      required
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        type="submit"
-                        disabled={savingPassword}
-                        className="flex-1 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
-                        style={{ background: 'var(--primary)' }}
-                      >
-                        {savingPassword ? 'Updating…' : 'Update'}
+                  <form onSubmit={handlePasswordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {passwordError && <Alert type="error" message={passwordError} />}
+                    {['Current password', 'New password', 'Confirm new password'].map((ph, i) => {
+                      const values = [oldPassword, newPassword, confirmPassword]
+                      const setters = [setOldPassword, setNewPassword, setConfirmPassword]
+                      return (
+                        <input
+                          key={ph}
+                          type="password"
+                          value={values[i]}
+                          onChange={(e) => setters[i](e.target.value)}
+                          placeholder={ph}
+                          style={{ ...inputStyle }}
+                          required
+                        />
+                      )
+                    })}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="submit" disabled={savingPassword}
+                        style={{
+                          flex: 1, padding: '8px 0', borderRadius: 7, fontSize: 12,
+                          fontWeight: 600, color: '#fff', background: 'var(--primary)',
+                          border: 'none', cursor: 'pointer', opacity: savingPassword ? 0.6 : 1,
+                        }}>
+                        {savingPassword ? 'Updating…' : 'Update Password'}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => { setShowPasswordForm(false); setPasswordError(null) }}
-                        className="flex-1 py-2 rounded-lg text-xs font-semibold border"
-                        style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-                      >
+                      <button type="button" onClick={() => { setShowPasswordForm(false); setPasswordError(null) }}
+                        style={{
+                          flex: 1, padding: '8px 0', borderRadius: 7, fontSize: 12,
+                          fontWeight: 600, color: 'var(--text)', background: 'transparent',
+                          border: '1px solid var(--border)', cursor: 'pointer',
+                        }}>
                         Cancel
                       </button>
                     </div>
@@ -467,8 +415,11 @@ const ViewProfilePage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowPasswordForm(true)}
-                    className="w-full py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-gray-50"
-                    style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+                    style={{
+                      width: '100%', padding: '8px 0', borderRadius: 7, fontSize: 12,
+                      fontWeight: 600, color: 'var(--text)', background: 'transparent',
+                      border: '1px solid var(--border)', cursor: 'pointer',
+                    }}
                   >
                     Change Password
                   </button>
@@ -476,7 +427,6 @@ const ViewProfilePage: React.FC = () => {
               </div>
             </div>
           </div>
-
         </div>
       </div>
     </div>

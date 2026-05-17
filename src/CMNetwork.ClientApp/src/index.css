@@ -10540,3 +10540,36 @@ section > div:first-child,
   .ar-card-header { flex-direction: column; }
   .ar-module-name { width: 90px; }
 }
+
+/* =====================================================================
+   CUSTOMER PORTAL — Professional ERP Enhancement Styles
+   ===================================================================== */
+
+/* Input focus ring */
+input[type='text']:focus,
+input[type='email']:focus,
+input[type='tel']:focus,
+input[type='number']:focus,
+input[type='password']:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+/* KPI card hover lift */
+.cp-kpi-card {
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.cp-kpi-card:hover {
+  box-shadow: var(--shadow-lg) !important;
+  transform: translateY(-1px);
+}
+
+/* FAQ accordion smooth expand */
+@keyframes cp-slide-down {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.cp-faq-answer { animation: cp-slide-down 0.2s ease; }
+

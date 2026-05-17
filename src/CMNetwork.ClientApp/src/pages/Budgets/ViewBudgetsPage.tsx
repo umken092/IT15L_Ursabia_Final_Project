@@ -3,19 +3,44 @@ import { customerPortalService, type Budget } from '../../services/customerPorta
 
 type Tab = 'budgets' | 'adjust'
 
-const inputCls =
-  'w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
+// ─── Shared styles ────────────────────────────────────────────────────────────
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '9px 12px',
+  border: '1px solid var(--border)', borderRadius: 7,
+  fontSize: 13, color: 'var(--text)', background: 'var(--card-bg)',
+  outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
+}
 
-const badge = (status: string) => {
-  const map: Record<string, [string, string]> = {
-    Active: ['#dcfce7', '#166534'],
-    Upcoming: ['#dbeafe', '#1e40af'],
-    Expired: ['#f3f4f6', '#374151'],
-    Closed: ['#f3f4f6', '#374151'],
-  }
-  const [bg, color] = map[status] ?? ['#f3f4f6', '#374151']
+const FieldLabel = ({ children, required }: { children: React.ReactNode; required?: boolean }) => (
+  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginBottom: 6, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
+    {children}{required && <span style={{ color: '#dc2626', marginLeft: 3 }}>*</span>}
+  </label>
+)
+
+const SectionRule = ({ label }: { label: string }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+    <span style={{ width: 3, height: 14, borderRadius: 2, background: 'var(--primary)', display: 'block', flexShrink: 0 }} />
+    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>{label}</p>
+  </div>
+)
+
+const STATUS_BADGE: Record<string, { bg: string; text: string; border: string }> = {
+  Active:   { bg: '#f0fdf4', text: '#166534', border: '#bbf7d0' },
+  Upcoming: { bg: '#eff6ff', text: '#1e40af', border: '#bfdbfe' },
+  Expired:  { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb' },
+  Closed:   { bg: '#f9fafb', text: '#9ca3af', border: '#e5e7eb' },
+}
+
+const StatusBadge = ({ status }: { status: string }) => {
+  const s = STATUS_BADGE[status] ?? STATUS_BADGE.Closed
   return (
-    <span className="px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: bg, color }}>
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+      letterSpacing: '0.02em', textTransform: 'uppercase' as const,
+      background: s.bg, color: s.text, border: `1px solid ${s.border}`, whiteSpace: 'nowrap' as const,
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: s.text, display: 'inline-block', flexShrink: 0 }} />
       {status}
     </span>
   )
@@ -42,169 +67,124 @@ const ViewBudgetsPage: React.FC = () => {
       } catch (err) {
         setError('Unable to load budgets.')
         console.error('Error loading budgets:', err)
-      } finally {
-        setLoading(false)
-      }
+      } finally { setLoading(false) }
     }
-
     fetchBudgets()
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (!selectedBudgetId || !requestedAmount || !reason.trim()) {
-      setError('All adjustment fields are required.')
-      return
-    }
-
+    if (!selectedBudgetId || !requestedAmount || !reason.trim()) { setError('All adjustment fields are required.'); return }
     const parsedAmount = Number.parseFloat(requestedAmount)
-    if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
-      setError('Requested amount must be greater than zero.')
-      return
-    }
-
+    if (Number.isNaN(parsedAmount) || parsedAmount <= 0) { setError('Requested amount must be greater than zero.'); return }
     try {
-      setSubmitting(true)
-      setError(null)
-      await customerPortalService.requestBudgetAdjustment({
-        budgetId: selectedBudgetId,
-        requestedAmount: parsedAmount,
-        reason: reason.trim(),
-      })
+      setSubmitting(true); setError(null)
+      await customerPortalService.requestBudgetAdjustment({ budgetId: selectedBudgetId, requestedAmount: parsedAmount, reason: reason.trim() })
       setSuccess('Budget adjustment request submitted successfully.')
-      setSelectedBudgetId('')
-      setRequestedAmount('')
-      setReason('')
+      setSelectedBudgetId(''); setRequestedAmount(''); setReason('')
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       setError('Unable to submit budget adjustment request.')
       console.error('Error submitting request:', err)
-    } finally {
-      setSubmitting(false)
-    }
+    } finally { setSubmitting(false) }
   }
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-1/4" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="h-48 bg-gray-200 rounded-xl" />
-            <div className="h-48 bg-gray-200 rounded-xl" />
-          </div>
-        </div>
+      <div style={{ padding: '24px 28px', maxWidth: 900, margin: '0 auto' }}>
+        {[60, 120, 120].map((h, i) => <div key={i} style={{ height: h, background: '#f1f5f9', borderRadius: 8, marginBottom: 16, opacity: 1 - i * 0.2 }} />)}
       </div>
     )
   }
 
-  const tabBtn = (id: Tab, label: string) => (
-    <button
-      type="button"
-      onClick={() => setTab(id)}
-      className="px-5 py-2 rounded-lg text-sm font-medium transition-all"
-      style={{
-        background: tab === id ? 'var(--card-bg)' : 'transparent',
-        color: tab === id ? 'var(--primary)' : 'var(--muted)',
-        boxShadow: tab === id ? 'var(--shadow)' : 'none',
-        fontWeight: tab === id ? 600 : 400,
-      }}
-    >
-      {label}
-    </button>
+  const TabBtn = ({ id, label }: { id: Tab; label: string }) => (
+    <button type="button" onClick={() => setTab(id)} style={{
+      padding: '8px 18px', borderRadius: 7, fontSize: 13, fontWeight: tab === id ? 600 : 500,
+      color: tab === id ? 'var(--primary)' : 'var(--muted)',
+      background: tab === id ? 'var(--card-bg)' : 'transparent',
+      boxShadow: tab === id ? 'var(--shadow)' : 'none',
+      border: tab === id ? '1px solid var(--border)' : '1px solid transparent',
+      cursor: 'pointer', transition: 'all 0.15s',
+    }}>{label}</button>
   )
 
   return (
-    <div className="p-6 space-y-5 max-w-5xl">
-      <div className="rounded-2xl p-5" style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
-        <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--text)' }}>Budgets</h1>
-        <p className="text-sm mt-2" style={{ color: 'var(--muted)' }}>
+    <div style={{ padding: '24px 28px', maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* Header */}
+      <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10, padding: '18px 24px', boxShadow: 'var(--shadow)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <span style={{ width: 4, height: 26, borderRadius: 2, background: 'var(--primary)', display: 'block', flexShrink: 0 }} />
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Budgets</h1>
+        </div>
+        <p style={{ margin: '0 0 0 14px', fontSize: 12, color: 'var(--muted)' }}>
           View your allocated budgets and submit adjustment requests.
         </p>
       </div>
 
-      {error && (
-        <div className="px-4 py-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200">{error}</div>
-      )}
-      {success && (
-        <div className="px-4 py-3 rounded-lg text-sm bg-green-50 text-green-700 border border-green-200">{success}</div>
-      )}
+      {error && <div style={{ padding: '10px 14px', borderRadius: 7, fontSize: 13, background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>{error}</div>}
+      {success && <div style={{ padding: '10px 14px', borderRadius: 7, fontSize: 13, background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' }}>{success}</div>}
 
       {/* Tab bar */}
-      <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: 'var(--surface-container)' }}>
-        {tabBtn('budgets', `My Budgets${budgets.length > 0 ? ` (${budgets.length})` : ''}`)}
-        {tabBtn('adjust', 'Request Adjustment')}
+      <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 9, width: 'fit-content', background: 'var(--surface-container)' }}>
+        <TabBtn id="budgets" label={`My Budgets${budgets.length > 0 ? ` (${budgets.length})` : ''}`} />
+        <TabBtn id="adjust" label="Request Adjustment" />
       </div>
 
-      {/* Budget cards tab */}
+      {/* Budget cards */}
       {tab === 'budgets' && (
         <>
           {budgets.length === 0 ? (
-            <div
-              className="rounded-xl px-6 py-12 text-center"
-              style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', color: 'var(--muted)' }}
-            >
+            <div style={{ padding: '48px 24px', textAlign: 'center', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--muted)', fontSize: 13 }}>
               No budgets found.
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
               {budgets.map((budget) => {
                 const pct = budget.allocatedAmount > 0 ? (budget.spentAmount / budget.allocatedAmount) * 100 : 0
                 const barColor = pct > 100 ? '#dc2626' : pct > 80 ? '#ca8a04' : '#059669'
                 return (
-                  <div
-                    key={budget.id}
-                    className="rounded-xl p-5"
-                    style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}
-                  >
-                    <div className="flex items-start justify-between mb-3">
+                  <div key={budget.id} style={{
+                    background: 'var(--card-bg)',
+                    border: `1px solid var(--border)`,
+                    borderTop: `3px solid ${barColor}`,
+                    borderRadius: 10,
+                    padding: 20,
+                    boxShadow: 'var(--shadow)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
                       <div>
-                        <p className="font-semibold" style={{ color: 'var(--text)' }}>{budget.name}</p>
-                        <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
+                        <p style={{ margin: '0 0 3px', fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{budget.name}</p>
+                        <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>
                           {new Date(budget.startDate).toLocaleDateString()} – {new Date(budget.endDate).toLocaleDateString()}
                         </p>
                       </div>
-                      {badge(budget.status)}
+                      <StatusBadge status={budget.status} />
                     </div>
 
-                    {/* Progress bar */}
-                    <div className="mb-3">
-                      <div className="flex justify-between text-xs mb-1.5" style={{ color: 'var(--muted)' }}>
-                        <span>Spent: ${budget.spentAmount.toFixed(2)}</span>
-                        <span>{pct.toFixed(1)}%</span>
+                    {/* Progress */}
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>Utilization</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: barColor }}>{pct.toFixed(1)}%</span>
                       </div>
-                      <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--border)' }}>
-                        <div
-                          className="h-2 rounded-full transition-all"
-                          style={{ width: `${Math.min(pct, 100)}%`, background: barColor }}
-                        />
+                      <div style={{ height: 6, borderRadius: 999, background: 'var(--border)', overflow: 'hidden' }}>
+                        <div style={{ height: 6, borderRadius: 999, background: barColor, width: `${Math.min(pct, 100)}%`, transition: 'width 0.4s' }} />
                       </div>
                     </div>
 
                     {/* Amounts */}
-                    <div className="grid grid-cols-3 gap-3 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
-                      <div>
-                        <p className="text-xs" style={{ color: 'var(--muted)' }}>Allocated</p>
-                        <p className="text-sm font-semibold mt-0.5" style={{ color: 'var(--text)' }}>
-                          ${budget.allocatedAmount.toFixed(2)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs" style={{ color: 'var(--muted)' }}>Spent</p>
-                        <p className="text-sm font-semibold mt-0.5" style={{ color: 'var(--text)' }}>
-                          ${budget.spentAmount.toFixed(2)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs" style={{ color: 'var(--muted)' }}>Remaining</p>
-                        <p
-                          className="text-sm font-semibold mt-0.5"
-                          style={{ color: budget.remainingAmount < 0 ? '#dc2626' : '#059669' }}
-                        >
-                          ${budget.remainingAmount.toFixed(2)}
-                        </p>
-                      </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                      {[
+                        { label: 'Allocated', value: `$${budget.allocatedAmount.toFixed(2)}`, color: 'var(--text)' },
+                        { label: 'Spent', value: `$${budget.spentAmount.toFixed(2)}`, color: 'var(--text)' },
+                        { label: 'Remaining', value: `$${budget.remainingAmount.toFixed(2)}`, color: budget.remainingAmount < 0 ? '#dc2626' : '#059669' },
+                      ].map((item) => (
+                        <div key={item.label}>
+                          <p style={{ margin: '0 0 3px', fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>{item.label}</p>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: item.color, fontVariantNumeric: 'tabular-nums' }}>{item.value}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )
@@ -214,84 +194,61 @@ const ViewBudgetsPage: React.FC = () => {
         </>
       )}
 
-      {/* Adjustment request tab */}
+      {/* Adjustment request */}
       {tab === 'adjust' && (
-        <div
-          className="rounded-xl max-w-xl overflow-hidden"
-          style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}
-        >
-          <div className="px-6 py-5 border-b" style={{ borderColor: 'var(--border)' }}>
-            <p className="font-semibold" style={{ color: 'var(--text)' }}>Request Budget Adjustment</p>
-            <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-              Submit a request to increase or reallocate your budget.
-            </p>
-          </div>
-          {budgets.length === 0 ? (
-            <div className="px-6 py-10 text-center" style={{ color: 'var(--muted)' }}>
-              No budgets available for adjustment.
+        <>
+          <SectionRule label="Budget Adjustment Request" />
+          <div style={{
+            background: 'var(--card-bg)', border: '1px solid var(--border)',
+            borderRadius: 10, boxShadow: 'var(--shadow)', overflow: 'hidden', maxWidth: 540,
+          }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface-container)' }}>
+              <p style={{ margin: '0 0 2px', fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Request Budget Adjustment</p>
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>Submit a request to increase or reallocate your budget.</p>
             </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--muted)' }}>
-                  Select Budget *
-                </label>
-                <select
-                  value={selectedBudgetId}
-                  onChange={(e) => setSelectedBudgetId(e.target.value)}
-                  className={inputCls}
-                  style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-                  required
-                >
-                  <option value="">Choose a budget…</option>
-                  {budgets.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} — ${b.remainingAmount.toFixed(2)} remaining
-                    </option>
-                  ))}
-                </select>
+            {budgets.length === 0 ? (
+              <div style={{ padding: '40px 24px', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                No budgets available for adjustment.
               </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--muted)' }}>
-                  Requested Amount *
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={requestedAmount}
-                  onChange={(e) => setRequestedAmount(e.target.value)}
-                  className={inputCls}
-                  style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-                  placeholder="0.00"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--muted)' }}>
-                  Reason *
-                </label>
-                <textarea
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  className={inputCls}
-                  style={{ borderColor: 'var(--border)', color: 'var(--text)', resize: 'vertical' }}
-                  rows={4}
-                  placeholder="Provide a detailed reason for the adjustment…"
-                  required
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="px-5 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
-                style={{ background: 'var(--primary)' }}
-              >
-                {submitting ? 'Submitting…' : 'Submit Request'}
-              </button>
-            </form>
-          )}
-        </div>
+            ) : (
+              <form onSubmit={handleSubmit} style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div>
+                  <FieldLabel required>Select Budget</FieldLabel>
+                  <select
+                    value={selectedBudgetId}
+                    onChange={(e) => setSelectedBudgetId(e.target.value)}
+                    style={{ ...inputStyle }} required
+                  >
+                    <option value="">Choose a budget…</option>
+                    {budgets.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name} — ${b.remainingAmount.toFixed(2)} remaining</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <FieldLabel required>Requested Amount (PHP)</FieldLabel>
+                  <input type="number" step="0.01" min="0.01" value={requestedAmount}
+                    onChange={(e) => setRequestedAmount(e.target.value)}
+                    style={inputStyle} placeholder="0.00" required />
+                </div>
+                <div>
+                  <FieldLabel required>Reason for Adjustment</FieldLabel>
+                  <textarea value={reason} onChange={(e) => setReason(e.target.value)}
+                    style={{ ...inputStyle, resize: 'vertical' }} rows={4}
+                    placeholder="Provide a detailed reason for the adjustment request…" required />
+                </div>
+                <button type="submit" disabled={submitting} style={{
+                  padding: '10px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  color: '#fff', background: 'var(--primary)', border: 'none',
+                  cursor: 'pointer', opacity: submitting ? 0.6 : 1,
+                  alignSelf: 'flex-start', boxShadow: '0 2px 6px rgba(29,99,193,0.25)',
+                }}>
+                  {submitting ? 'Submitting…' : 'Submit Request'}
+                </button>
+              </form>
+            )}
+          </div>
+        </>
       )}
     </div>
   )

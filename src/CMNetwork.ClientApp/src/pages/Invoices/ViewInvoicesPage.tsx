@@ -3,20 +3,46 @@ import { customerPortalService, type CustomerInvoicesResponse } from '../../serv
 
 type Tab = 'all' | 'pay'
 
-const badge = (status: string) => {
-  const map: Record<string, [string, string]> = {
-    Paid: ['#dcfce7', '#166534'],
-    Pending: ['#fef9c3', '#854d0e'],
-    Overdue: ['#fee2e2', '#991b1b'],
-    Draft: ['#f3f4f6', '#374151'],
-  }
-  const [bg, color] = map[status] ?? ['#f3f4f6', '#374151']
+// ─── Shared helpers ───────────────────────────────────────────────────────────
+const STATUS_MAP: Record<string, { bg: string; text: string; border: string }> = {
+  Paid:    { bg: '#f0fdf4', text: '#166534', border: '#bbf7d0' },
+  Pending: { bg: '#fefce8', text: '#854d0e', border: '#fde68a' },
+  Overdue: { bg: '#fef2f2', text: '#991b1b', border: '#fecaca' },
+  Draft:   { bg: '#f9fafb', text: '#374151', border: '#e5e7eb' },
+}
+
+const StatusBadge = ({ status }: { status: string }) => {
+  const s = STATUS_MAP[status] ?? STATUS_MAP.Draft
   return (
-    <span className="px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: bg, color }}>
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+      letterSpacing: '0.02em', textTransform: 'uppercase' as const,
+      background: s.bg, color: s.text, border: `1px solid ${s.border}`,
+      whiteSpace: 'nowrap' as const,
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: s.text, display: 'inline-block', flexShrink: 0 }} />
       {status}
     </span>
   )
 }
+
+const SectionRule = ({ label }: { label: string }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+    <span style={{ width: 3, height: 14, borderRadius: 2, background: 'var(--primary)', display: 'block', flexShrink: 0 }} />
+    <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>{label}</p>
+  </div>
+)
+
+const THCell = ({ children, right }: { children: React.ReactNode; right?: boolean }) => (
+  <th style={{
+    padding: '10px 16px', fontSize: 11, fontWeight: 700, color: 'var(--muted)',
+    textTransform: 'uppercase' as const, letterSpacing: '0.06em',
+    textAlign: right ? 'right' : 'left', whiteSpace: 'nowrap' as const,
+  }}>
+    {children}
+  </th>
+)
 
 const ViewInvoicesPage: React.FC = () => {
   const [tab, setTab] = useState<Tab>('all')
@@ -40,7 +66,6 @@ const ViewInvoicesPage: React.FC = () => {
         setLoading(false)
       }
     }
-
     fetchInvoices()
   }, [])
 
@@ -51,43 +76,30 @@ const ViewInvoicesPage: React.FC = () => {
   }
 
   const handlePayment = async () => {
-    if (!data || selectedInvoices.length === 0) {
-      setError('Please select at least one invoice to pay.')
-      return
-    }
-
+    if (!data || selectedInvoices.length === 0) { setError('Please select at least one invoice to pay.'); return }
     try {
-      setProcessing(true)
-      setError(null)
-      const totalAmount = data.invoices
-        .filter((inv) => selectedInvoices.includes(inv.id))
-        .reduce((sum, inv) => sum + inv.totalAmount, 0)
-
+      setProcessing(true); setError(null)
+      const totalAmount = data.invoices.filter((inv) => selectedInvoices.includes(inv.id)).reduce((sum, inv) => sum + inv.totalAmount, 0)
       const result = await customerPortalService.createPaymentIntent(selectedInvoices, totalAmount)
       globalThis.location.href = result.redirectUrl
     } catch (err) {
       setError('Unable to process payment. Please try again.')
       console.error('Error processing payment:', err)
-    } finally {
-      setProcessing(false)
-    }
+    } finally { setProcessing(false) }
   }
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-1/4" />
-          <div className="h-64 bg-gray-200 rounded-xl" />
-        </div>
+      <div style={{ padding: '24px 28px', maxWidth: 900, margin: '0 auto' }}>
+        {[60, 200].map((h, i) => <div key={i} style={{ height: h, background: '#f1f5f9', borderRadius: 8, marginBottom: 16, opacity: 1 - i * 0.3 }} />)}
       </div>
     )
   }
 
   if (!data) {
     return (
-      <div className="p-6">
-        <div className="px-4 py-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200">
+      <div style={{ padding: '24px 28px' }}>
+        <div style={{ padding: '10px 14px', borderRadius: 7, fontSize: 13, background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
           {error ?? 'No invoice data available.'}
         </div>
       </div>
@@ -95,20 +107,19 @@ const ViewInvoicesPage: React.FC = () => {
   }
 
   const pendingInvoices = data.invoices.filter((inv) => inv.status !== 'Paid')
-  const totalSelected = data.invoices
-    .filter((inv) => selectedInvoices.includes(inv.id))
-    .reduce((sum, inv) => sum + inv.totalAmount, 0)
+  const totalSelected = data.invoices.filter((inv) => selectedInvoices.includes(inv.id)).reduce((sum, inv) => sum + inv.totalAmount, 0)
 
-  const tabBtn = (id: Tab, label: string) => (
+  const TabBtn = ({ id, label }: { id: Tab; label: string }) => (
     <button
       type="button"
       onClick={() => setTab(id)}
-      className="px-5 py-2 rounded-lg text-sm font-medium transition-all"
       style={{
-        background: tab === id ? 'var(--card-bg)' : 'transparent',
+        padding: '8px 18px', borderRadius: 7, fontSize: 13, fontWeight: tab === id ? 600 : 500,
         color: tab === id ? 'var(--primary)' : 'var(--muted)',
+        background: tab === id ? 'var(--card-bg)' : 'transparent',
         boxShadow: tab === id ? 'var(--shadow)' : 'none',
-        fontWeight: tab === id ? 600 : 400,
+        border: tab === id ? '1px solid var(--border)' : '1px solid transparent',
+        cursor: 'pointer', transition: 'all 0.15s',
       }}
     >
       {label}
@@ -116,137 +127,141 @@ const ViewInvoicesPage: React.FC = () => {
   )
 
   return (
-    <div className="p-6 space-y-5 max-w-5xl">
-      <div className="rounded-2xl p-5" style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
-        <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--text)' }}>
-          Invoices
-        </h1>
-        <p className="text-sm mt-2" style={{ color: 'var(--muted)' }}>
-          {data.customerName} · {data.customerCode} — View and manage all your invoices in one place.
+    <div style={{ padding: '24px 28px', maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* Header */}
+      <div style={{
+        background: 'var(--card-bg)', border: '1px solid var(--border)',
+        borderRadius: 10, padding: '18px 24px', boxShadow: 'var(--shadow)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <span style={{ width: 4, height: 26, borderRadius: 2, background: 'var(--primary)', display: 'block', flexShrink: 0 }} />
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em' }}>Invoices</h1>
+        </div>
+        <p style={{ margin: '0 0 0 14px', fontSize: 12, color: 'var(--muted)' }}>
+          {data.customerName} · {data.customerCode} — View and manage all your invoices.
         </p>
       </div>
 
       {error && (
-        <div className="px-4 py-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200">{error}</div>
-      )}
-
-      {/* Tab bar */}
-      <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: 'var(--surface-container)' }}>
-        {tabBtn('all', 'All Invoices')}
-        {tabBtn('pay', `Pay Invoices${pendingInvoices.length > 0 ? ` (${pendingInvoices.length})` : ''}`)}
-      </div>
-
-      {/* All invoices tab */}
-      {tab === 'all' && (
-        <div
-          className="rounded-xl overflow-hidden"
-          style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}
-        >
-          {data.invoices.length === 0 ? (
-            <div className="px-6 py-12 text-center" style={{ color: 'var(--muted)' }}>
-              No invoices found.
-            </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ background: 'var(--surface-container)', borderBottom: '1px solid var(--border)' }}>
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Invoice #</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Date</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Due Date</th>
-                  <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Amount</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.invoices.map((invoice, i) => (
-                  <tr
-                    key={invoice.id}
-                    style={{ borderTop: i === 0 ? 'none' : '1px solid var(--border)' }}
-                  >
-                    <td className="px-5 py-3.5 font-medium" style={{ color: 'var(--primary)' }}>{invoice.invoiceNumber}</td>
-                    <td className="px-5 py-3.5" style={{ color: 'var(--muted)' }}>{new Date(invoice.invoiceDate).toLocaleDateString()}</td>
-                    <td className="px-5 py-3.5" style={{ color: 'var(--muted)' }}>{new Date(invoice.dueDate).toLocaleDateString()}</td>
-                    <td className="px-5 py-3.5 text-right font-semibold" style={{ color: 'var(--text)' }}>${invoice.totalAmount.toFixed(2)}</td>
-                    <td className="px-5 py-3.5">{badge(invoice.status)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+        <div style={{ padding: '10px 14px', borderRadius: 7, fontSize: 13, background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
+          {error}
         </div>
       )}
 
-      {/* Pay invoices tab */}
-      {tab === 'pay' && (
-        <div className="space-y-4">
-          {pendingInvoices.length === 0 ? (
-            <div
-              className="rounded-xl px-6 py-12 text-center"
-              style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', color: 'var(--muted)' }}
-            >
-              All invoices are paid. No pending payments.
-            </div>
-          ) : (
-            <>
-              <div
-                className="rounded-xl overflow-hidden"
-                style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}
-              >
-                <table className="w-full text-sm">
+      {/* Tab bar */}
+      <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 9, width: 'fit-content', background: 'var(--surface-container)' }}>
+        <TabBtn id="all" label="All Invoices" />
+        <TabBtn id="pay" label={`Pay Invoices${pendingInvoices.length > 0 ? ` (${pendingInvoices.length})` : ''}`} />
+      </div>
+
+      {/* All invoices */}
+      {tab === 'all' && (
+        <>
+          <SectionRule label="Invoice Register" />
+          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: 'var(--shadow)', overflow: 'hidden' }}>
+            {data.invoices.length === 0 ? (
+              <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>No invoices found.</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
-                    <tr style={{ background: 'var(--surface-container)', borderBottom: '1px solid var(--border)' }}>
-                      <th className="px-5 py-3 w-10" />
-                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Invoice #</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Due Date</th>
-                      <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Amount</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Status</th>
+                    <tr style={{ background: 'var(--surface-container)', borderBottom: '2px solid var(--border)' }}>
+                      <THCell>Invoice #</THCell>
+                      <THCell>Issue Date</THCell>
+                      <THCell>Due Date</THCell>
+                      <THCell right>Amount</THCell>
+                      <THCell>Status</THCell>
                     </tr>
                   </thead>
                   <tbody>
-                    {pendingInvoices.map((invoice, i) => (
-                      <tr
-                        key={invoice.id}
-                        style={{
-                          borderTop: i === 0 ? 'none' : '1px solid var(--border)',
-                          background: selectedInvoices.includes(invoice.id) ? 'rgba(29,99,193,0.04)' : undefined,
-                        }}
-                      >
-                        <td className="px-5 py-3.5 text-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedInvoices.includes(invoice.id)}
-                            onChange={() => handleSelectInvoice(invoice.id)}
-                            className="w-4 h-4 rounded accent-blue-600"
-                          />
-                        </td>
-                        <td className="px-5 py-3.5 font-medium" style={{ color: 'var(--primary)' }}>{invoice.invoiceNumber}</td>
-                        <td className="px-5 py-3.5" style={{ color: 'var(--muted)' }}>{new Date(invoice.dueDate).toLocaleDateString()}</td>
-                        <td className="px-5 py-3.5 text-right font-semibold" style={{ color: 'var(--text)' }}>${invoice.totalAmount.toFixed(2)}</td>
-                        <td className="px-5 py-3.5">{badge(invoice.status)}</td>
+                    {data.invoices.map((invoice, i) => (
+                      <tr key={invoice.id} style={{ borderTop: i === 0 ? 'none' : '1px solid var(--border)', background: i % 2 === 0 ? 'var(--card-bg)' : 'var(--surface-container)' }}>
+                        <td style={{ padding: '10px 16px', fontWeight: 600, color: 'var(--primary)', fontFamily: 'monospace', fontSize: 12 }}>{invoice.invoiceNumber}</td>
+                        <td style={{ padding: '10px 16px', color: 'var(--muted)' }}>{new Date(invoice.invoiceDate).toLocaleDateString()}</td>
+                        <td style={{ padding: '10px 16px', color: 'var(--muted)' }}>{new Date(invoice.dueDate).toLocaleDateString()}</td>
+                        <td style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${invoice.totalAmount.toFixed(2)}</td>
+                        <td style={{ padding: '10px 16px' }}><StatusBadge status={invoice.status} /></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Pay invoices */}
+      {tab === 'pay' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {pendingInvoices.length === 0 ? (
+            <div style={{ padding: '48px 24px', textAlign: 'center', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--muted)', fontSize: 13 }}>
+              All invoices are paid. No pending payments.
+            </div>
+          ) : (
+            <>
+              <SectionRule label="Pending Invoices" />
+              <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: 'var(--shadow)', overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: 'var(--surface-container)', borderBottom: '2px solid var(--border)' }}>
+                        <th style={{ width: 40, padding: '10px 16px' }} />
+                        <THCell>Invoice #</THCell>
+                        <THCell>Due Date</THCell>
+                        <THCell right>Amount</THCell>
+                        <THCell>Status</THCell>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingInvoices.map((invoice, i) => {
+                        const isSelected = selectedInvoices.includes(invoice.id)
+                        return (
+                          <tr key={invoice.id} style={{
+                            borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                            background: isSelected ? 'color-mix(in srgb, var(--primary) 4%, white)' : i % 2 === 0 ? 'var(--card-bg)' : 'var(--surface-container)',
+                          }}>
+                            <td style={{ padding: '10px 16px', textAlign: 'center' }}>
+                              <input type="checkbox" checked={isSelected} onChange={() => handleSelectInvoice(invoice.id)}
+                                style={{ width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--primary)' }} />
+                            </td>
+                            <td style={{ padding: '10px 16px', fontWeight: 600, color: 'var(--primary)', fontFamily: 'monospace', fontSize: 12 }}>{invoice.invoiceNumber}</td>
+                            <td style={{ padding: '10px 16px', color: 'var(--muted)' }}>{new Date(invoice.dueDate).toLocaleDateString()}</td>
+                            <td style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${invoice.totalAmount.toFixed(2)}</td>
+                            <td style={{ padding: '10px 16px' }}><StatusBadge status={invoice.status} /></td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
               {/* Payment summary */}
-              <div
-                className="rounded-xl px-6 py-5 flex items-center justify-between gap-6"
-                style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}
-              >
+              <div style={{
+                background: 'var(--card-bg)', border: '1px solid var(--border)',
+                borderRadius: 10, padding: '18px 24px', boxShadow: 'var(--shadow)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
+              }}>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--muted)' }}>
+                  <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                     {selectedInvoices.length > 0 ? `${selectedInvoices.length} invoice(s) selected` : 'Select invoices above'}
                   </p>
-                  <p className="text-2xl font-bold mt-1" style={{ color: 'var(--text)' }}>
+                  <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
                     ${totalSelected.toFixed(2)}
                   </p>
                 </div>
                 <button
                   onClick={handlePayment}
                   disabled={processing || selectedInvoices.length === 0}
-                  className="px-6 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 transition-opacity"
-                  style={{ background: 'var(--primary)' }}
+                  style={{
+                    padding: '10px 24px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                    color: '#fff', background: 'var(--primary)', border: 'none',
+                    cursor: selectedInvoices.length === 0 ? 'default' : 'pointer',
+                    opacity: (processing || selectedInvoices.length === 0) ? 0.6 : 1,
+                    boxShadow: '0 2px 6px rgba(29,99,193,0.25)',
+                  }}
                 >
                   {processing ? 'Processing…' : 'Proceed to Payment'}
                 </button>
