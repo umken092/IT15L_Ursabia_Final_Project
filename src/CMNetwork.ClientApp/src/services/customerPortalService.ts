@@ -183,8 +183,8 @@ export const customerPortalService = {
 
   // Budget operations
   async getMyBudgets(): Promise<Budget[]> {
-    const response = await apiClient.get<Budget[]>('/customer/budgets')
-    return response.data
+    const response = await apiClient.get<{ budgets: Budget[] }>('/customer/budgets')
+    return Array.isArray(response.data) ? response.data : (response.data?.budgets ?? [])
   },
 
   async requestBudgetAdjustment(request: BudgetAdjustmentRequest): Promise<{ message: string; adjustmentId: string }> {
@@ -194,8 +194,8 @@ export const customerPortalService = {
 
   // Expense Claims operations
   async getMyExpenseClaims(): Promise<ExpenseClaim[]> {
-    const response = await apiClient.get<ExpenseClaim[]>('/customer/expense-claims')
-    return response.data
+    const response = await apiClient.get<{ claims: ExpenseClaim[] } | ExpenseClaim[]>('/customer/expense-claims')
+    return Array.isArray(response.data) ? response.data : ((response.data as { claims: ExpenseClaim[] })?.claims ?? [])
   },
 
   async submitExpenseClaim(claim: SubmitExpenseClaimRequest): Promise<{ message: string; claimId: string }> {
@@ -216,25 +216,25 @@ export const customerPortalService = {
 
   // Approvals operations
   async getPendingApprovals(): Promise<Approval[]> {
-    const response = await apiClient.get<Approval[]>('/customer/approvals/pending')
-    return response.data
+    const response = await apiClient.get<{ approvals: Approval[] } | Approval[]>('/customer/approvals/pending')
+    return Array.isArray(response.data) ? response.data : ((response.data as { approvals: Approval[] })?.approvals ?? [])
   },
 
   async getApprovedRequests(): Promise<Approval[]> {
-    const response = await apiClient.get<Approval[]>('/customer/approvals/approved')
-    return response.data
+    const response = await apiClient.get<{ approvals: Approval[] } | Approval[]>('/customer/approvals/approved')
+    return Array.isArray(response.data) ? response.data : ((response.data as { approvals: Approval[] })?.approvals ?? [])
   },
 
   // Reports operations
   async getFinancialReports(): Promise<FinancialReport[]> {
-    const response = await apiClient.get<FinancialReport[]>('/customer/reports/financial')
-    return response.data
+    const response = await apiClient.get<{ reports: FinancialReport[] } | FinancialReport[]>('/customer/reports/financial')
+    return Array.isArray(response.data) ? response.data : ((response.data as { reports: FinancialReport[] })?.reports ?? [])
   },
 
   // Support operations
   async getMyTickets(): Promise<SupportTicket[]> {
-    const response = await apiClient.get<SupportTicket[]>('/customer/support/tickets')
-    return response.data
+    const response = await apiClient.get<{ tickets: SupportTicket[] } | SupportTicket[]>('/customer/support/tickets')
+    return Array.isArray(response.data) ? response.data : ((response.data as { tickets: SupportTicket[] })?.tickets ?? [])
   },
 
   async createSupportTicket(subject: string, description: string, priority: string): Promise<{ message: string; ticketId: string }> {
@@ -247,8 +247,8 @@ export const customerPortalService = {
   },
 
   async getFAQs(): Promise<FAQ[]> {
-    const response = await apiClient.get<FAQ[]>('/customer/support/faqs')
-    return response.data
+    const response = await apiClient.get<{ faqs: FAQ[] } | FAQ[]>('/customer/support/faqs')
+    return Array.isArray(response.data) ? response.data : ((response.data as { faqs: FAQ[] })?.faqs ?? [])
   },
 }
 
