@@ -1,4 +1,4 @@
-import { type ReactElement, useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   customerPortalService,
@@ -147,193 +147,217 @@ export const CustomerPortalModule = () => {
     .filter((inv) => selectedInvoiceIds.includes(inv.id))
     .reduce((sum, inv) => sum + inv.totalAmount, 0)
 
-  let invoiceTableContent: ReactElement
-  if (loading) {
-    invoiceTableContent = <p style={{ color: '#6b7280', textAlign: 'center', padding: 40 }}>Loading invoices…</p>
-  } else if (filteredInvoices.length === 0) {
-    invoiceTableContent = <p style={{ color: '#6b7280', textAlign: 'center', padding: 40 }}>No invoices match your filter.</p>
-  } else {
-    invoiceTableContent = (
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid #e5e7eb', textAlign: 'left' }}>
-              <th style={{ padding: '10px 12px', color: '#6b7280', fontWeight: 600, textAlign: 'center' }}>Pay</th>
-              <th style={{ padding: '10px 12px', color: '#6b7280', fontWeight: 600 }}>Invoice #</th>
-              <th style={{ padding: '10px 12px', color: '#6b7280', fontWeight: 600 }}>Date</th>
-              <th style={{ padding: '10px 12px', color: '#6b7280', fontWeight: 600 }}>Due Date</th>
-              <th style={{ padding: '10px 12px', color: '#6b7280', fontWeight: 600, textAlign: 'right' }}>Amount</th>
-              <th style={{ padding: '10px 12px', color: '#6b7280', fontWeight: 600, textAlign: 'center' }}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredInvoices.map((inv, idx) => (
-              <tr
-                key={inv.id}
-                style={{
-                  borderBottom: '1px solid #f3f4f6',
-                  background: idx % 2 === 0 ? '#fff' : '#fafafa',
-                }}
-              >
-                <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                  {payableStatus.has(inv.status) ? (
-                    <input
-                      type="checkbox"
-                      checked={selectedInvoiceIds.includes(inv.id)}
-                      onChange={(e) => toggleInvoiceSelection(inv.id, e.target.checked)}
-                    />
-                  ) : (
-                    <span style={{ color: '#9ca3af', fontSize: 12 }}>-</span>
-                  )}
-                </td>
-                <td style={{ padding: '10px 12px', fontWeight: 600, color: '#1d4ed8' }}>
-                  {inv.invoiceNumber}
-                </td>
-                <td style={{ padding: '10px 12px', color: '#374151' }}>{inv.invoiceDate}</td>
-                <td style={{ padding: '10px 12px', color: '#374151' }}>{inv.dueDate}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>
-                  {formatCurrency(inv.totalAmount)}
-                </td>
-                <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                  <StatusBadge status={inv.status} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    )
-  }
-
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount)
 
   return (
-    <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
+    <div className="p-6 max-w-4xl mx-auto space-y-5">
+
+      {/* ── Page header ───────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Customer Portal</h1>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text)' }}>Customer Portal</h1>
           {data && (
-            <p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: 14 }}>
+            <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
               {data.customerName} · {data.customerCode}
             </p>
           )}
         </div>
         <button
+          type="button"
           onClick={() => { void handleDownloadStatement() }}
           disabled={downloadingStatement || loading}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '8px 16px',
-            borderRadius: 8,
-            border: 'none',
-            background: '#1d4ed8',
-            color: '#fff',
-            fontWeight: 600,
-            fontSize: 14,
-            cursor: downloadingStatement ? 'not-allowed' : 'pointer',
-            opacity: downloadingStatement ? 0.7 : 1,
-          }}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-60 transition-opacity flex-shrink-0"
+          style={{ background: 'var(--primary)' }}
         >
-          {downloadingStatement ? '⏳ Generating…' : '⬇ Download Statement (PDF)'}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          {downloadingStatement ? 'Generating…' : 'Download Statement (PDF)'}
         </button>
       </div>
 
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 13, color: '#374151' }}>
-          Selected for payment: <strong>{selectedInvoiceIds.length}</strong>
-          {selectedInvoiceIds.length > 0 && <> · <strong>{formatCurrency(selectedTotal)}</strong></>}
-        </div>
-        <button
-          onClick={() => { void handlePayNow() }}
-          disabled={startingPayment || selectedInvoiceIds.length === 0}
-          style={{
-            border: 'none',
-            borderRadius: 8,
-            background: selectedInvoiceIds.length === 0 ? '#9ca3af' : '#16a34a',
-            color: '#fff',
-            padding: '8px 14px',
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: selectedInvoiceIds.length === 0 ? 'not-allowed' : 'pointer',
-          }}
+      {/* ── Stat cards ────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Total Invoices */}
+        <div
+          className="flex items-center gap-5 rounded-2xl p-6"
+          style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}
         >
-          {startingPayment ? 'Redirecting to PayMongo...' : 'Pay Selected Invoices'}
-        </button>
-      </div>
-
-      {/* Summary card */}
-      <div
-        style={{
-          background: '#eff6ff',
-          border: '1px solid #bfdbfe',
-          borderRadius: 12,
-          padding: '16px 20px',
-          marginBottom: 24,
-          display: 'flex',
-          gap: 40,
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>
-            Total Invoices
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0"
+            style={{ background: 'var(--primary)' }}
+          >
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+            </svg>
           </div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: '#1e3a8a' }}>
-            {loading ? '—' : (data?.invoices.length ?? 0)}
+          <div>
+            <p className="text-sm font-medium" style={{ color: 'var(--muted)' }}>Total Invoices</p>
+            <p className="text-3xl font-bold mt-0.5" style={{ color: 'var(--text)' }}>
+              {loading ? '—' : (data?.invoices.length ?? 0)}
+            </p>
           </div>
         </div>
-        <div>
-          <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>
-            Outstanding Balance
-          </div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: outstanding > 0 ? '#dc2626' : '#16a34a' }}>
-            {loading ? '—' : formatCurrency(outstanding)}
-          </div>
-        </div>
-      </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-        <input
-          type="text"
-          placeholder="Search invoice number…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{
-            padding: '8px 12px',
-            borderRadius: 8,
-            border: '1px solid #d1d5db',
-            fontSize: 14,
-            flex: '1 1 200px',
-          }}
-        />
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {allStatuses.map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              style={{
-                padding: '6px 14px',
-                borderRadius: 20,
-                border: `1px solid ${statusFilter === s ? '#1d4ed8' : '#d1d5db'}`,
-                background: statusFilter === s ? '#1d4ed8' : '#fff',
-                color: statusFilter === s ? '#fff' : '#374151',
-                fontSize: 13,
-                fontWeight: 500,
-                cursor: 'pointer',
-              }}
+        {/* Outstanding Balance */}
+        <div
+          className="flex items-center gap-5 rounded-2xl p-6"
+          style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}
+        >
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0"
+            style={{ background: 'var(--primary)' }}
+          >
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-medium" style={{ color: 'var(--muted)' }}>Outstanding Balance</p>
+            <p
+              className="text-3xl font-bold mt-0.5"
+              style={{ color: loading ? 'var(--text)' : outstanding > 0 ? '#dc2626' : '#059669' }}
             >
-              {s}
-            </button>
-          ))}
+              {loading ? '—' : formatCurrency(outstanding)}
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Invoice table */}
-      {invoiceTableContent}
+      {/* ── Filters ───────────────────────────────────────────── */}
+      <div
+        className="rounded-2xl overflow-hidden"
+        style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}
+      >
+        <div className="flex flex-wrap items-center gap-3 p-4" style={{ borderBottom: '1px solid var(--border)' }}>
+          {/* Search */}
+          <div className="relative flex-1 min-w-48">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--muted)' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </span>
+            <input
+              type="text"
+              placeholder="Search invoice number..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 rounded-full text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              style={{ borderColor: 'var(--border)', color: 'var(--text)', background: 'var(--surface-container)' }}
+            />
+          </div>
+
+          {/* Status pills */}
+          <div className="flex flex-wrap gap-2">
+            {allStatuses.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStatusFilter(s)}
+                className="px-4 py-1.5 rounded-full text-sm font-medium transition-all"
+                style={{
+                  background: statusFilter === s ? 'var(--primary)' : 'var(--card-bg)',
+                  color: statusFilter === s ? '#fff' : 'var(--text)',
+                  border: `1px solid ${statusFilter === s ? 'var(--primary)' : 'var(--border)'}`,
+                }}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+
+          {/* Pay button */}
+          <button
+            type="button"
+            onClick={() => { void handlePayNow() }}
+            disabled={startingPayment || selectedInvoiceIds.length === 0}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 transition-opacity flex-shrink-0"
+            style={{ background: selectedInvoiceIds.length === 0 ? 'var(--muted)' : 'var(--primary)' }}
+          >
+            {startingPayment ? 'Redirecting…' : 'Pay Selected Invoices'}
+          </button>
+        </div>
+
+        {/* ── Invoice content ──────────────────────────────────── */}
+        {loading ? (
+          <div className="animate-pulse space-y-3 p-6">
+            <div className="h-10 bg-gray-200 rounded" />
+            <div className="h-10 bg-gray-200 rounded" />
+            <div className="h-10 bg-gray-200 rounded" />
+          </div>
+        ) : filteredInvoices.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 px-6">
+            {/* Folder illustration */}
+            <svg width="120" height="100" viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="10" y="30" width="100" height="62" rx="6" fill="#e0e7ef" stroke="#b0bec5" strokeWidth="1.5"/>
+              <path d="M10 36a6 6 0 0 1 6-6h28l8 10H104a6 6 0 0 1 6 6v2H10V36z" fill="#b0c4d8" stroke="#b0bec5" strokeWidth="1.5"/>
+              <rect x="30" y="48" width="60" height="8" rx="3" fill="#fff" opacity=".7"/>
+              <rect x="30" y="62" width="44" height="8" rx="3" fill="#fff" opacity=".5"/>
+              <rect x="30" y="76" width="52" height="8" rx="3" fill="#fff" opacity=".4"/>
+            </svg>
+            <p className="mt-4 text-sm font-medium" style={{ color: 'var(--muted)' }}>No invoices match your filter.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                  <th className="px-4 py-3 text-center font-semibold" style={{ color: 'var(--muted)' }}>Pay</th>
+                  <th className="px-4 py-3 text-left font-semibold" style={{ color: 'var(--muted)' }}>Invoice #</th>
+                  <th className="px-4 py-3 text-left font-semibold" style={{ color: 'var(--muted)' }}>Date</th>
+                  <th className="px-4 py-3 text-left font-semibold" style={{ color: 'var(--muted)' }}>Due Date</th>
+                  <th className="px-4 py-3 text-right font-semibold" style={{ color: 'var(--muted)' }}>Amount</th>
+                  <th className="px-4 py-3 text-center font-semibold" style={{ color: 'var(--muted)' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredInvoices.map((inv, idx) => (
+                  <tr
+                    key={inv.id}
+                    style={{
+                      borderBottom: '1px solid var(--border)',
+                      background: idx % 2 === 0 ? 'var(--card-bg)' : 'var(--surface-container)',
+                    }}
+                  >
+                    <td className="px-4 py-3 text-center">
+                      {payableStatus.has(inv.status) ? (
+                        <input
+                          type="checkbox"
+                          checked={selectedInvoiceIds.includes(inv.id)}
+                          onChange={(e) => toggleInvoiceSelection(inv.id, e.target.checked)}
+                          className="w-4 h-4 rounded accent-blue-600"
+                        />
+                      ) : (
+                        <span className="text-xs" style={{ color: 'var(--muted)' }}>—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 font-semibold" style={{ color: 'var(--primary)' }}>{inv.invoiceNumber}</td>
+                    <td className="px-4 py-3" style={{ color: 'var(--text)' }}>{inv.invoiceDate}</td>
+                    <td className="px-4 py-3" style={{ color: 'var(--text)' }}>{inv.dueDate}</td>
+                    <td className="px-4 py-3 text-right font-semibold" style={{ color: 'var(--text)' }}>{formatCurrency(inv.totalAmount)}</td>
+                    <td className="px-4 py-3 text-center">
+                      <StatusBadge status={inv.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Selected summary footer */}
+        {selectedInvoiceIds.length > 0 && (
+          <div
+            className="flex items-center justify-between px-5 py-3 text-sm"
+            style={{ borderTop: '1px solid var(--border)', background: '#eff6ff', color: 'var(--text)' }}
+          >
+            <span>
+              <strong>{selectedInvoiceIds.length}</strong> invoice{selectedInvoiceIds.length > 1 ? 's' : ''} selected
+            </span>
+            <span className="font-bold" style={{ color: 'var(--primary)' }}>
+              Total: {formatCurrency(selectedTotal)}
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
