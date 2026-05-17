@@ -24,11 +24,14 @@ public class JwtTokenService
     {
         var roles = await _userManager.GetRolesAsync(user);
         var primaryRole = roles.FirstOrDefault() ?? "employee";
+        var safeEmail = string.IsNullOrWhiteSpace(user.Email)
+            ? (string.IsNullOrWhiteSpace(user.UserName) ? $"user-{user.Id}@cmnetwork.local" : user.UserName)
+            : user.Email;
 
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub,   user.Id.ToString()),
-            new(JwtRegisteredClaimNames.Email, user.Email!),
+            new(JwtRegisteredClaimNames.Email, safeEmail),
             new(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString()),
             new("fullName",     user.FullName),
             new("role",         primaryRole),

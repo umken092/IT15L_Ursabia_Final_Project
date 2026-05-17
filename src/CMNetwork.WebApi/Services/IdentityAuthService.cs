@@ -308,11 +308,53 @@ public class IdentityAuthService : IAuthService
             return false;
         }
 
-        var customer = await _db.Customers
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == user.CustomerId.Value);
+        try
+        {
+            var customer = await _db.Customers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == user.CustomerId.Value);
 
-        return customer is not null && !customer.RegistrationOtpVerified;
+            return customer is not null && !customer.RegistrationOtpVerified;
+        }
+        catch (Exception ex)
+        {
+            // Compatibility fallback for environments where Customer schema lags behind code.
+            _logger.LogWarning(ex, "Customer OTP check fallback used for user {UserId}", user.Id);
+
+            var legacyCustomer = await _db.Customers.FromSqlRaw(@"
+SELECT
+    Id,
+    CustomerCode,
+    Name,
+    ContactPerson,
+    Email,
+    PhoneNumber,
+    Address,
+    City,
+    [State],
+    PostalCode,
+    Country,
+    TaxId,
+    PaymentTerms,
+    CreditLimit,
+    IsActive,
+    CreatedUtc,
+    LastUpdatedUtc,
+    RegistrationOtp,
+    RegistrationOtpGeneratedUtc,
+    RegistrationOtpVerified,
+    CAST(NULL AS nvarchar(32)) AS TIN,
+    CAST(NULL AS nvarchar(32)) AS SSS,
+    CAST(NULL AS nvarchar(128)) AS BankAccount,
+    CAST(NULL AS nvarchar(128)) AS BankName,
+    CAST(0 AS int) AS BankVerificationStatus,
+    CAST(NULL AS datetime2) AS BankVerifiedAtUtc
+FROM Customers")
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == user.CustomerId.Value);
+
+            return legacyCustomer is not null && !legacyCustomer.RegistrationOtpVerified;
+        }
     }
 
     private static string GenerateQrCodeUri(string email, string key)
