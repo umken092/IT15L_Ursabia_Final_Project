@@ -382,13 +382,31 @@ const ViewProfilePage: React.FC = () => {
                   <strong>Bank Verified:</strong> {loanAccess.isBankVerified ? <span style={{ color: '#059669' }}>Yes ✓</span> : <span style={{ color: '#dc2626' }}>No</span>}
                 </p>
               </div>
-              <p style={{ fontSize: 11, color: 'var(--muted)', margin: 0 }}>
+              <p style={{ fontSize: 11, color: 'var(--muted)', margin: '0 0 12px' }}>
                 {loanAccess.canAccessLoans
                   ? 'You can now access loan products.'
                   : loanAccess.profileCompletionPercentage < 80
                     ? `Complete ${100 - loanAccess.profileCompletionPercentage}% more of your profile to unlock loans.`
                     : 'Verify your bank account to access loans.'}
               </p>
+              {loanAccess.canAccessLoans && (
+                <button
+                  type="button"
+                  onClick={() => { window.location.href = '/module/loans' }}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    background: 'var(--primary)',
+                    color: '#fff',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  View Loans & Apply
+                </button>
+              )}
             </div>
           )}
 

@@ -49,6 +49,9 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
     public DbSet<FAQ> FAQs => Set<FAQ>();
     public DbSet<CustomerBudgetAdjustmentRequest> CustomerBudgetAdjustmentRequests => Set<CustomerBudgetAdjustmentRequest>();
+    public DbSet<CustomerLoanApplication> CustomerLoanApplications => Set<CustomerLoanApplication>();
+    public DbSet<CustomerLoan> CustomerLoans => Set<CustomerLoan>();
+    public DbSet<CustomerLoanPayment> CustomerLoanPayments => Set<CustomerLoanPayment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

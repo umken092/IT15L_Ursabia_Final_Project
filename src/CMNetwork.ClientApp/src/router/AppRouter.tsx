@@ -44,6 +44,9 @@ const FinancialReportsPage = lazy(() =>
 const ContactSupportPage = lazy(() =>
   import('../pages/Support/ContactSupportPage').then((m) => ({ default: m.default })),
 )
+const ViewLoansPage = lazy(() =>
+  import('../pages/Loans/ViewLoansPage').then((m) => ({ default: m.ViewLoansPage })),
+)
 
 const APP_TITLE = 'CMNetwork ERP'
 
@@ -222,6 +225,12 @@ export const AppRouter = () => {
             <Route path="/module/support" element={<ContactSupportPage />} />
             <Route path="/module/support/contact" element={<ContactSupportPage />} />
             <Route path="/module/support/faqs" element={<ContactSupportPage />} />
+
+            {/* Customer Loans Routes */}
+            <Route path="/module/loans" element={<ViewLoansPage />} />
+            <Route path="/module/loans/apply" element={<ViewLoansPage />} />
+            <Route path="/module/loans/active" element={<ViewLoansPage />} />
+            <Route path="/module/loans/applications" element={<ViewLoansPage />} />
           </Route>
         </Route>
 

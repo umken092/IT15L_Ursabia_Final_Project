@@ -250,9 +250,33 @@ export const customerPortalService = {
     return Array.isArray(response.data) ? response.data : ((response.data as { faqs: FAQ[] })?.faqs ?? [])
   },
 
-  // Loan access check
+  // Loan access check (100% profile + verified bank)
   async checkLoanAccess(): Promise<{ canAccessLoans: boolean; profileCompletionPercentage: number; isBankVerified: boolean; message: string }> {
     const response = await apiClient.get<{ canAccessLoans: boolean; profileCompletionPercentage: number; isBankVerified: boolean; message: string }>('/customer/loan-access-check')
+    return response.data
+  },
+
+  // Loan application
+  async applyForLoan(request: { requestedAmount: number; interestRate: number; termMonths: number; purpose: string }): Promise<{ message: string; applicationId: string; status: string }> {
+    const response = await apiClient.post<{ message: string; applicationId: string; status: string }>('/customer/loans/apply', request)
+    return response.data
+  },
+
+  // Get all loans and applications
+  async getMyLoans(): Promise<{ activeLoans: any[]; allLoans: any[]; pendingApplications: any[]; allApplications: any[] }> {
+    const response = await apiClient.get<{ activeLoans: any[]; allLoans: any[]; pendingApplications: any[]; allApplications: any[] }>('/customer/loans')
+    return response.data
+  },
+
+  // Get loan details
+  async getLoanDetail(loanId: string): Promise<any> {
+    const response = await apiClient.get(`/customer/loans/${loanId}`)
+    return response.data
+  },
+
+  // Get loan application status
+  async getApplicationDetail(applicationId: string): Promise<any> {
+    const response = await apiClient.get(`/customer/loans/applications/${applicationId}`)
     return response.data
   },
 }
