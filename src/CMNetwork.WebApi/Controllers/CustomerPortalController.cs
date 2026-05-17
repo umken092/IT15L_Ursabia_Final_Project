@@ -161,6 +161,31 @@ SELECT CASE
         });
     }
 
+    private async Task<bool> HasDemographicCustomerProfileColumnsAsync()
+    {
+        return await MemoryCache.GetOrCreateAsync("customer:demographic-profile-columns:v1", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            try
+            {
+                var query = @"
+SELECT CASE
+    WHEN EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'BirthDate')
+     AND EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'Age')
+     AND EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'Gender')
+     AND EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'MaritalStatus')
+    THEN 1 ELSE 0 END";
+
+                var hasColumns = await _dbContext.Database.SqlQueryRaw<int>(query).SingleAsync();
+                return hasColumns == 1;
+            }
+            catch
+            {
+                return false;
+            }
+        });
+    }
+
     [HttpGet("dashboard")]
     public async Task<IActionResult> GetDashboard()
     {
@@ -564,6 +589,7 @@ SELECT CASE
         }
 
         var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
+        var hasDemographicColumns = await HasDemographicCustomerProfileColumnsAsync();
 
         return Ok(new
         {
@@ -579,10 +605,10 @@ SELECT CASE
             country = customer.Country,
             postalCode = customer.PostalCode,
             zipCode = customer.PostalCode,
-            birthDate = customer.BirthDate,
-            age = customer.Age,
-            gender = customer.Gender,
-            maritalStatus = customer.MaritalStatus,
+            birthDate = hasDemographicColumns ? customer.BirthDate : null,
+            age = hasDemographicColumns ? customer.Age : null,
+            gender = hasDemographicColumns ? customer.Gender : null,
+            maritalStatus = hasDemographicColumns ? customer.MaritalStatus : null,
             tin = hasExtendedColumns ? customer.TIN : null,
             sss = hasExtendedColumns ? customer.SSS : null,
             bankAccount = hasExtendedColumns ? customer.BankAccount : null,
@@ -596,6 +622,7 @@ SELECT CASE
     public async Task<IActionResult> UpdateProfile([FromBody] UpdateCustomerProfileRequest request)
     {
         var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
+        var hasDemographicColumns = await HasDemographicCustomerProfileColumnsAsync();
 
         // On legacy schemas, extended columns do not exist yet.
         // Ignore extended field validation so profile updates do not fail with 400.
@@ -605,6 +632,10 @@ SELECT CASE
             ModelState.Remove(nameof(UpdateCustomerProfileRequest.SSS));
             ModelState.Remove(nameof(UpdateCustomerProfileRequest.BankAccount));
             ModelState.Remove(nameof(UpdateCustomerProfileRequest.BankName));
+        }
+
+        if (!hasDemographicColumns)
+        {
             ModelState.Remove(nameof(UpdateCustomerProfileRequest.BirthDate));
             ModelState.Remove(nameof(UpdateCustomerProfileRequest.Age));
             ModelState.Remove(nameof(UpdateCustomerProfileRequest.Gender));
@@ -645,6 +676,21 @@ SELECT CASE
         if (!string.IsNullOrWhiteSpace(postalCode))
             customer.PostalCode = postalCode;
 
+        if (hasDemographicColumns)
+        {
+            if (request.BirthDate.HasValue)
+                customer.BirthDate = request.BirthDate.Value;
+
+            if (request.Age.HasValue)
+                customer.Age = request.Age.Value;
+
+            if (!string.IsNullOrWhiteSpace(request.Gender))
+                customer.Gender = request.Gender;
+
+            if (!string.IsNullOrWhiteSpace(request.MaritalStatus))
+                customer.MaritalStatus = request.MaritalStatus;
+        }
+
         if (hasExtendedColumns)
         {
             if (request.TIN is not null)
@@ -659,17 +705,6 @@ SELECT CASE
             if (request.BankName is not null)
                 customer.BankName = string.IsNullOrWhiteSpace(request.BankName) ? null : request.BankName;
 
-            if (request.BirthDate.HasValue)
-                customer.BirthDate = request.BirthDate.Value;
-
-            if (request.Age.HasValue)
-                customer.Age = request.Age.Value;
-
-            if (!string.IsNullOrWhiteSpace(request.Gender))
-                customer.Gender = request.Gender;
-
-            if (!string.IsNullOrWhiteSpace(request.MaritalStatus))
-                customer.MaritalStatus = request.MaritalStatus;
         }
 
         customer.LastUpdatedUtc = DateTime.UtcNow;
@@ -690,10 +725,10 @@ SELECT CASE
             country = customer.Country,
             postalCode = customer.PostalCode,
             zipCode = customer.PostalCode,
-            birthDate = customer.BirthDate,
-            age = customer.Age,
-            gender = customer.Gender,
-            maritalStatus = customer.MaritalStatus,
+            birthDate = hasDemographicColumns ? customer.BirthDate : null,
+            age = hasDemographicColumns ? customer.Age : null,
+            gender = hasDemographicColumns ? customer.Gender : null,
+            maritalStatus = hasDemographicColumns ? customer.MaritalStatus : null,
             tin = hasExtendedColumns ? customer.TIN : null,
             sss = hasExtendedColumns ? customer.SSS : null,
             bankAccount = hasExtendedColumns ? customer.BankAccount : null,
@@ -702,7 +737,9 @@ SELECT CASE
             bankVerifiedAtUtc = hasExtendedColumns ? customer.BankVerifiedAtUtc : null,
             message = hasExtendedColumns
                 ? "Profile updated successfully"
-                : "Profile updated. Extended profile fields (TIN/SSS/Bank) will be available after database migration."
+                : hasDemographicColumns
+                    ? "Profile updated. TIN/SSS/Bank fields will be available after database migration."
+                    : "Profile updated. Demographic and extended profile fields will be available after database migration."
         });
     }
 
@@ -750,11 +787,17 @@ SELECT CASE
     public async Task<IActionResult> GetProfileSchemaHealth()
     {
         var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
+        var hasDemographicColumns = await HasDemographicCustomerProfileColumnsAsync();
 
         return Ok(new
         {
-            schema = hasExtendedColumns ? "extended" : "legacy",
+            schema = hasExtendedColumns && hasDemographicColumns
+                ? "extended"
+                : hasDemographicColumns
+                    ? "demographic-only"
+                    : "legacy",
             hasExtendedProfileColumns = hasExtendedColumns,
+            hasDemographicProfileColumns = hasDemographicColumns,
             requiredExtendedColumns = new[]
             {
                 "TIN",
@@ -763,9 +806,18 @@ SELECT CASE
                 "BankName",
                 "BankVerificationStatus"
             },
-            guidance = hasExtendedColumns
+            requiredDemographicColumns = new[]
+            {
+                "BirthDate",
+                "Age",
+                "Gender",
+                "MaritalStatus"
+            },
+            guidance = hasExtendedColumns && hasDemographicColumns
                 ? "Profile and loan-gating schema is in sync."
-                : "DB is running legacy Customers schema. Apply migration 20260518_AddProfileCompletionAndLoanAccess to enable TIN/SSS/Bank fields and full loan gating.",
+                : hasDemographicColumns
+                    ? "Demographic fields are enabled. Apply migration 20260518_AddProfileCompletionAndLoanAccess to enable TIN/SSS/Bank fields and full loan gating."
+                    : "DB is running legacy Customers schema. Apply migrations for demographic and extended profile columns.",
             checkedAtUtc = DateTime.UtcNow
         });
     }
