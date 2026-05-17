@@ -1,6 +1,17 @@
 import { apiClient } from './apiClient'
 import type { LoginCredentials, User } from '../types/auth'
 
+const isTransientLoginError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object' || !('response' in error)) {
+    return true
+  }
+
+  const status = (error as { response?: { status?: number } }).response?.status
+  return status === 502 || status === 503 || status === 504
+}
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 export interface VerifyCustomerOtpRequest {
   email: string
   otp: string
@@ -61,12 +72,27 @@ export interface RegisterCustomerRequest {
 
 export const authService = {
   login: async (credentials: LoginCredentials, recaptchaToken?: string): Promise<LoginApiResponse> => {
-    const { data } = await apiClient.post<LoginApiResponse>('/auth/login', {
-      email: credentials.email,
-      password: credentials.password,
-      recaptchaToken,
-    })
-    return data
+    try {
+      const { data } = await apiClient.post<LoginApiResponse>('/auth/login', {
+        email: credentials.email,
+        password: credentials.password,
+        recaptchaToken,
+      })
+      return data
+    } catch (error) {
+      // First click after deploy can hit cold-start/gateway hiccups.
+      if (!isTransientLoginError(error)) {
+        throw error
+      }
+
+      await delay(500)
+      const { data } = await apiClient.post<LoginApiResponse>('/auth/login', {
+        email: credentials.email,
+        password: credentials.password,
+        recaptchaToken,
+      })
+      return data
+    }
   },
 
   verifyMfa: async (email: string, code: string, mfaSessionToken: string): Promise<LoginApiResponse> => {
