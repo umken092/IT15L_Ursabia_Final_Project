@@ -151,23 +151,33 @@ export const CustomerPortalModule = () => {
     new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount)
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-5">
+    <div className="p-6 max-w-6xl mx-auto space-y-5">
 
       {/* ── Page header ───────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4">
+      <div
+        className="flex flex-wrap items-start justify-between gap-4 rounded-2xl p-5"
+        style={{
+          background: 'var(--card-bg)',
+          border: '1px solid var(--border)',
+          boxShadow: 'var(--shadow)',
+        }}
+      >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text)' }}>Customer Portal</h1>
+          <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--text)' }}>Customer Portal</h1>
           {data && (
             <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
               {data.customerName} · {data.customerCode}
             </p>
           )}
+          <p className="text-xs mt-2" style={{ color: 'var(--muted)' }}>
+            Track invoices, settle outstanding balances, and download statements in one place.
+          </p>
         </div>
         <button
           type="button"
           onClick={() => { void handleDownloadStatement() }}
           disabled={downloadingStatement || loading}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-60 transition-opacity flex-shrink-0"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-60 transition-opacity flex-shrink-0"
           style={{ background: 'var(--primary)' }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -179,8 +189,12 @@ export const CustomerPortalModule = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Total Invoices */}
         <div
-          className="flex items-center gap-5 rounded-2xl p-6"
-          style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}
+          className="flex items-center gap-5 rounded-2xl p-6 transition-transform duration-200 hover:-translate-y-0.5"
+          style={{
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border)',
+            boxShadow: 'var(--shadow)',
+          }}
         >
           <div
             className="w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0"
@@ -201,8 +215,12 @@ export const CustomerPortalModule = () => {
 
         {/* Outstanding Balance */}
         <div
-          className="flex items-center gap-5 rounded-2xl p-6"
-          style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}
+          className="flex items-center gap-5 rounded-2xl p-6 transition-transform duration-200 hover:-translate-y-0.5"
+          style={{
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border)',
+            boxShadow: 'var(--shadow)',
+          }}
         >
           <div
             className="w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0"
@@ -240,7 +258,7 @@ export const CustomerPortalModule = () => {
               placeholder="Search invoice number..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-full text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-9 pr-4 py-2.5 rounded-full text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               style={{ borderColor: 'var(--border)', color: 'var(--text)', background: 'var(--surface-container)' }}
             />
           </div>
@@ -257,6 +275,7 @@ export const CustomerPortalModule = () => {
                   background: statusFilter === s ? 'var(--primary)' : 'var(--card-bg)',
                   color: statusFilter === s ? '#fff' : 'var(--text)',
                   border: `1px solid ${statusFilter === s ? 'var(--primary)' : 'var(--border)'}`,
+
                 }}
               >
                 {s}
@@ -269,7 +288,7 @@ export const CustomerPortalModule = () => {
             type="button"
             onClick={() => { void handlePayNow() }}
             disabled={startingPayment || selectedInvoiceIds.length === 0}
-            className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 transition-opacity flex-shrink-0"
+            className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 transition-opacity flex-shrink-0"
             style={{ background: selectedInvoiceIds.length === 0 ? 'var(--muted)' : 'var(--primary)' }}
           >
             {startingPayment ? 'Redirecting…' : 'Pay Selected Invoices'}
@@ -299,7 +318,12 @@ export const CustomerPortalModule = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                <tr
+                  style={{
+                    borderBottom: '2px solid var(--border)',
+                    background: 'color-mix(in srgb, var(--primary) 6%, white)',
+                  }}
+                >
                   <th className="px-4 py-3 text-center font-semibold" style={{ color: 'var(--muted)' }}>Pay</th>
                   <th className="px-4 py-3 text-left font-semibold" style={{ color: 'var(--muted)' }}>Invoice #</th>
                   <th className="px-4 py-3 text-left font-semibold" style={{ color: 'var(--muted)' }}>Date</th>
@@ -312,6 +336,7 @@ export const CustomerPortalModule = () => {
                 {filteredInvoices.map((inv, idx) => (
                   <tr
                     key={inv.id}
+                    className="transition-colors"
                     style={{
                       borderBottom: '1px solid var(--border)',
                       background: idx % 2 === 0 ? 'var(--card-bg)' : 'var(--surface-container)',

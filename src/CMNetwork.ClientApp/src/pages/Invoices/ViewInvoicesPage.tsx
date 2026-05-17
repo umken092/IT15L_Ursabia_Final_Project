@@ -117,12 +117,12 @@ const ViewInvoicesPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-5 max-w-5xl">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text)' }}>
+      <div className="rounded-2xl p-5" style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' }}>
+        <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--text)' }}>
           Invoices
         </h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--muted)' }}>
-          {data.customerName} · {data.customerCode}
+        <p className="text-sm mt-2" style={{ color: 'var(--muted)' }}>
+          {data.customerName} · {data.customerCode} — View and manage all your invoices in one place.
         </p>
       </div>
 
