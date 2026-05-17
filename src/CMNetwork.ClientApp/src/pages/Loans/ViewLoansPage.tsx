@@ -71,12 +71,17 @@ export const ViewLoansPage = () => {
     purpose: '',
   })
 
+  const profileCompletion = loanAccess?.profileCompletionPercentage ?? 0
+  const hasUnlockedLoanWorkspace = profileCompletion >= 80
+  const remainingToUnlock = Math.max(0, 80 - profileCompletion)
+
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
       const access = await customerPortalService.checkLoanAccess()
       setLoanAccess(access)
-      if (access.canAccessLoans) {
+      // Page unlocks at 80% profile completion; apply eligibility remains backend-enforced.
+      if (access.profileCompletionPercentage >= 80) {
         const loans = await customerPortalService.getMyLoans()
         setLoansData(loans)
       }
@@ -168,25 +173,25 @@ export const ViewLoansPage = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <div style={{
               width: 28, height: 28, borderRadius: 6,
-              background: loanAccess.canAccessLoans ? '#d1fae5' : '#fee2e2',
+              background: hasUnlockedLoanWorkspace ? '#d1fae5' : '#fee2e2',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 16, fontWeight: 700, color: loanAccess.canAccessLoans ? '#059669' : '#dc2626',
+              fontSize: 16, fontWeight: 700, color: hasUnlockedLoanWorkspace ? '#059669' : '#dc2626',
             }}>
-              {loanAccess.canAccessLoans ? '✓' : '○'}
+              {hasUnlockedLoanWorkspace ? '✓' : '○'}
             </div>
             <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.text }}>
-              {loanAccess.canAccessLoans ? 'Loan Access Enabled' : 'Loan Access Locked'}
+              {hasUnlockedLoanWorkspace ? 'Loan Workspace Unlocked' : 'Loan Workspace Locked'}
             </p>
           </div>
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>
             <p style={{ margin: '0 0 8px' }}>
-              <strong>Profile Completion:</strong> {loanAccess.profileCompletionPercentage}% / 100%
+              <strong>Profile Completion:</strong> {profileCompletion}% / 100%
             </p>
             <p style={{ margin: 0 }}>
-              <strong>Bank Verified:</strong> {loanAccess.isBankVerified ? <span style={{ color: '#059669' }}>Yes ✓</span> : <span style={{ color: '#dc2626' }}>No</span>}
+              <strong>Workspace Unlock:</strong> {hasUnlockedLoanWorkspace ? <span style={{ color: '#059669' }}>Unlocked (80% reached)</span> : <span style={{ color: '#dc2626' }}>Locked (needs 80%)</span>}
             </p>
           </div>
-          {!loanAccess.canAccessLoans && (
+          {!hasUnlockedLoanWorkspace && (
             <button
               type="button"
               onClick={() => navigate('/module/profile')}
@@ -202,16 +207,58 @@ export const ViewLoansPage = () => {
         </div>
       )}
 
-      {!loanAccess?.canAccessLoans ? (
+      {!hasUnlockedLoanWorkspace ? (
         <div style={{
           background: C.cardBg,
           border: `1px solid ${C.border}`,
           borderRadius: 10,
-          padding: '20px 24px',
+          padding: '28px 24px',
           textAlign: 'center',
-          color: C.muted,
+          color: C.text,
+          boxShadow: C.shadow,
         }}>
-          <p>Complete your profile (100%) and verify your bank account to apply for loans.</p>
+          <div style={{
+            width: 56,
+            height: 56,
+            borderRadius: 999,
+            margin: '0 auto 14px',
+            background: '#fee2e2',
+            color: C.danger,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 28,
+          }}>
+            🔒
+          </div>
+          <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700 }}>Loan Workspace Locked</h2>
+          <p style={{ margin: '0 0 12px', fontSize: 13, color: C.muted }}>
+            Your loan dashboard unlocks automatically once your profile reaches at least 80% completion.
+          </p>
+          <p style={{ margin: '0 0 14px', fontSize: 13, color: C.text, fontWeight: 600 }}>
+            {remainingToUnlock > 0
+              ? `Complete ${remainingToUnlock}% more of your profile to unlock this page.`
+              : 'Refreshing eligibility...'}
+          </p>
+          <p style={{ margin: '0 0 20px', fontSize: 12, color: C.muted }}>
+            Tip: Add your contact details, address fields, tax IDs, and bank information in Profile for faster access.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/module/profile')}
+            style={{
+              padding: '9px 16px',
+              borderRadius: 8,
+              fontSize: 12,
+              background: C.primary,
+              color: '#fff',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: 700,
+            }}
+          >
+            Go to Profile
+          </button>
         </div>
       ) : (
         <>
