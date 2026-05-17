@@ -32,6 +32,93 @@ export interface CreatePaymentIntentResponse {
   amount: number
 }
 
+export interface CustomerProfile {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  phoneNumber: string
+  companyName: string
+  address: string
+  city: string
+  state: string
+  country: string
+  zipCode: string
+}
+
+export interface Budget {
+  id: string
+  name: string
+  allocatedAmount: number
+  spentAmount: number
+  remainingAmount: number
+  startDate: string
+  endDate: string
+  status: string
+}
+
+export interface BudgetAdjustmentRequest {
+  budgetId: string
+  requestedAmount: number
+  reason: string
+}
+
+export interface ExpenseClaim {
+  id: string
+  claimNumber: string
+  description: string
+  amount: number
+  category: string
+  submittedDate: string
+  status: string
+  approvedDate?: string
+  rejectReason?: string
+}
+
+export interface SubmitExpenseClaimRequest {
+  description: string
+  amount: number
+  category: string
+  attachments?: File[]
+}
+
+export interface Approval {
+  id: string
+  title: string
+  description: string
+  type: string
+  status: string
+  submittedDate: string
+  approvedDate?: string
+}
+
+export interface FinancialReport {
+  id: string
+  reportName: string
+  reportType: string
+  generatedDate: string
+  description: string
+  fileUrl: string
+}
+
+export interface SupportTicket {
+  id: string
+  ticketNumber: string
+  subject: string
+  description: string
+  status: string
+  priority: string
+  createdDate: string
+  lastUpdatedDate: string
+}
+
+export interface FAQ {
+  id: string
+  question: string
+  answer: string
+  category: string
+}
+
 export const customerPortalService = {
   async getMyInvoices(): Promise<CustomerInvoicesResponse> {
     const response = await apiClient.get<CustomerInvoicesResponse>('/customer/invoices')
@@ -74,4 +161,94 @@ export const customerPortalService = {
       filename: filenameMatch?.[1] ? decodeURIComponent(filenameMatch[1].replaceAll('"', '')) : fallback,
     }
   },
+
+  // Profile operations
+  async getMyProfile(): Promise<CustomerProfile> {
+    const response = await apiClient.get<CustomerProfile>('/customer/profile')
+    return response.data
+  },
+
+  async updateMyProfile(profile: Partial<CustomerProfile>): Promise<CustomerProfile> {
+    const response = await apiClient.put<CustomerProfile>('/customer/profile', profile)
+    return response.data
+  },
+
+  async changePassword(oldPassword: string, newPassword: string): Promise<{ message: string }> {
+    const response = await apiClient.post<{ message: string }>('/customer/change-password', {
+      oldPassword,
+      newPassword,
+    })
+    return response.data
+  },
+
+  // Budget operations
+  async getMyBudgets(): Promise<Budget[]> {
+    const response = await apiClient.get<Budget[]>('/customer/budgets')
+    return response.data
+  },
+
+  async requestBudgetAdjustment(request: BudgetAdjustmentRequest): Promise<{ message: string; adjustmentId: string }> {
+    const response = await apiClient.post<{ message: string; adjustmentId: string }>('/customer/budgets/request-adjustment', request)
+    return response.data
+  },
+
+  // Expense Claims operations
+  async getMyExpenseClaims(): Promise<ExpenseClaim[]> {
+    const response = await apiClient.get<ExpenseClaim[]>('/customer/expense-claims')
+    return response.data
+  },
+
+  async submitExpenseClaim(claim: SubmitExpenseClaimRequest): Promise<{ message: string; claimId: string }> {
+    const formData = new FormData()
+    formData.append('description', claim.description)
+    formData.append('amount', claim.amount.toString())
+    formData.append('category', claim.category)
+    if (claim.attachments) {
+      claim.attachments.forEach((file, index) => {
+        formData.append(`attachments[${index}]`, file)
+      })
+    }
+    const response = await apiClient.post<{ message: string; claimId: string }>('/customer/expense-claims/submit', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return response.data
+  },
+
+  // Approvals operations
+  async getPendingApprovals(): Promise<Approval[]> {
+    const response = await apiClient.get<Approval[]>('/customer/approvals/pending')
+    return response.data
+  },
+
+  async getApprovedRequests(): Promise<Approval[]> {
+    const response = await apiClient.get<Approval[]>('/customer/approvals/approved')
+    return response.data
+  },
+
+  // Reports operations
+  async getFinancialReports(): Promise<FinancialReport[]> {
+    const response = await apiClient.get<FinancialReport[]>('/customer/reports/financial')
+    return response.data
+  },
+
+  // Support operations
+  async getMyTickets(): Promise<SupportTicket[]> {
+    const response = await apiClient.get<SupportTicket[]>('/customer/support/tickets')
+    return response.data
+  },
+
+  async createSupportTicket(subject: string, description: string, priority: string): Promise<{ message: string; ticketId: string }> {
+    const response = await apiClient.post<{ message: string; ticketId: string }>('/customer/support/tickets', {
+      subject,
+      description,
+      priority,
+    })
+    return response.data
+  },
+
+  async getFAQs(): Promise<FAQ[]> {
+    const response = await apiClient.get<FAQ[]>('/customer/support/faqs')
+    return response.data
+  },
 }
+

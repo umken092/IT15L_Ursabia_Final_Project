@@ -1,12 +1,17 @@
+using CMNetwork.Application.Services;
 using CMNetwork.Domain.Entities;
+using CMNetwork.Infrastructure.Identity;
 using CMNetwork.Infrastructure.Persistence;
 using CMNetwork.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 
 namespace CMNetwork.Controllers;
@@ -26,6 +31,8 @@ public class CustomerPortalController : ControllerBase
     private readonly IPayMongoService _payMongoService;
     private readonly IAutoJournalService _autoJournalService;
     private readonly IConfiguration _configuration;
+    private readonly UserManager<ApplicationUser> _userManager;
+    private IMemoryCache MemoryCache => HttpContext.RequestServices.GetRequiredService<IMemoryCache>();
 
     public CustomerPortalController(
         CMNetworkDbContext dbContext,
@@ -33,7 +40,8 @@ public class CustomerPortalController : ControllerBase
         ICurrentUserService currentUser,
         IPayMongoService payMongoService,
         IAutoJournalService autoJournalService,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        UserManager<ApplicationUser> userManager)
     {
         _dbContext = dbContext;
         _currentCustomer = currentCustomer;
@@ -41,6 +49,7 @@ public class CustomerPortalController : ControllerBase
         _payMongoService = payMongoService;
         _autoJournalService = autoJournalService;
         _configuration = configuration;
+        _userManager = userManager;
     }
 
     private async Task<Customer?> GetCurrentCustomerAsync()
@@ -456,10 +465,562 @@ public class CustomerPortalController : ControllerBase
         return File(pdf, "application/pdf",
             $"statement-{customer.CustomerCode}-{DateTime.UtcNow:yyyyMMdd}.pdf");
     }
+
+    [HttpGet("profile")]
+    public async Task<IActionResult> GetProfile()
+    {
+        var customer = await GetCurrentCustomerAsync();
+        if (customer is null)
+        {
+            return NotFound(new { message = MissingCustomerMessage });
+        }
+
+        return Ok(new
+        {
+            id = customer.Id,
+            firstName = customer.ContactPerson ?? string.Empty,
+            lastName = customer.Name,
+            email = customer.Email,
+            phoneNumber = customer.PhoneNumber,
+            companyName = customer.Name,
+            address = customer.Address,
+            city = customer.City,
+            state = customer.State,
+            country = customer.Country,
+            postalCode = customer.PostalCode
+        });
+    }
+
+    [HttpPut("profile")]
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdateCustomerProfileRequest request)
+    {
+        if (!ModelState.IsValid)
+            return ValidationProblem(ModelState);
+
+        var customer = await GetCurrentCustomerAsync();
+        if (customer is null)
+        {
+            return NotFound(new { message = MissingCustomerMessage });
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.FirstName))
+            customer.ContactPerson = request.FirstName;
+
+        if (!string.IsNullOrWhiteSpace(request.LastName))
+            customer.Name = request.LastName;
+
+        if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
+            customer.PhoneNumber = request.PhoneNumber;
+
+        if (!string.IsNullOrWhiteSpace(request.Address))
+            customer.Address = request.Address;
+
+        if (!string.IsNullOrWhiteSpace(request.City))
+            customer.City = request.City;
+
+        if (!string.IsNullOrWhiteSpace(request.State))
+            customer.State = request.State;
+
+        if (!string.IsNullOrWhiteSpace(request.Country))
+            customer.Country = request.Country;
+
+        if (!string.IsNullOrWhiteSpace(request.PostalCode))
+            customer.PostalCode = request.PostalCode;
+
+        customer.LastUpdatedUtc = DateTime.UtcNow;
+
+        _dbContext.Customers.Update(customer);
+        await _dbContext.SaveChangesAsync();
+
+        return Ok(new { message = "Profile updated successfully" });
+    }
+
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        if (!ModelState.IsValid)
+            return ValidationProblem(ModelState);
+
+        if (string.IsNullOrWhiteSpace(request.OldPassword) || string.IsNullOrWhiteSpace(request.NewPassword))
+            return BadRequest(new { message = "Old password and new password are required." });
+
+        if (request.OldPassword == request.NewPassword)
+            return BadRequest(new { message = "New password must be different from the old password." });
+
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+            return Unauthorized(new { message = "User not found." });
+
+        var result = await _userManager.ChangePasswordAsync(user, request.OldPassword, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+            return BadRequest(new { message = $"Password change failed: {errors}" });
+        }
+
+        return Ok(new { message = "Password changed successfully" });
+    }
+
+    [HttpGet("budgets")]
+    public async Task<IActionResult> GetBudgets()
+    {
+        var customer = await GetCurrentCustomerAsync();
+        if (customer is null)
+        {
+            return NotFound(new { message = MissingCustomerMessage });
+        }
+
+        var spentAmount = await _dbContext.ARInvoices
+            .AsNoTracking()
+            .Where(inv => inv.CustomerId == customer.Id && !inv.IsDeleted && inv.Status != ARInvoiceStatus.Void)
+            .SumAsync(inv => (decimal?)inv.TotalAmount) ?? 0m;
+
+        var now = DateTime.UtcNow;
+        var budget = new
+        {
+            id = customer.Id,
+            name = $"{customer.Name} Credit Budget",
+            allocatedAmount = customer.CreditLimit,
+            spentAmount,
+            remainingAmount = customer.CreditLimit - spentAmount,
+            startDate = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc),
+            endDate = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(1).AddDays(-1),
+            status = spentAmount <= customer.CreditLimit ? "OnTrack" : "Exceeded"
+        };
+
+        return Ok(new { budgets = new[] { budget } });
+    }
+
+    [HttpPost("budgets/adjustment-request")]
+    public async Task<IActionResult> RequestBudgetAdjustment([FromBody] RequestBudgetAdjustmentRequest request)
+    {
+        if (!ModelState.IsValid)
+            return ValidationProblem(ModelState);
+
+        var customer = await GetCurrentCustomerAsync();
+        if (customer is null)
+        {
+            return NotFound(new { message = MissingCustomerMessage });
+        }
+
+        if (request.RequestedAmount <= 0)
+            return BadRequest(new { message = "Requested amount must be greater than zero." });
+
+        if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length < 10)
+            return BadRequest(new { message = "Reason must be at least 10 characters." });
+
+        var requestId = Guid.NewGuid();
+        var requestNumber = $"BAR-{DateTime.UtcNow:yyyyMMdd}-{requestId.ToString().Substring(0, 8)}";
+
+        var adjustmentRequest = new CMNetwork.Domain.Entities.CustomerBudgetAdjustmentRequest
+        {
+            Id = requestId,
+            RequestNumber = requestNumber,
+            CustomerId = customer.Id,
+            BudgetId = request.BudgetId,
+            BudgetName = request.BudgetId.ToString(),
+            RequestedAmount = request.RequestedAmount,
+            Reason = request.Reason,
+            Status = CMNetwork.Domain.Entities.BudgetAdjustmentStatus.Pending,
+            RequestedAtUtc = DateTime.UtcNow
+        };
+
+        _dbContext.CustomerBudgetAdjustmentRequests.Add(adjustmentRequest);
+        await _dbContext.SaveChangesAsync();
+
+        return Ok(new { requestId, requestNumber });
+    }
+
+    [HttpGet("budgets/adjustment-requests")]
+    public async Task<IActionResult> GetBudgetAdjustmentRequests()
+    {
+        var customer = await GetCurrentCustomerAsync();
+        if (customer is null)
+        {
+            return NotFound(new { message = MissingCustomerMessage });
+        }
+
+        var requests = await _dbContext.CustomerBudgetAdjustmentRequests
+            .Where(r => r.CustomerId == customer.Id)
+            .OrderByDescending(r => r.RequestedAtUtc)
+            .Select(r => new
+            {
+                r.Id,
+                r.RequestNumber,
+                r.BudgetName,
+                r.RequestedAmount,
+                r.Reason,
+                Status = r.Status.ToString(),
+                r.RequestedAtUtc,
+                r.ApprovedAtUtc,
+                r.DecisionNotes
+            })
+            .ToListAsync();
+
+        return Ok(new { requests });
+    }
+
+    [HttpGet("expense-claims")]
+    public async Task<IActionResult> GetExpenseClaims()
+    {
+        var customer = await GetCurrentCustomerAsync();
+        if (customer is null)
+        {
+            return NotFound(new { message = MissingCustomerMessage });
+        }
+
+        var claims = await _dbContext.ExpenseClaims
+            .AsNoTracking()
+            .Where(c => c.EmployeeId == customer.Id)
+            .OrderByDescending(c => c.CreatedAtUtc)
+            .Select(c => new
+            {
+                c.Id,
+                c.ClaimNumber,
+                c.Description,
+                c.Amount,
+                c.Category,
+                SubmittedDate = c.SubmittedAtUtc,
+                Status = c.Status.ToString(),
+                c.ReviewedAtUtc,
+                c.ReviewNotes
+            })
+            .ToListAsync();
+
+        return Ok(new { claims });
+    }
+
+    [HttpPost("expense-claims/submit")]
+    public async Task<IActionResult> SubmitExpenseClaim([FromBody] SubmitExpenseClaimRequest request)
+    {
+        if (!ModelState.IsValid)
+            return ValidationProblem(ModelState);
+
+        var customer = await GetCurrentCustomerAsync();
+        if (customer is null)
+        {
+            return NotFound(new { message = MissingCustomerMessage });
+        }
+
+        if (request.Amount <= 0)
+            return BadRequest(new { message = "Amount must be greater than zero." });
+
+        if (request.Amount > 10_000_000)
+            return BadRequest(new { message = "Amount exceeds allowed maximum." });
+
+        if (string.IsNullOrWhiteSpace(request.Description) || request.Description.Trim().Length < 5)
+            return BadRequest(new { message = "Description must be at least 5 characters." });
+
+        if (string.IsNullOrWhiteSpace(request.Category))
+            return BadRequest(new { message = "Category is required." });
+
+        var claimNumber = $"EC-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString().Substring(0, 8)}";
+
+        var claim = new CMNetwork.Domain.Entities.ExpenseClaim
+        {
+            Id = Guid.NewGuid(),
+            ClaimNumber = claimNumber,
+            EmployeeId = customer.Id,
+            EmployeeName = customer.Name,
+            ClaimDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            Category = request.Category,
+            Description = request.Description,
+            Amount = request.Amount,
+            MerchantName = request.MerchantName,
+            ProjectCode = request.ProjectCode,
+            ReceiptUrl = request.ReceiptUrl,
+            Status = CMNetwork.Domain.Entities.ExpenseClaimStatus.Submitted,
+            SubmittedAtUtc = DateTime.UtcNow,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        _dbContext.ExpenseClaims.Add(claim);
+        await _dbContext.SaveChangesAsync();
+
+        return Ok(new { claimId = claim.Id, claimNumber });
+    }
+
+    [HttpGet("support/tickets")]
+    public async Task<IActionResult> GetSupportTickets()
+    {
+        var customer = await GetCurrentCustomerAsync();
+        if (customer is null)
+        {
+            return NotFound(new { message = MissingCustomerMessage });
+        }
+
+        var tickets = await _dbContext.SupportTickets
+            .Where(t => t.CustomerId == customer.Id)
+            .OrderByDescending(t => t.CreatedAtUtc)
+            .Select(t => new
+            {
+                t.Id,
+                t.TicketNumber,
+                t.Subject,
+                Status = t.Status.ToString(),
+                Priority = t.Priority.ToString(),
+                CreatedDate = t.CreatedAtUtc,
+                t.ResolvedAtUtc
+            })
+            .ToListAsync();
+
+        return Ok(new { tickets });
+    }
+
+    [HttpPost("support/tickets/create")]
+    public async Task<IActionResult> CreateSupportTicket([FromBody] CreateSupportTicketRequest request)
+    {
+        if (!ModelState.IsValid)
+            return ValidationProblem(ModelState);
+
+        var customer = await GetCurrentCustomerAsync();
+        if (customer is null)
+        {
+            return NotFound(new { message = MissingCustomerMessage });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Subject) || string.IsNullOrWhiteSpace(request.Description))
+            return BadRequest(new { message = "Subject and description are required." });
+
+        if (request.Subject.Trim().Length < 5 || request.Subject.Trim().Length > 256)
+            return BadRequest(new { message = "Subject must be between 5 and 256 characters." });
+
+        if (request.Description.Trim().Length < 10 || request.Description.Trim().Length > 2048)
+            return BadRequest(new { message = "Description must be between 10 and 2048 characters." });
+
+        var priority = request.Priority switch
+        {
+            "Low" => CMNetwork.Domain.Entities.SupportTicketPriority.Low,
+            "Medium" => CMNetwork.Domain.Entities.SupportTicketPriority.Medium,
+            "High" => CMNetwork.Domain.Entities.SupportTicketPriority.High,
+            "Urgent" => CMNetwork.Domain.Entities.SupportTicketPriority.Urgent,
+            _ => CMNetwork.Domain.Entities.SupportTicketPriority.Medium
+        };
+
+        var ticketNumber = $"TKT-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString().Substring(0, 8)}";
+
+        var ticket = new CMNetwork.Domain.Entities.SupportTicket
+        {
+            Id = Guid.NewGuid(),
+            TicketNumber = ticketNumber,
+            CustomerId = customer.Id,
+            Subject = request.Subject,
+            Description = request.Description,
+            Status = CMNetwork.Domain.Entities.SupportTicketStatus.Open,
+            Priority = priority,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        _dbContext.SupportTickets.Add(ticket);
+        await _dbContext.SaveChangesAsync();
+
+        return Ok(new { ticketId = ticket.Id, ticketNumber });
+    }
+
+    [HttpGet("support/faqs")]
+    public async Task<IActionResult> GetFAQs()
+    {
+        var faqs = await MemoryCache.GetOrCreateAsync("customer:faqs:active", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            entry.SlidingExpiration = TimeSpan.FromMinutes(2);
+            return await _dbContext.FAQs
+                .AsNoTracking()
+                .Where(f => f.IsActive)
+                .OrderBy(f => f.Category)
+                .ThenBy(f => f.DisplayOrder)
+                .Select(f => new
+                {
+                    f.Id,
+                    f.Question,
+                    f.Answer,
+                    f.Category,
+                    f.DisplayOrder
+                })
+                .ToListAsync();
+        });
+
+        return Ok(new { faqs });
+    }
+
+    [HttpGet("approvals/pending")]
+    public async Task<IActionResult> GetPendingApprovals()
+    {
+        var customer = await GetCurrentCustomerAsync();
+        if (customer is null)
+        {
+            return NotFound(new { message = MissingCustomerMessage });
+        }
+
+        var approvals = await _dbContext.CustomerBudgetAdjustmentRequests
+            .AsNoTracking()
+            .Where(r => r.CustomerId == customer.Id && r.Status == BudgetAdjustmentStatus.Pending)
+            .Select(r => new
+            {
+                r.Id,
+                Title = $"Budget Adjustment Request: {r.BudgetName}",
+                Description = r.Reason,
+                Type = "Budget Adjustment",
+                Status = r.Status.ToString(),
+                SubmittedDate = r.RequestedAtUtc,
+                r.ApprovedAtUtc
+            })
+            .OrderByDescending(r => r.SubmittedDate)
+            .ToListAsync();
+
+        return Ok(new { approvals });
+    }
+
+    [HttpGet("approvals/approved")]
+    public async Task<IActionResult> GetApprovedRequests()
+    {
+        var customer = await GetCurrentCustomerAsync();
+        if (customer is null)
+        {
+            return NotFound(new { message = MissingCustomerMessage });
+        }
+
+        var approvals = await _dbContext.CustomerBudgetAdjustmentRequests
+            .AsNoTracking()
+            .Where(r => r.CustomerId == customer.Id && r.Status == BudgetAdjustmentStatus.Approved)
+            .Select(r => new
+            {
+                r.Id,
+                Title = $"Budget Adjustment Request: {r.BudgetName}",
+                Description = r.Reason,
+                Type = "Budget Adjustment",
+                Status = r.Status.ToString(),
+                SubmittedDate = r.RequestedAtUtc,
+                r.ApprovedAtUtc
+            })
+            .OrderByDescending(r => r.ApprovedAtUtc)
+            .ToListAsync();
+
+        return Ok(new { approvals });
+    }
+
+    [HttpGet("reports")]
+    public async Task<IActionResult> GetFinancialReports()
+    {
+        var customer = await GetCurrentCustomerAsync();
+        if (customer is null)
+        {
+            return NotFound(new { message = MissingCustomerMessage });
+        }
+
+        var cacheKey = $"customer:reports:{customer.Id}";
+        var reports = await MemoryCache.GetOrCreateAsync(cacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(2);
+            entry.SlidingExpiration = TimeSpan.FromMinutes(1);
+
+            var generatedDate = DateTime.UtcNow;
+            var result = new List<object>();
+
+            var invoiceCount = await _dbContext.ARInvoices
+                .AsNoTracking()
+                .Where(i => i.CustomerId == customer.Id && !i.IsDeleted)
+                .CountAsync();
+
+            var totalAmount = await _dbContext.ARInvoices
+                .AsNoTracking()
+                .Where(i => i.CustomerId == customer.Id && !i.IsDeleted)
+                .SumAsync(i => (decimal?)i.TotalAmount) ?? 0m;
+
+            if (invoiceCount > 0)
+            {
+                result.Add(new
+                {
+                    reportName = "Invoice Summary",
+                    reportType = "Summary",
+                    generatedDate,
+                    description = $"Total of {invoiceCount} invoices amounting to ₱{totalAmount:N2}"
+                });
+            }
+
+            var paymentCount = await _dbContext.CustomerPayments
+                .AsNoTracking()
+                .Where(p => p.CustomerId == customer.Id)
+                .CountAsync();
+
+            var completedPayments = await _dbContext.CustomerPayments
+                .AsNoTracking()
+                .Where(p => p.CustomerId == customer.Id && p.Status == CustomerPaymentStatus.Completed)
+                .SumAsync(p => (decimal?)p.Amount) ?? 0m;
+
+            if (paymentCount > 0)
+            {
+                result.Add(new
+                {
+                    reportName = "Payment History",
+                    reportType = "Payment",
+                    generatedDate,
+                    description = $"Total of {paymentCount} payment transactions, ₱{completedPayments:N2} completed"
+                });
+            }
+
+            return result;
+        });
+
+        return Ok(new { reports });
+    }
 }
 
 public sealed class CreatePaymentIntentRequest
 {
+    [Required]
+    [MinLength(1)]
     public List<Guid> InvoiceIds { get; set; } = [];
+
+    [Range(0.01, 100000000)]
     public decimal Amount { get; set; }
+}
+
+public sealed class RequestBudgetAdjustmentRequest
+{
+    public Guid BudgetId { get; set; }
+
+    [Range(0.01, 100000000)]
+    public decimal RequestedAmount { get; set; }
+
+    [Required]
+    [StringLength(1024, MinimumLength = 10)]
+    public string Reason { get; set; } = string.Empty;
+}
+
+public sealed class SubmitExpenseClaimRequest
+{
+    [Required]
+    [StringLength(1000, MinimumLength = 5)]
+    public string Description { get; set; } = string.Empty;
+
+    [Range(0.01, 10000000)]
+    public decimal Amount { get; set; }
+
+    [Required]
+    [StringLength(128, MinimumLength = 2)]
+    public string Category { get; set; } = string.Empty;
+
+    [StringLength(256)]
+    public string? MerchantName { get; set; }
+
+    [StringLength(128)]
+    public string? ProjectCode { get; set; }
+
+    [StringLength(1024)]
+    public string? ReceiptUrl { get; set; }
+}
+
+public sealed class CreateSupportTicketRequest
+{
+    [Required]
+    [StringLength(256, MinimumLength = 5)]
+    public string Subject { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(2048, MinimumLength = 10)]
+    public string Description { get; set; } = string.Empty;
+
+    [RegularExpression("^(Low|Medium|High|Urgent)$")]
+    public string Priority { get; set; } = "Medium";
 }

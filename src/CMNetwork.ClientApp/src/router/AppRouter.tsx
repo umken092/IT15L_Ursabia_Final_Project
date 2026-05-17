@@ -22,6 +22,53 @@ const RoleDashboardPage = lazy(() =>
 )
 const PrivateRoute = lazy(() => import('../routes/PrivateRoute').then((m) => ({ default: m.PrivateRoute })))
 
+// Customer pages
+const ViewProfilePage = lazy(() =>
+  import('../pages/Profile/ViewProfilePage').then((m) => ({ default: m.default })),
+)
+const EditProfilePage = lazy(() =>
+  import('../pages/Profile/EditProfilePage').then((m) => ({ default: m.default })),
+)
+const ChangePasswordPage = lazy(() =>
+  import('../pages/Profile/ChangePasswordPage').then((m) => ({ default: m.default })),
+)
+const ViewInvoicesPage = lazy(() =>
+  import('../pages/Invoices/ViewInvoicesPage').then((m) => ({ default: m.default })),
+)
+const PayInvoicesPage = lazy(() =>
+  import('../pages/Invoices/PayInvoicesPage').then((m) => ({ default: m.default })),
+)
+const ViewBudgetsPage = lazy(() =>
+  import('../pages/Budgets/ViewBudgetsPage').then((m) => ({ default: m.default })),
+)
+const RequestBudgetAdjustmentPage = lazy(() =>
+  import('../pages/Budgets/RequestBudgetAdjustmentPage').then((m) => ({ default: m.default })),
+)
+const SubmitExpenseClaimPage = lazy(() =>
+  import('../pages/ExpenseClaims/SubmitExpenseClaimPage').then((m) => ({ default: m.default })),
+)
+const ViewExpenseClaimsPage = lazy(() =>
+  import('../pages/ExpenseClaims/ViewExpenseClaimsPage').then((m) => ({ default: m.default })),
+)
+const PendingApprovalsPage = lazy(() =>
+  import('../pages/Approvals/PendingApprovalsPage').then((m) => ({ default: m.default })),
+)
+const ApprovedRequestsPage = lazy(() =>
+  import('../pages/Approvals/ApprovedRequestsPage').then((m) => ({ default: m.default })),
+)
+const FinancialReportsPage = lazy(() =>
+  import('../pages/Reports/FinancialReportsPage').then((m) => ({ default: m.default })),
+)
+const DownloadStatementsPage = lazy(() =>
+  import('../pages/Reports/DownloadStatementsPage').then((m) => ({ default: m.default })),
+)
+const ContactSupportPage = lazy(() =>
+  import('../pages/Support/ContactSupportPage').then((m) => ({ default: m.default })),
+)
+const FAQsPage = lazy(() =>
+  import('../pages/Support/FAQsPage').then((m) => ({ default: m.default })),
+)
+
 const APP_TITLE = 'CMNetwork ERP'
 
 const modulePageTitles: Record<string, string> = {
@@ -163,6 +210,35 @@ export const AppRouter = () => {
             <Route path="/module/:moduleKey" element={<ModulePlaceholderPage />} />
             <Route path="/mfa/setup" element={<MfaSetupPage />} />
             <Route path="/settings/mfa" element={<MfaSetupPage />} />
+            
+            {/* Customer Profile Routes */}
+            <Route path="/module/profile/view" element={<ViewProfilePage />} />
+            <Route path="/module/profile/edit" element={<EditProfilePage />} />
+            <Route path="/module/profile/change-password" element={<ChangePasswordPage />} />
+            
+            {/* Customer Invoices Routes */}
+            <Route path="/module/invoices/view" element={<ViewInvoicesPage />} />
+            <Route path="/module/invoices/pay" element={<PayInvoicesPage />} />
+            
+            {/* Customer Budgets Routes */}
+            <Route path="/module/budgets/view" element={<ViewBudgetsPage />} />
+            <Route path="/module/budgets/request-adjustment" element={<RequestBudgetAdjustmentPage />} />
+            
+            {/* Customer Expense Claims Routes */}
+            <Route path="/module/expense-claims/submit" element={<SubmitExpenseClaimPage />} />
+            <Route path="/module/expense-claims/view" element={<ViewExpenseClaimsPage />} />
+            
+            {/* Customer Approvals Routes */}
+            <Route path="/module/approvals/pending" element={<PendingApprovalsPage />} />
+            <Route path="/module/approvals/approved" element={<ApprovedRequestsPage />} />
+            
+            {/* Customer Reports Routes */}
+            <Route path="/module/reports/financial" element={<FinancialReportsPage />} />
+            <Route path="/module/reports/statements" element={<DownloadStatementsPage />} />
+            
+            {/* Customer Support Routes */}
+            <Route path="/module/support/contact" element={<ContactSupportPage />} />
+            <Route path="/module/support/faqs" element={<FAQsPage />} />
           </Route>
         </Route>
 

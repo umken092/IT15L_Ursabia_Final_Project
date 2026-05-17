@@ -46,6 +46,9 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
     public DbSet<PayrollLineItem> PayrollLineItems => Set<PayrollLineItem>();
     public DbSet<TaxTable> TaxTables => Set<TaxTable>();
     public DbSet<DeductionConfig> DeductionConfigs => Set<DeductionConfig>();
+    public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
+    public DbSet<FAQ> FAQs => Set<FAQ>();
+    public DbSet<CustomerBudgetAdjustmentRequest> CustomerBudgetAdjustmentRequests => Set<CustomerBudgetAdjustmentRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -628,6 +631,54 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
             entity.Property(x => x.Name).HasMaxLength(128).IsRequired();
             entity.Property(x => x.DefaultAmount).HasPrecision(18, 2);
             entity.HasIndex(x => new { x.Name, x.IsDeleted }).IsUnique();
+        });
+
+        // ── SupportTicket ────────────────────────────────────────────────────────
+        modelBuilder.Entity<SupportTicket>(entity =>
+        {
+            entity.Property(x => x.TicketNumber).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.Subject).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(2048).IsRequired();
+            entity.Property(x => x.AssignedToName).HasMaxLength(256);
+            entity.Property(x => x.AssignedToUserId).HasMaxLength(256);
+            entity.Property(x => x.ResolutionNotes).HasMaxLength(2048);
+            entity.HasIndex(x => x.TicketNumber).IsUnique();
+            entity.HasIndex(x => new { x.CustomerId, x.Status });
+            entity.HasIndex(x => x.CreatedAtUtc);
+            entity.HasOne(x => x.Customer)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── FAQ ──────────────────────────────────────────────────────────────────
+        modelBuilder.Entity<FAQ>(entity =>
+        {
+            entity.Property(x => x.Question).HasMaxLength(512).IsRequired();
+            entity.Property(x => x.Answer).HasMaxLength(4000).IsRequired();
+            entity.Property(x => x.Category).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.DisplayOrder).HasDefaultValue(0);
+            entity.Property(x => x.IsActive).HasDefaultValue(true);
+            entity.HasIndex(x => new { x.Category, x.DisplayOrder });
+            entity.HasIndex(x => x.IsActive);
+        });
+
+        // ── CustomerBudgetAdjustmentRequest ──────────────────────────────────────
+        modelBuilder.Entity<CustomerBudgetAdjustmentRequest>(entity =>
+        {
+            entity.Property(x => x.RequestNumber).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.BudgetName).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.Reason).HasMaxLength(1024).IsRequired();
+            entity.Property(x => x.RequestedAmount).HasPrecision(18, 2);
+            entity.Property(x => x.ApprovedByName).HasMaxLength(256);
+            entity.Property(x => x.DecisionNotes).HasMaxLength(512);
+            entity.HasIndex(x => x.RequestNumber).IsUnique();
+            entity.HasIndex(x => new { x.CustomerId, x.Status });
+            entity.HasIndex(x => x.RequestedAtUtc);
+            entity.HasOne(x => x.Customer)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 

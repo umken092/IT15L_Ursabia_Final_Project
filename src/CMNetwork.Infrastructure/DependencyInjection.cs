@@ -59,6 +59,15 @@ public static class DependencyInjection
         services.AddScoped<IIntegrationCredentialService, IntegrationCredentialService>();
         services.AddHttpClient<IPayMongoService, PayMongoService>();
 
+        // ── Customer Portal Services ────────────────────────────────────
+        services.AddScoped<ICustomerProfileService, CustomerProfileService>();
+        services.AddScoped<ICustomerInvoiceService, CustomerInvoiceService>();
+        services.AddScoped<ICustomerBudgetService, CustomerBudgetService>();
+        services.AddScoped<ICustomerExpenseClaimService, CustomerExpenseClaimService>();
+        services.AddScoped<ICustomerSupportService, CustomerSupportService>();
+        services.AddScoped<ICustomerApprovalService, CustomerApprovalService>();
+        services.AddScoped<ICustomerReportService, CustomerReportService>();
+
         services.AddHangfire(config =>
             config
                 .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
