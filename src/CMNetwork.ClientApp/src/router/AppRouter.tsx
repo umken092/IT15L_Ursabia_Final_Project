@@ -26,26 +26,11 @@ const PrivateRoute = lazy(() => import('../routes/PrivateRoute').then((m) => ({ 
 const ViewProfilePage = lazy(() =>
   import('../pages/Profile/ViewProfilePage').then((m) => ({ default: m.default })),
 )
-const EditProfilePage = lazy(() =>
-  import('../pages/Profile/EditProfilePage').then((m) => ({ default: m.default })),
-)
-const ChangePasswordPage = lazy(() =>
-  import('../pages/Profile/ChangePasswordPage').then((m) => ({ default: m.default })),
-)
 const ViewInvoicesPage = lazy(() =>
   import('../pages/Invoices/ViewInvoicesPage').then((m) => ({ default: m.default })),
 )
-const PayInvoicesPage = lazy(() =>
-  import('../pages/Invoices/PayInvoicesPage').then((m) => ({ default: m.default })),
-)
 const ViewBudgetsPage = lazy(() =>
   import('../pages/Budgets/ViewBudgetsPage').then((m) => ({ default: m.default })),
-)
-const RequestBudgetAdjustmentPage = lazy(() =>
-  import('../pages/Budgets/RequestBudgetAdjustmentPage').then((m) => ({ default: m.default })),
-)
-const SubmitExpenseClaimPage = lazy(() =>
-  import('../pages/ExpenseClaims/SubmitExpenseClaimPage').then((m) => ({ default: m.default })),
 )
 const ViewExpenseClaimsPage = lazy(() =>
   import('../pages/ExpenseClaims/ViewExpenseClaimsPage').then((m) => ({ default: m.default })),
@@ -53,20 +38,11 @@ const ViewExpenseClaimsPage = lazy(() =>
 const PendingApprovalsPage = lazy(() =>
   import('../pages/Approvals/PendingApprovalsPage').then((m) => ({ default: m.default })),
 )
-const ApprovedRequestsPage = lazy(() =>
-  import('../pages/Approvals/ApprovedRequestsPage').then((m) => ({ default: m.default })),
-)
 const FinancialReportsPage = lazy(() =>
   import('../pages/Reports/FinancialReportsPage').then((m) => ({ default: m.default })),
 )
-const DownloadStatementsPage = lazy(() =>
-  import('../pages/Reports/DownloadStatementsPage').then((m) => ({ default: m.default })),
-)
 const ContactSupportPage = lazy(() =>
   import('../pages/Support/ContactSupportPage').then((m) => ({ default: m.default })),
-)
-const FAQsPage = lazy(() =>
-  import('../pages/Support/FAQsPage').then((m) => ({ default: m.default })),
 )
 
 const APP_TITLE = 'CMNetwork ERP'
@@ -212,33 +188,40 @@ export const AppRouter = () => {
             <Route path="/settings/mfa" element={<MfaSetupPage />} />
             
             {/* Customer Profile Routes */}
+            <Route path="/module/profile" element={<ViewProfilePage />} />
             <Route path="/module/profile/view" element={<ViewProfilePage />} />
-            <Route path="/module/profile/edit" element={<EditProfilePage />} />
-            <Route path="/module/profile/change-password" element={<ChangePasswordPage />} />
+            <Route path="/module/profile/edit" element={<ViewProfilePage />} />
+            <Route path="/module/profile/change-password" element={<ViewProfilePage />} />
             
             {/* Customer Invoices Routes */}
+            <Route path="/module/invoices" element={<ViewInvoicesPage />} />
             <Route path="/module/invoices/view" element={<ViewInvoicesPage />} />
-            <Route path="/module/invoices/pay" element={<PayInvoicesPage />} />
+            <Route path="/module/invoices/pay" element={<ViewInvoicesPage />} />
             
             {/* Customer Budgets Routes */}
+            <Route path="/module/budgets" element={<ViewBudgetsPage />} />
             <Route path="/module/budgets/view" element={<ViewBudgetsPage />} />
-            <Route path="/module/budgets/request-adjustment" element={<RequestBudgetAdjustmentPage />} />
+            <Route path="/module/budgets/request-adjustment" element={<ViewBudgetsPage />} />
             
             {/* Customer Expense Claims Routes */}
-            <Route path="/module/expense-claims/submit" element={<SubmitExpenseClaimPage />} />
+            <Route path="/module/expense-claims" element={<ViewExpenseClaimsPage />} />
+            <Route path="/module/expense-claims/submit" element={<ViewExpenseClaimsPage />} />
             <Route path="/module/expense-claims/view" element={<ViewExpenseClaimsPage />} />
             
             {/* Customer Approvals Routes */}
+            <Route path="/module/approvals" element={<PendingApprovalsPage />} />
             <Route path="/module/approvals/pending" element={<PendingApprovalsPage />} />
-            <Route path="/module/approvals/approved" element={<ApprovedRequestsPage />} />
+            <Route path="/module/approvals/approved" element={<PendingApprovalsPage />} />
             
             {/* Customer Reports Routes */}
+            <Route path="/module/reports" element={<FinancialReportsPage />} />
             <Route path="/module/reports/financial" element={<FinancialReportsPage />} />
-            <Route path="/module/reports/statements" element={<DownloadStatementsPage />} />
+            <Route path="/module/reports/statements" element={<FinancialReportsPage />} />
             
             {/* Customer Support Routes */}
+            <Route path="/module/support" element={<ContactSupportPage />} />
             <Route path="/module/support/contact" element={<ContactSupportPage />} />
-            <Route path="/module/support/faqs" element={<FAQsPage />} />
+            <Route path="/module/support/faqs" element={<ContactSupportPage />} />
           </Route>
         </Route>
 

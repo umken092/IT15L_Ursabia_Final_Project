@@ -136,62 +136,12 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
   ],
   customer: [
     { label: 'Dashboard', path: '/dashboard/customer' },
-    {
-      label: 'Profile',
-      path: '/module/profile',
-      children: [
-        { label: 'View Profile', path: '/module/profile/view' },
-        { label: 'Edit Profile', path: '/module/profile/edit' },
-        { label: 'Change Password', path: '/module/profile/change-password' },
-      ],
-    },
-    {
-      label: 'Invoices',
-      path: '/module/invoices',
-      children: [
-        { label: 'View Invoices', path: '/module/invoices/view' },
-        { label: 'Pay Invoices', path: '/module/invoices/pay' },
-      ],
-    },
-    {
-      label: 'Budgets',
-      path: '/module/budgets',
-      children: [
-        { label: 'View Budgets', path: '/module/budgets/view' },
-        { label: 'Request Budget Adjustment', path: '/module/budgets/request-adjustment' },
-      ],
-    },
-    {
-      label: 'Expense Claims',
-      path: '/module/expense-claims',
-      children: [
-        { label: 'Submit Expense Claim', path: '/module/expense-claims/submit' },
-        { label: 'View Expense Claims', path: '/module/expense-claims/view' },
-      ],
-    },
-    {
-      label: 'Approvals',
-      path: '/module/approvals',
-      children: [
-        { label: 'Pending Approvals', path: '/module/approvals/pending' },
-        { label: 'Approved Requests', path: '/module/approvals/approved' },
-      ],
-    },
-    {
-      label: 'Reports',
-      path: '/module/reports',
-      children: [
-        { label: 'Financial Reports', path: '/module/reports/financial' },
-        { label: 'Download Statements', path: '/module/reports/statements' },
-      ],
-    },
-    {
-      label: 'Support',
-      path: '/module/support',
-      children: [
-        { label: 'Contact Support', path: '/module/support/contact' },
-        { label: 'FAQs', path: '/module/support/faqs' },
-      ],
-    },
+    { label: 'Profile', path: '/module/profile' },
+    { label: 'Invoices', path: '/module/invoices' },
+    { label: 'Budgets', path: '/module/budgets' },
+    { label: 'Expense Claims', path: '/module/expense-claims' },
+    { label: 'Approvals', path: '/module/approvals' },
+    { label: 'Reports', path: '/module/reports' },
+    { label: 'Support', path: '/module/support' },
   ],
 }
