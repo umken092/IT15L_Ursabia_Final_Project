@@ -9,6 +9,11 @@ interface MfaPending {
   mfaSessionToken: string
 }
 
+interface LoginBlockedVerificationState {
+  email: string
+  message: string
+}
+
 interface AuthState {
   user: User | null
   token: string | null
@@ -18,11 +23,34 @@ interface AuthState {
   loading: boolean
   error: string | null
   mfaPending: MfaPending | null
-  login: (credentials: LoginCredentials, recaptchaToken?: string) => Promise<'ok' | 'mfa' | 'error'>
+  loginBlockedVerification: LoginBlockedVerificationState | null
+  login: (credentials: LoginCredentials, recaptchaToken?: string) => Promise<'ok' | 'mfa' | 'verify-customer-otp' | 'error'>
   completeMfaLogin: (code: string) => Promise<boolean>
   logout: () => Promise<void>
   switchRole: (role: Role) => void
   setTokens: (accessToken: string, refreshToken: string) => void
+}
+
+type LoginErrorResponse = {
+  message?: string
+  requiresCustomerOtpVerification?: boolean
+  email?: string
+}
+
+const getLoginErrorResponse = (error: unknown): LoginErrorResponse | null => {
+  if (!error || typeof error !== 'object' || !('response' in error)) {
+    return null
+  }
+
+  const response = error.response
+
+  if (!response || typeof response !== 'object' || !('data' in response)) {
+    return null
+  }
+
+  const { data } = response
+
+  return data && typeof data === 'object' ? (data as LoginErrorResponse) : null
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -36,6 +64,7 @@ export const useAuthStore = create<AuthState>()(
       loading: false,
       error: null,
       mfaPending: null,
+      loginBlockedVerification: null,
 
       login: async (credentials, recaptchaToken) => {
         set({ loading: true, error: null })
@@ -60,10 +89,31 @@ export const useAuthStore = create<AuthState>()(
             loading: false,
             error: null,
             mfaPending: null,
+            loginBlockedVerification: null,
           })
           return 'ok'
-        } catch {
-          set({ loading: false, error: 'Invalid email or password.', isAuthenticated: false })
+        } catch (error: unknown) {
+          const loginError = getLoginErrorResponse(error)
+
+          if (loginError?.requiresCustomerOtpVerification) {
+            set({
+              loading: false,
+              error: loginError.message ?? 'Email verification is required before signing in.',
+              isAuthenticated: false,
+              loginBlockedVerification: {
+                email: loginError.email ?? credentials.email,
+                message: loginError.message ?? 'Email verification is required before signing in.',
+              },
+            })
+            return 'verify-customer-otp'
+          }
+
+          set({
+            loading: false,
+            error: 'Invalid email or password.',
+            isAuthenticated: false,
+            loginBlockedVerification: null,
+          })
           return 'error'
         }
       },
@@ -88,6 +138,7 @@ export const useAuthStore = create<AuthState>()(
             loading: false,
             error: null,
             mfaPending: null,
+            loginBlockedVerification: null,
           })
           return true
         } catch {
@@ -112,6 +163,7 @@ export const useAuthStore = create<AuthState>()(
           error: null,
           loading: false,
           mfaPending: null,
+          loginBlockedVerification: null,
         })
       },
 

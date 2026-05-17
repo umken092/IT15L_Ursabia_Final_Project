@@ -1,6 +1,25 @@
 import { apiClient } from './apiClient'
 import type { LoginCredentials, User } from '../types/auth'
 
+export interface VerifyCustomerOtpRequest {
+  email: string
+  otp: string
+}
+
+export interface VerifyCustomerOtpResponse {
+  success: boolean
+  message: string
+}
+
+export interface ResendCustomerOtpRequest {
+  email: string
+}
+
+export interface AuthResponse {
+  success: boolean
+  message: string
+}
+
 export interface LoginApiResponse {
   accessToken?: string
   refreshToken?: string
@@ -30,6 +49,14 @@ export interface ResetPasswordRequest {
   email: string
   token: string
   newPassword: string
+}
+
+export interface RegisterCustomerRequest {
+  fullName: string
+  email: string
+  password: string
+  confirmPassword: string
+  companyName?: string
 }
 
 export const authService = {
@@ -85,6 +112,10 @@ export const authService = {
     await apiClient.post('/auth/password/reset', payload)
   },
 
+  registerCustomer: async (payload: RegisterCustomerRequest): Promise<void> => {
+    await apiClient.post('/auth/register/customer', payload)
+  },
+
   validateToken: async (token: string): Promise<boolean> => {
     try {
       const { data } = await apiClient.post<{ isValid: boolean }>('/auth/validate', { token })
@@ -92,5 +123,15 @@ export const authService = {
     } catch {
       return false
     }
+  },
+
+  verifyCustomerOtp: async (payload: VerifyCustomerOtpRequest): Promise<VerifyCustomerOtpResponse> => {
+    const { data } = await apiClient.post<VerifyCustomerOtpResponse>('/auth/verify/customer-otp', payload)
+    return data
+  },
+
+  resendCustomerOtp: async (payload: ResendCustomerOtpRequest): Promise<AuthResponse> => {
+    const { data } = await apiClient.post<AuthResponse>('/auth/resend/customer-otp', payload)
+    return data
   },
 }

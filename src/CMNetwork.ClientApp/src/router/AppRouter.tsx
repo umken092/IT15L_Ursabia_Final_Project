@@ -5,6 +5,12 @@ import { roleLabels, type Role } from '../types/auth'
 const MainLayout = lazy(() => import('../layout/MainLayout').then((m) => ({ default: m.MainLayout })))
 const LandingPage = lazy(() => import('../pages/LandingPage').then((m) => ({ default: m.LandingPage })))
 const LoginPage = lazy(() => import('../pages/LoginPage').then((m) => ({ default: m.LoginPage })))
+const RegisterCustomerPage = lazy(() =>
+  import('../pages/RegisterCustomerPage').then((m) => ({ default: m.RegisterCustomerPage })),
+)
+const VerifyCustomerOtpPage = lazy(() =>
+  import('../pages/VerifyCustomerOtpPage').then((m) => ({ default: m.VerifyCustomerOtpPage })),
+)
 const ResetPasswordPage = lazy(() => import('../pages/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })))
 const MfaVerifyPage = lazy(() => import('../pages/MfaVerifyPage').then((m) => ({ default: m.MfaVerifyPage })))
 const MfaSetupPage = lazy(() => import('../pages/MfaSetupPage').then((m) => ({ default: m.MfaSetupPage })))
@@ -85,6 +91,14 @@ const getPageTitle = (pathname: string) => {
     return `Reset Password | ${APP_TITLE}`
   }
 
+  if (pathname === '/register') {
+    return `Register | ${APP_TITLE}`
+  }
+
+  if (pathname === '/verify-customer-otp') {
+    return `Verify Email | ${APP_TITLE}`
+  }
+
   if (pathname === '/mfa/verify') {
     return `MFA Verification | ${APP_TITLE}`
   }
@@ -138,6 +152,8 @@ export const AppRouter = () => {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterCustomerPage />} />
+        <Route path="/verify-customer-otp" element={<VerifyCustomerOtpPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/mfa/verify" element={<MfaVerifyPage />} />
 

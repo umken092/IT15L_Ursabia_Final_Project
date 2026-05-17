@@ -1,4 +1,5 @@
 using CMNetwork.Models;
+using CMNetwork.Infrastructure.Identity;
 
 namespace CMNetwork.Services;
 
@@ -13,4 +14,5 @@ public interface IAuthService
     Task<bool> EnableMfaAsync(string userId, string code);
     Task<LoginResponse?> VerifyMfaAndLoginAsync(MfaVerifyRequest request, string? ipAddress = null);
     Task<bool> DisableMfaAsync(string userId, string password);
+    Task<bool> ResendOtpAsync(ApplicationUser user);
 }

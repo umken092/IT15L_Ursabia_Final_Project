@@ -13,6 +13,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
+using CMNetwork.Domain.Entities;
 
 namespace CMNetwork.Controllers;
 
@@ -21,6 +22,8 @@ namespace CMNetwork.Controllers;
 public class AuthController : ControllerBase
 {
     private const string SmtpSettingsPolicyName = "smtp-settings";
+    private static readonly TimeSpan CustomerOtpLifetime = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan CustomerOtpResendCooldown = TimeSpan.FromMinutes(1);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IAuthService _authService;
@@ -72,6 +75,26 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Invalid credentials or account locked." });
         }
 
+        if (response.RequiresCustomerOtpVerification)
+        {
+            await _audit.LogAsync(
+                entityName: "Auth",
+                action: "LoginBlockedPendingCustomerOtp",
+                category: AuditCategories.Security,
+                recordId: response.User.Id,
+                details: new { email = request.Email },
+                performedByOverride: response.User.Id,
+                userEmailOverride: request.Email,
+                ipAddressOverride: ip);
+
+            return StatusCode(StatusCodes.Status403Forbidden, new
+            {
+                message = "Your customer account is pending email verification. Enter the OTP sent to your email before signing in.",
+                requiresCustomerOtpVerification = true,
+                email = request.Email,
+            });
+        }
+
         if (response.RequiresMfa)
         {
             await _audit.LogAsync(
@@ -82,6 +105,7 @@ public class AuthController : ControllerBase
                 performedByOverride: request.Email,
                 userEmailOverride: request.Email,
                 ipAddressOverride: ip);
+
             return Ok(new { requiresMfa = true, mfaSessionToken = response.MfaSessionToken, email = request.Email });
         }
 
@@ -293,6 +317,182 @@ public class AuthController : ControllerBase
         return Ok(new { message = "If the account exists, a password reset email has been sent." });
     }
 
+    [HttpPost("register/customer")]
+    [EnableRateLimiting("login")]
+    [AllowAnonymous]
+    public async Task<IActionResult> RegisterCustomer([FromBody] RegisterCustomerRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(new { message = "Please provide valid registration details." });
+        }
+
+        var normalizedEmail = request.Email.Trim();
+        var existingUser = await _userManager.FindByEmailAsync(normalizedEmail);
+        if (existingUser is not null)
+        {
+            return Conflict(new { message = "An account with this email already exists." });
+        }
+
+        var fullName = request.FullName.Trim();
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            return BadRequest(new { message = "Full name is required." });
+        }
+
+        var existingCustomer = await _dbContext.Customers
+            .FirstOrDefaultAsync(c => c.Email != null && c.Email.ToLower() == normalizedEmail.ToLower());
+
+        Customer customer;
+        if (existingCustomer is not null)
+        {
+            if (!existingCustomer.IsActive)
+            {
+                return BadRequest(new { message = "This customer profile is inactive. Please contact support." });
+            }
+            customer = existingCustomer;
+        }
+        else
+        {
+            var generatedCode = await GenerateCustomerCodeAsync();
+            // Generate a unique 6-digit OTP
+            string otp = await GenerateUniqueOtpAsync();
+            customer = new Customer
+            {
+                Id = Guid.NewGuid(),
+                CustomerCode = generatedCode,
+                Name = string.IsNullOrWhiteSpace(request.CompanyName) ? fullName : request.CompanyName.Trim(),
+                ContactPerson = fullName,
+                Email = normalizedEmail,
+                IsActive = true,
+                CreatedUtc = DateTime.UtcNow,
+                RegistrationOtp = otp,
+                RegistrationOtpGeneratedUtc = DateTime.UtcNow,
+                RegistrationOtpVerified = false,
+            };
+            _dbContext.Customers.Add(customer);
+        }
+
+        var (firstName, middleName, lastName) = SplitName(fullName);
+        var user = new ApplicationUser
+        {
+            Id = Guid.NewGuid(),
+            UserName = normalizedEmail,
+            Email = normalizedEmail,
+            FirstName = firstName,
+            MiddleName = middleName,
+            LastName = lastName,
+            IsActive = true,
+            EmailConfirmed = true,
+            CustomerId = customer.Id,
+            CreatedUtc = DateTime.UtcNow,
+        };
+
+        var createResult = await _userManager.CreateAsync(user, request.Password);
+        if (!createResult.Succeeded)
+        {
+            return BadRequest(new
+            {
+                message = string.Join(" ", createResult.Errors.Select(e => e.Description)),
+                errors = createResult.Errors.ToDictionary(e => e.Code, e => e.Description)
+            });
+        }
+
+        var roleResult = await _userManager.AddToRoleAsync(user, "customer");
+        if (!roleResult.Succeeded)
+        {
+            await _userManager.DeleteAsync(user);
+            return BadRequest(new { message = "Unable to assign customer access role." });
+        }
+
+        await _dbContext.SaveChangesAsync();
+
+        if (!string.IsNullOrWhiteSpace(customer.RegistrationOtp))
+        {
+            await SendCustomerRegistrationOtpEmailAsync(customer, fullName, normalizedEmail);
+        }
+
+        await _audit.LogAsync(
+            entityName: "Auth",
+            action: "CustomerRegistered",
+            category: AuditCategories.Security,
+            recordId: user.Id.ToString(),
+            details: new { email = normalizedEmail, customerId = customer.Id },
+            performedByOverride: user.Id.ToString(),
+            userEmailOverride: normalizedEmail,
+            ipAddressOverride: HttpContext.Connection.RemoteIpAddress?.ToString());
+
+        return Ok(new { message = "Registration successful. Please check your email for your OTP." });
+    }
+
+    private async Task<string> GenerateUniqueOtpAsync()
+    {
+        var random = new Random();
+        for (int i = 0; i < 10; i++)
+        {
+            var otp = random.Next(100000, 999999).ToString();
+            var validAfterUtc = DateTime.UtcNow.Subtract(CustomerOtpLifetime);
+            var exists = await _dbContext.Customers.AnyAsync(c => c.RegistrationOtp == otp && c.RegistrationOtpGeneratedUtc > validAfterUtc && !c.RegistrationOtpVerified);
+            if (!exists)
+                return otp;
+        }
+
+        return random.Next(100000, 999999).ToString();
+    }
+
+    [HttpPost("resend/customer-otp")]
+    [EnableRateLimiting("login")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResendCustomerOtp([FromBody] CustomerOtpResendRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(new AuthResponse { Success = false, Message = "A valid email is required." });
+        }
+
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var successMessage = "If the account exists and still requires verification, a new OTP has been sent.";
+        var customer = await _dbContext.Customers.FirstOrDefaultAsync(c => c.Email != null && c.Email.ToLower() == normalizedEmail);
+
+        if (customer is null || !customer.IsActive || customer.RegistrationOtpVerified)
+        {
+            return Ok(new AuthResponse { Success = true, Message = successMessage });
+        }
+
+        var linkedUser = await _userManager.FindByEmailAsync(normalizedEmail);
+        if (linkedUser is null || !linkedUser.IsActive || linkedUser.CustomerId != customer.Id)
+        {
+            return Ok(new AuthResponse { Success = true, Message = successMessage });
+        }
+
+        if (customer.RegistrationOtpGeneratedUtc.HasValue && DateTime.UtcNow - customer.RegistrationOtpGeneratedUtc.Value < CustomerOtpResendCooldown)
+        {
+            return Ok(new AuthResponse
+            {
+                Success = true,
+                Message = "A verification code was sent recently. Please wait about a minute before requesting another one."
+            });
+        }
+
+        customer.RegistrationOtp = await GenerateUniqueOtpAsync();
+        customer.RegistrationOtpGeneratedUtc = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync();
+
+        await SendCustomerRegistrationOtpEmailAsync(customer, customer.ContactPerson ?? customer.Name, normalizedEmail);
+
+        await _audit.LogAsync(
+            entityName: "Auth",
+            action: "CustomerOtpResent",
+            category: AuditCategories.Security,
+            recordId: customer.Id.ToString(),
+            details: new { email = normalizedEmail },
+            performedByOverride: linkedUser.Id.ToString(),
+            userEmailOverride: normalizedEmail,
+            ipAddressOverride: HttpContext.Connection.RemoteIpAddress?.ToString());
+
+        return Ok(new AuthResponse { Success = true, Message = successMessage });
+    }
+
     [HttpPost("password/reset")]
     [EnableRateLimiting("login")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
@@ -395,5 +595,142 @@ public class AuthController : ControllerBase
 
         var separator = resetUrl.Contains('?', StringComparison.Ordinal) ? "&" : "?";
         return $"{resetUrl}{separator}email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}";
+    }
+
+    private async Task<string> GenerateCustomerCodeAsync()
+    {
+        for (var i = 0; i < 10; i++)
+        {
+            var code = $"CUST-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(100, 999)}";
+            var exists = await _dbContext.Customers.AnyAsync(c => c.CustomerCode == code);
+            if (!exists)
+            {
+                return code;
+            }
+        }
+
+        return $"CUST-{Guid.NewGuid():N}"[..18].ToUpperInvariant();
+    }
+
+    private static (string firstName, string middleName, string lastName) SplitName(string fullName)
+    {
+        var parts = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0)
+        {
+            return ("Customer", string.Empty, "User");
+        }
+
+        if (parts.Length == 1)
+        {
+            return (parts[0], string.Empty, "Customer");
+        }
+
+        if (parts.Length == 2)
+        {
+            return (parts[0], string.Empty, parts[1]);
+        }
+
+        var firstName = parts[0];
+        var lastName = parts[^1];
+        var middleName = string.Join(' ', parts[1..^1]);
+        return (firstName, middleName, lastName);
+    }
+
+    [HttpPost("verify/customer-otp")]
+    [AllowAnonymous]
+    public async Task<IActionResult> VerifyCustomerOtp([FromBody] CustomerOtpVerifyRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(new CustomerOtpVerifyResponse { Success = false, Message = "Invalid request." });
+
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var customer = await _dbContext.Customers.FirstOrDefaultAsync(c => c.Email != null && c.Email.ToLower() == normalizedEmail);
+        if (customer == null || string.IsNullOrWhiteSpace(customer.RegistrationOtp))
+            return BadRequest(new CustomerOtpVerifyResponse { Success = false, Message = "No OTP found for this customer." });
+
+        if (customer.RegistrationOtpVerified)
+            return Ok(new CustomerOtpVerifyResponse { Success = true, Message = "OTP already verified." });
+
+        if (customer.RegistrationOtpGeneratedUtc == null || customer.RegistrationOtpGeneratedUtc < DateTime.UtcNow.Subtract(CustomerOtpLifetime))
+            return BadRequest(new CustomerOtpVerifyResponse { Success = false, Message = "OTP has expired. Please request a new one." });
+
+        if (customer.RegistrationOtp != request.Otp)
+            return BadRequest(new CustomerOtpVerifyResponse { Success = false, Message = "Invalid OTP. Please check and try again." });
+
+        customer.RegistrationOtpVerified = true;
+        await _dbContext.SaveChangesAsync();
+
+        await _audit.LogAsync(
+            entityName: "Auth",
+            action: "CustomerOtpVerified",
+            category: AuditCategories.Security,
+            recordId: customer.Id.ToString(),
+            details: new { email = customer.Email },
+            performedByOverride: customer.Id.ToString(),
+            userEmailOverride: customer.Email,
+            ipAddressOverride: HttpContext.Connection.RemoteIpAddress?.ToString());
+
+        return Ok(new CustomerOtpVerifyResponse { Success = true, Message = "OTP verified successfully. You can now sign in." });
+    }
+
+    [HttpGet("admin/otp/{userId}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetOtpStatus(string userId)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+            return NotFound(new { message = "User not found." });
+
+        var otpStatus = new
+        {
+            user.Email,
+            user.PhoneNumber,
+            user.EmailConfirmed,
+            user.PhoneNumberConfirmed
+        };
+
+        return Ok(otpStatus);
+    }
+
+    [HttpPost("admin/otp/resend/{userId}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ResendOtp(string userId)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+            return NotFound(new { message = "User not found." });
+
+        var result = await _authService.ResendOtpAsync(user);
+        if (!result)
+            return BadRequest(new { message = "Failed to resend OTP." });
+
+        return Ok(new { message = "OTP resent successfully." });
+    }
+
+    private async Task SendCustomerRegistrationOtpEmailAsync(Customer customer, string recipientName, string recipientEmail)
+    {
+        if (string.IsNullOrWhiteSpace(customer.RegistrationOtp))
+        {
+            return;
+        }
+
+        var smtpSettings = await GetSmtpSettingsAsync();
+        if (smtpSettings == null)
+        {
+            return;
+        }
+
+        var emailService = _emailServiceFactory.GetEmailService(smtpSettings);
+        var displayName = string.IsNullOrWhiteSpace(recipientName) ? customer.ContactPerson ?? customer.Name : recipientName.Trim();
+        var subject = "Your Customer Portal Registration OTP";
+        var body = $@"Hello {displayName},<br/><br/>Your one-time passcode (OTP) is: <b>{customer.RegistrationOtp}</b><br/><br/>This code is valid for 10 minutes. Please enter it to verify your account.<br/><br/>If you did not request this, please ignore this email.";
+
+        await emailService.SendEmailAsync(
+            smtpSettings,
+            recipientEmail,
+            subject,
+            body,
+            true,
+            displayName);
     }
 }

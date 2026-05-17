@@ -25,6 +25,7 @@ export const LoginPage = () => {
   const user = useAuthStore((state) => state.user)
   const token = useAuthStore((state) => state.token)
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const loginBlockedVerification = useAuthStore((state) => state.loginBlockedVerification)
 
   // Clear stale auth state when the JWT has expired during the session.
   // Without this, PrivateRoute redirects here but isAuthenticated stays true,
@@ -62,6 +63,13 @@ export const LoginPage = () => {
 
     if (result === 'error') {
       pushToast('error', 'Invalid email or password.')
+      return
+    }
+
+    if (result === 'verify-customer-otp') {
+      const verificationEmail = loginBlockedVerification?.email || values.email.trim()
+      pushToast('warning', loginBlockedVerification?.message || 'Email verification is required before signing in.')
+      navigate('/verify-customer-otp', { state: { email: verificationEmail }, replace: true })
       return
     }
 
@@ -210,9 +218,9 @@ export const LoginPage = () => {
               <button
                 type="button"
                 className="link-button"
-                onClick={() => pushToast('info', 'Registration flow will be enabled in the next step.')}
+                onClick={() => navigate('/register')}
               >
-                Create one
+                Register now!
               </button>
             </p>
 

@@ -19,4 +19,9 @@ public class Customer
     public bool IsActive { get; set; } = true;
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
     public DateTime? LastUpdatedUtc { get; set; }
+
+    // OTP for registration verification
+    public string? RegistrationOtp { get; set; }
+    public DateTime? RegistrationOtpGeneratedUtc { get; set; }
+    public bool RegistrationOtpVerified { get; set; } = false;
 }

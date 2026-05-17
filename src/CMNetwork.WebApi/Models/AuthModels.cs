@@ -1,4 +1,28 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace CMNetwork.Models;
+
+// ── OTP Verification ─────────────────────────────────────────────────────
+public class CustomerOtpVerifyRequest
+{
+    [Required]
+    public string Email { get; set; } = string.Empty;
+    [Required]
+    public string Otp { get; set; } = string.Empty;
+}
+
+public class CustomerOtpResendRequest
+{
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+}
+
+public class CustomerOtpVerifyResponse
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+}
 
 // ── Login ────────────────────────────────────────────────────────────────────
 public class LoginRequest
@@ -14,6 +38,7 @@ public class LoginResponse
     public string? AccessToken { get; set; }
     public string? RefreshToken { get; set; }
     public bool RequiresMfa { get; set; }
+    public bool RequiresCustomerOtpVerification { get; set; }
     public string? MfaSessionToken { get; set; }
     public UserDto User { get; set; } = new();
 
@@ -91,6 +116,27 @@ public class ResetPasswordRequest
     public string Email { get; set; } = string.Empty;
     public string Token { get; set; } = string.Empty;
     public string NewPassword { get; set; } = string.Empty;
+}
+
+public class RegisterCustomerRequest
+{
+    [Required]
+    public string FullName { get; set; } = string.Empty;
+
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+
+    [Required]
+    [MinLength(8)]
+    public string Password { get; set; } = string.Empty;
+
+    [Required]
+    [Compare(nameof(Password))]
+    public string ConfirmPassword { get; set; } = string.Empty;
+
+    [MaxLength(120)]
+    public string? CompanyName { get; set; }
 }
 
 // ── Generic ──────────────────────────────────────────────────────────────────

@@ -53,6 +53,16 @@ public class IdentityAuthService : IAuthService
             return null;
         }
 
+        if (await RequiresCustomerOtpVerificationAsync(user))
+        {
+            _logger.LogInformation("Login blocked for {Email}: customer OTP verification pending", request.Email);
+            return new LoginResponse
+            {
+                RequiresCustomerOtpVerification = true,
+                User = await BuildUserDtoAsync(user),
+            };
+        }
+
         // MFA required?
         if (user.TwoFactorEnabled)
         {
@@ -224,6 +234,38 @@ public class IdentityAuthService : IAuthService
         return true;
     }
 
+    public async Task<bool> ResendOtpAsync(ApplicationUser user)
+    {
+        // Generate OTP
+        var otp = new Random().Next(100000, 999999).ToString();
+
+        // Save OTP to user claims or database
+        var otpClaim = (await _userManager.GetClaimsAsync(user)).FirstOrDefault(c => c.Type == "otp");
+        if (otpClaim != null)
+        {
+            await _userManager.RemoveClaimAsync(user, otpClaim);
+        }
+        await _userManager.AddClaimAsync(user, new Claim("otp", otp));
+
+        // Send OTP via email
+        var emailSent = await SendOtpEmailAsync(user.Email, otp);
+        if (!emailSent)
+        {
+            _logger.LogError("Failed to send OTP email to {Email}", user.Email);
+            return false;
+        }
+
+        _logger.LogInformation("OTP resent to {Email}", user.Email);
+        return true;
+    }
+
+    private async Task<bool> SendOtpEmailAsync(string email, string otp)
+    {
+        // Implement email sending logic here
+        _logger.LogInformation("Sending OTP {Otp} to {Email}", otp, email);
+        return true; // Simulate success
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
     private async Task<LoginResponse> BuildAuthResponseAsync(ApplicationUser user, string? ipAddress)
     {
@@ -257,6 +299,20 @@ public class IdentityAuthService : IAuthService
             DepartmentId     = user.DepartmentId?.ToString(),
             TwoFactorEnabled = user.TwoFactorEnabled,
         };
+    }
+
+    private async Task<bool> RequiresCustomerOtpVerificationAsync(ApplicationUser user)
+    {
+        if (user.CustomerId is null)
+        {
+            return false;
+        }
+
+        var customer = await _db.Customers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == user.CustomerId.Value);
+
+        return customer is not null && !customer.RegistrationOtpVerified;
     }
 
     private static string GenerateQrCodeUri(string email, string key)
