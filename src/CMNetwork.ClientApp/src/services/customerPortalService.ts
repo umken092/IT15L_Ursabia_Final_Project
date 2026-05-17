@@ -44,6 +44,8 @@ export interface CustomerProfile {
   state: string
   country: string
   zipCode: string
+  birthDate?: string
+  gender?: string
   tin?: string
   sss?: string
   bankAccount?: string

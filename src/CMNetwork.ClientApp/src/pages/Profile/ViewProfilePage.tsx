@@ -1,15 +1,28 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { customerPortalService, type CustomerProfile } from '../../services/customerPortalService'
 
-type EditableProfile = Pick<
-  CustomerProfile,
-  'firstName' | 'lastName' | 'phoneNumber' | 'companyName' | 'address' | 'city' | 'state' | 'country' | 'zipCode' | 'tin' | 'sss' | 'bankAccount' | 'bankName'
->
+type EditableProfile = {
+  firstName: string
+  lastName: string
+  phoneNumber?: string
+  companyName?: string
+  address?: string
+  city?: string
+  state?: string
+  country?: string
+  zipCode?: string
+  tin?: string
+  sss?: string
+  bankAccount?: string
+  bankName?: string
+  birthDate?: string
+  gender?: string
+}
 
 const emptyProfileForm: EditableProfile = {
   firstName: '', lastName: '', phoneNumber: '', companyName: '',
   address: '', city: '', state: '', country: '', zipCode: '',
-  tin: '', sss: '', bankAccount: '', bankName: '',
+  tin: '', sss: '', bankAccount: '', bankName: '', birthDate: '', gender: '',
 }
 
 // ─── Shared input style ───────────────────────────────────────────────────────
@@ -85,6 +98,7 @@ const ViewProfilePage: React.FC = () => {
           address: data.address ?? '', city: data.city ?? '',
           state: data.state ?? '', country: data.country ?? '', zipCode: data.zipCode ?? '',
           tin: data.tin ?? '', sss: data.sss ?? '', bankAccount: data.bankAccount ?? '', bankName: data.bankName ?? '',
+          birthDate: data.birthDate ?? '', gender: data.gender ?? '',
         })
         const loanCheck = await customerPortalService.checkLoanAccess()
         setLoanAccess(loanCheck)
@@ -123,6 +137,7 @@ const ViewProfilePage: React.FC = () => {
         address: updated.address ?? '', city: updated.city ?? '',
         state: updated.state ?? '', country: updated.country ?? '', zipCode: updated.zipCode ?? '',
         tin: updated.tin ?? '', sss: updated.sss ?? '', bankAccount: updated.bankAccount ?? '', bankName: updated.bankName ?? '',
+        birthDate: updated.birthDate ?? '', gender: updated.gender ?? '',
       })
       const loanCheck = await customerPortalService.checkLoanAccess()
       setLoanAccess(loanCheck)
@@ -159,6 +174,7 @@ const ViewProfilePage: React.FC = () => {
     profileForm.firstName, profileForm.lastName, profileForm.phoneNumber,
     profileForm.companyName, profileForm.address, profileForm.city,
     profileForm.state, profileForm.country, profileForm.zipCode,
+    profileForm.birthDate, profileForm.gender,
     profileForm.tin, profileForm.sss, profileForm.bankAccount, profileForm.bankName,
   ]
   const filledCount = strengthFields.filter((v) => v && v.trim().length > 0).length
@@ -257,6 +273,26 @@ const ViewProfilePage: React.FC = () => {
                 <FieldLabel required>Last Name</FieldLabel>
                 <input type="text" name="lastName" value={profileForm.lastName} onChange={handleProfileChange}
                   placeholder="Last name" style={inputStyle} required />
+              </div>
+            </div>
+
+            {/* Birthdate and Gender */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <FieldLabel>Birthdate</FieldLabel>
+                <input type="date" name="birthDate" value={profileForm.birthDate} onChange={handleProfileChange}
+                  style={inputStyle} />
+              </div>
+              <div>
+                <FieldLabel>Gender</FieldLabel>
+                <select name="gender" value={profileForm.gender} onChange={(e: any) => handleProfileChange(e)}
+                  style={inputStyle}>
+                  <option value="">Select gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
               </div>
             </div>
 

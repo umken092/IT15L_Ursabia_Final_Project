@@ -50,6 +50,7 @@ public class ProfileController : ControllerBase
         if (user is null)
             return Unauthorized(new { message = "Authenticated user could not be resolved." });
 
+        // Email update
         var email = request.Email.Trim();
         if (!string.Equals(user.Email, email, StringComparison.OrdinalIgnoreCase))
         {
@@ -62,13 +63,36 @@ public class ProfileController : ControllerBase
                 return BadRequest(new { message = string.Join(" ", userNameResult.Errors.Select(x => x.Description)) });
         }
 
-        var nameParts = SplitFullName(request.FullName);
-        user.FirstName = nameParts.firstName;
-        user.MiddleName = nameParts.middleName;
-        user.LastName = nameParts.lastName;
-        user.PhoneNumber = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
-        user.Address = request.Address.Trim();
+        // Update name fields directly or via FullName fallback
+        if (!string.IsNullOrWhiteSpace(request.FirstName) && !string.IsNullOrWhiteSpace(request.LastName))
+        {
+            user.FirstName = request.FirstName.Trim();
+            user.MiddleName = string.IsNullOrWhiteSpace(request.MiddleName) ? string.Empty : request.MiddleName.Trim();
+            user.LastName = request.LastName.Trim();
+        }
+        else if (!string.IsNullOrWhiteSpace(request.FullName))
+        {
+            var nameParts = SplitFullName(request.FullName.Trim());
+            user.FirstName = nameParts.firstName;
+            user.MiddleName = nameParts.middleName;
+            user.LastName = nameParts.lastName;
+        }
 
+        // Contact & address info
+        user.PhoneNumber = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+        user.Address = string.IsNullOrWhiteSpace(request.Address) ? string.Empty : request.Address.Trim();
+        
+        // New registration profile fields
+        if (request.BirthDate.HasValue)
+        {
+            user.Birthdate = request.BirthDate.Value;
+        }
+        if (!string.IsNullOrWhiteSpace(request.Gender))
+        {
+            user.Gender = request.Gender.Trim();
+        }
+
+        // Department assignment
         var departmentIdResult = await ResolveDepartmentIdAsync(request.Department);
         if (!departmentIdResult.isValid)
             return BadRequest(new { message = departmentIdResult.errorMessage });
@@ -122,6 +146,11 @@ public class ProfileController : ControllerBase
     {
         user.Id,
         fullName = user.FullName,
+        firstName = user.FirstName ?? string.Empty,
+        middleName = user.MiddleName ?? string.Empty,
+        lastName = user.LastName ?? string.Empty,
+        birthDate = user.Birthdate,
+        gender = user.Gender ?? string.Empty,
         email = user.Email ?? string.Empty,
         phone = user.PhoneNumber ?? string.Empty,
         address = user.Address ?? string.Empty,
@@ -152,8 +181,22 @@ public class ProfileController : ControllerBase
 
 public sealed class UpdateProfileRequest
 {
-    [Required]
-    public string FullName { get; init; } = string.Empty;
+    /// <summary>Fallback: if FirstName/LastName are not provided, this will be split.</summary>
+    public string? FullName { get; init; }
+
+    [StringLength(64)]
+    public string? FirstName { get; init; }
+
+    [StringLength(64)]
+    public string? MiddleName { get; init; }
+
+    [StringLength(64)]
+    public string? LastName { get; init; }
+
+    public DateOnly? BirthDate { get; init; }
+
+    [RegularExpression("^(Male|Female|Other|Prefer not to say)$")]
+    public string? Gender { get; init; }
 
     [Required]
     [EmailAddress]
@@ -161,8 +204,7 @@ public sealed class UpdateProfileRequest
 
     public string? Phone { get; init; }
 
-    [Required]
-    public string Address { get; init; } = string.Empty;
+    public string? Address { get; init; }
 
     public string? Department { get; init; }
 
