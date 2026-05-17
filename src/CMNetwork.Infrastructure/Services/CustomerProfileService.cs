@@ -1,4 +1,5 @@
 using CMNetwork.Application.Services;
+using CMNetwork.Infrastructure.Identity;
 using CMNetwork.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;

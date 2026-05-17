@@ -1,4 +1,5 @@
 using CMNetwork.Application;
+using CMNetwork.Application.Services;
 using CMNetwork.Infrastructure.Data.Seeders;
 using CMNetwork.Infrastructure.Identity;
 using CMNetwork.Infrastructure.Persistence;
