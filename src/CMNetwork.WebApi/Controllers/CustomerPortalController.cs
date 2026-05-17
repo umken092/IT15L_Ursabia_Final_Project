@@ -144,11 +144,11 @@ FROM Customers");
             {
                 var query = @"
 SELECT CASE
-    WHEN EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'TIN')
-     AND EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'SSS')
-     AND EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'BankAccount')
-     AND EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'BankName')
-     AND EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'BankVerificationStatus')
+    WHEN COL_LENGTH('Customers', 'TIN') IS NOT NULL
+     AND COL_LENGTH('Customers', 'SSS') IS NOT NULL
+     AND COL_LENGTH('Customers', 'BankAccount') IS NOT NULL
+     AND COL_LENGTH('Customers', 'BankName') IS NOT NULL
+     AND COL_LENGTH('Customers', 'BankVerificationStatus') IS NOT NULL
     THEN 1 ELSE 0 END";
 
                 var hasColumns = await _dbContext.Database.SqlQueryRaw<int>(query).SingleAsync();
@@ -170,10 +170,10 @@ SELECT CASE
             {
                 var query = @"
 SELECT CASE
-    WHEN EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'BirthDate')
-     AND EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'Age')
-     AND EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'Gender')
-     AND EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'MaritalStatus')
+    WHEN COL_LENGTH('Customers', 'BirthDate') IS NOT NULL
+     AND COL_LENGTH('Customers', 'Age') IS NOT NULL
+     AND COL_LENGTH('Customers', 'Gender') IS NOT NULL
+     AND COL_LENGTH('Customers', 'MaritalStatus') IS NOT NULL
     THEN 1 ELSE 0 END";
 
                 var hasColumns = await _dbContext.Database.SqlQueryRaw<int>(query).SingleAsync();
