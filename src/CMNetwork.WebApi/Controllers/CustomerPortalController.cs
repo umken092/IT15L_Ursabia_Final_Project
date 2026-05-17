@@ -583,6 +583,18 @@ SELECT CASE
     [HttpPut("profile")]
     public async Task<IActionResult> UpdateProfile([FromBody] UpdateCustomerProfileRequest request)
     {
+        var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
+
+        // On legacy schemas, TIN/SSS/Bank columns do not exist yet.
+        // Ignore extended field validation so profile updates do not fail with 400.
+        if (!hasExtendedColumns)
+        {
+            ModelState.Remove(nameof(UpdateCustomerProfileRequest.TIN));
+            ModelState.Remove(nameof(UpdateCustomerProfileRequest.SSS));
+            ModelState.Remove(nameof(UpdateCustomerProfileRequest.BankAccount));
+            ModelState.Remove(nameof(UpdateCustomerProfileRequest.BankName));
+        }
+
         if (!ModelState.IsValid)
             return ValidationProblem(ModelState);
 
@@ -616,7 +628,6 @@ SELECT CASE
         if (!string.IsNullOrWhiteSpace(request.PostalCode))
             customer.PostalCode = request.PostalCode;
 
-        var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
         if (hasExtendedColumns)
         {
             if (!string.IsNullOrWhiteSpace(request.TIN))
