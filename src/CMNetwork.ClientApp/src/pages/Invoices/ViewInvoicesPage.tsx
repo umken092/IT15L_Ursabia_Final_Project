@@ -90,7 +90,7 @@ const ViewInvoicesPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{ padding: '24px 28px', maxWidth: 900, margin: '0 auto' }}>
+      <div style={{ padding: '24px 28px' }}>
         {[60, 200].map((h, i) => <div key={i} style={{ height: h, background: '#f1f5f9', borderRadius: 8, marginBottom: 16, opacity: 1 - i * 0.3 }} />)}
       </div>
     )
@@ -127,7 +127,7 @@ const ViewInvoicesPage: React.FC = () => {
   )
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* Header */}
       <div style={{

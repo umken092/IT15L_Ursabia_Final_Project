@@ -158,7 +158,7 @@ const ViewProfilePage: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{ padding: '24px 28px', maxWidth: 900, margin: '0 auto' }}>
+      <div style={{ padding: '24px 28px' }}>
         {[1, 2, 3].map((i) => (
           <div key={i} style={{ height: i === 1 ? 48 : 120, background: '#f1f5f9', borderRadius: 8, marginBottom: 16, opacity: 1 - i * 0.2 }} />
         ))}
@@ -177,7 +177,7 @@ const ViewProfilePage: React.FC = () => {
   if (!profile) return null
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* ── Page Header ──────────────────────────────────────────────── */}
       <div style={{

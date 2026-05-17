@@ -212,7 +212,7 @@ export const CustomerPortalModule = () => {
     new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount)
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: 960, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* ── Page Header ──────────────────────────────────────────────── */}
       <div style={{
