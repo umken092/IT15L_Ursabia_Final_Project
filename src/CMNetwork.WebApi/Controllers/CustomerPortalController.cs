@@ -54,23 +54,104 @@ public class CustomerPortalController : ControllerBase
 
     private async Task<Customer?> GetCurrentCustomerAsync()
     {
-        if (_currentCustomer.CustomerId.HasValue)
-        {
-            return await _dbContext.Customers.FirstOrDefaultAsync(c => c.Id == _currentCustomer.CustomerId.Value);
-        }
-
         // Compatibility fallback for old tokens without customerId claim.
         var email = User.FindFirstValue(ClaimTypes.Email)
                     ?? User.FindFirstValue("email")
                     ?? User.Identity?.Name;
+
+        try
+        {
+            if (_currentCustomer.CustomerId.HasValue)
+            {
+                return await _dbContext.Customers.FirstOrDefaultAsync(c => c.Id == _currentCustomer.CustomerId.Value);
+            }
+
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return null;
+            }
+
+            return await _dbContext.Customers
+                .FirstOrDefaultAsync(c => c.Email != null && c.Email.ToLower() == email.ToLower());
+        }
+        catch
+        {
+            // In environments where new profile columns are not migrated yet,
+            // EF entity materialization can fail. Fallback to a legacy-safe query.
+            return await GetCurrentCustomerLegacySafeAsync(_currentCustomer.CustomerId, email);
+        }
+    }
+
+    private async Task<Customer?> GetCurrentCustomerLegacySafeAsync(Guid? customerId, string? email)
+    {
+        var legacySafeQuery = _dbContext.Customers.FromSqlRaw(@"
+SELECT
+    Id,
+    CustomerCode,
+    Name,
+    ContactPerson,
+    Email,
+    PhoneNumber,
+    Address,
+    City,
+    [State],
+    PostalCode,
+    Country,
+    TaxId,
+    PaymentTerms,
+    CreditLimit,
+    IsActive,
+    CreatedUtc,
+    LastUpdatedUtc,
+    RegistrationOtp,
+    RegistrationOtpGeneratedUtc,
+    RegistrationOtpVerified,
+    CAST(NULL AS nvarchar(32)) AS TIN,
+    CAST(NULL AS nvarchar(32)) AS SSS,
+    CAST(NULL AS nvarchar(128)) AS BankAccount,
+    CAST(NULL AS nvarchar(128)) AS BankName,
+    CAST(0 AS int) AS BankVerificationStatus,
+    CAST(NULL AS datetime2) AS BankVerifiedAtUtc
+FROM Customers");
+
+        if (customerId.HasValue)
+        {
+            return await legacySafeQuery.FirstOrDefaultAsync(c => c.Id == customerId.Value);
+        }
 
         if (string.IsNullOrWhiteSpace(email))
         {
             return null;
         }
 
-        return await _dbContext.Customers
+        return await legacySafeQuery
             .FirstOrDefaultAsync(c => c.Email != null && c.Email.ToLower() == email.ToLower());
+    }
+
+    private async Task<bool> HasExtendedCustomerProfileColumnsAsync()
+    {
+        return await MemoryCache.GetOrCreateAsync("customer:extended-profile-columns:v1", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            try
+            {
+                var query = @"
+SELECT CASE
+    WHEN EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'TIN')
+     AND EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'SSS')
+     AND EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'BankAccount')
+     AND EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'BankName')
+     AND EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Customers' AND COLUMN_NAME = 'BankVerificationStatus')
+    THEN 1 ELSE 0 END";
+
+                var hasColumns = await _dbContext.Database.SqlQueryRaw<int>(query).SingleAsync();
+                return hasColumns == 1;
+            }
+            catch
+            {
+                return false;
+            }
+        });
     }
 
     [HttpGet("dashboard")]
@@ -475,6 +556,8 @@ public class CustomerPortalController : ControllerBase
             return NotFound(new { message = MissingCustomerMessage });
         }
 
+        var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
+
         return Ok(new
         {
             id = customer.Id,
@@ -487,7 +570,13 @@ public class CustomerPortalController : ControllerBase
             city = customer.City,
             state = customer.State,
             country = customer.Country,
-            postalCode = customer.PostalCode
+            postalCode = customer.PostalCode,
+            tin = hasExtendedColumns ? customer.TIN : null,
+            sss = hasExtendedColumns ? customer.SSS : null,
+            bankAccount = hasExtendedColumns ? customer.BankAccount : null,
+            bankName = hasExtendedColumns ? customer.BankName : null,
+            bankVerificationStatus = hasExtendedColumns ? customer.BankVerificationStatus.ToString() : BankVerificationStatus.NotVerified.ToString(),
+            bankVerifiedAtUtc = hasExtendedColumns ? customer.BankVerifiedAtUtc : null
         });
     }
 
@@ -527,24 +616,32 @@ public class CustomerPortalController : ControllerBase
         if (!string.IsNullOrWhiteSpace(request.PostalCode))
             customer.PostalCode = request.PostalCode;
 
-        if (!string.IsNullOrWhiteSpace(request.TIN))
-            customer.TIN = request.TIN;
+        var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
+        if (hasExtendedColumns)
+        {
+            if (!string.IsNullOrWhiteSpace(request.TIN))
+                customer.TIN = request.TIN;
 
-        if (!string.IsNullOrWhiteSpace(request.SSS))
-            customer.SSS = request.SSS;
+            if (!string.IsNullOrWhiteSpace(request.SSS))
+                customer.SSS = request.SSS;
 
-        if (!string.IsNullOrWhiteSpace(request.BankAccount))
-            customer.BankAccount = request.BankAccount;
+            if (!string.IsNullOrWhiteSpace(request.BankAccount))
+                customer.BankAccount = request.BankAccount;
 
-        if (!string.IsNullOrWhiteSpace(request.BankName))
-            customer.BankName = request.BankName;
+            if (!string.IsNullOrWhiteSpace(request.BankName))
+                customer.BankName = request.BankName;
+        }
 
         customer.LastUpdatedUtc = DateTime.UtcNow;
 
-        _dbContext.Customers.Update(customer);
         await _dbContext.SaveChangesAsync();
 
-        return Ok(new { message = "Profile updated successfully" });
+        return Ok(new
+        {
+            message = hasExtendedColumns
+                ? "Profile updated successfully"
+                : "Profile updated. Extended profile fields (TIN/SSS/Bank) will be available after database migration."
+        });
     }
 
     [HttpGet("loan-access-check")]
@@ -556,16 +653,22 @@ public class CustomerPortalController : ControllerBase
             return NotFound(new { message = MissingCustomerMessage });
         }
 
-        var profileFields = new[] 
-        { 
-            customer.ContactPerson, customer.Email, customer.PhoneNumber, 
-            customer.Address, customer.City, customer.State, customer.Country, 
-            customer.PostalCode, customer.TIN, customer.SSS, customer.BankAccount, customer.BankName 
+        var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
+
+        var profileFields = new[]
+        {
+            customer.ContactPerson, customer.Email, customer.PhoneNumber,
+            customer.Address, customer.City, customer.State, customer.Country,
+            customer.PostalCode,
+            hasExtendedColumns ? customer.TIN : null,
+            hasExtendedColumns ? customer.SSS : null,
+            hasExtendedColumns ? customer.BankAccount : null,
+            hasExtendedColumns ? customer.BankName : null
         };
-        
+
         var filledCount = profileFields.Count(f => !string.IsNullOrWhiteSpace(f));
         var completionPercentage = (int)Math.Round((filledCount / (double)profileFields.Length) * 100);
-        var isBankVerified = customer.BankVerificationStatus == BankVerificationStatus.Verified;
+        var isBankVerified = hasExtendedColumns && customer.BankVerificationStatus == BankVerificationStatus.Verified;
         var canAccessLoans = completionPercentage >= 80 && isBankVerified;
 
         return Ok(new LoanAccessCheckResponse
@@ -578,6 +681,30 @@ public class CustomerPortalController : ControllerBase
                 : completionPercentage < 80
                     ? $"Complete {100 - completionPercentage}% more of your profile to unlock loan access."
                     : "Bank verification is required to access loans. Please verify your bank account."
+        });
+    }
+
+    [HttpGet("profile-schema-health")]
+    public async Task<IActionResult> GetProfileSchemaHealth()
+    {
+        var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
+
+        return Ok(new
+        {
+            schema = hasExtendedColumns ? "extended" : "legacy",
+            hasExtendedProfileColumns = hasExtendedColumns,
+            requiredExtendedColumns = new[]
+            {
+                "TIN",
+                "SSS",
+                "BankAccount",
+                "BankName",
+                "BankVerificationStatus"
+            },
+            guidance = hasExtendedColumns
+                ? "Profile and loan-gating schema is in sync."
+                : "DB is running legacy Customers schema. Apply migration 20260518_AddProfileCompletionAndLoanAccess to enable TIN/SSS/Bank fields and full loan gating.",
+            checkedAtUtc = DateTime.UtcNow
         });
     }
 
