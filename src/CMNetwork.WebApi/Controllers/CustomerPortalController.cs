@@ -84,7 +84,22 @@ public class CustomerPortalController : ControllerBase
 
     private async Task<Customer?> GetCurrentCustomerLegacySafeAsync(Guid? customerId, string? email)
     {
-        var legacySafeQuery = _dbContext.Customers.FromSqlRaw(@"
+        var hasDemographicColumns = await HasDemographicCustomerProfileColumnsAsync();
+        var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
+
+        var birthDateExpr = hasDemographicColumns ? "[BirthDate]" : "CAST(NULL AS date)";
+        var ageExpr = hasDemographicColumns ? "[Age]" : "CAST(NULL AS int)";
+        var genderExpr = hasDemographicColumns ? "[Gender]" : "CAST(NULL AS nvarchar(16))";
+        var maritalStatusExpr = hasDemographicColumns ? "[MaritalStatus]" : "CAST(NULL AS nvarchar(32))";
+
+        var tinExpr = hasExtendedColumns ? "[TIN]" : "CAST(NULL AS nvarchar(32))";
+        var sssExpr = hasExtendedColumns ? "[SSS]" : "CAST(NULL AS nvarchar(32))";
+        var bankAccountExpr = hasExtendedColumns ? "[BankAccount]" : "CAST(NULL AS nvarchar(128))";
+        var bankNameExpr = hasExtendedColumns ? "[BankName]" : "CAST(NULL AS nvarchar(128))";
+        var bankStatusExpr = hasExtendedColumns ? "[BankVerificationStatus]" : "CAST(0 AS int)";
+        var bankVerifiedExpr = hasExtendedColumns ? "[BankVerifiedAtUtc]" : "CAST(NULL AS datetime2)";
+
+        var query = $@"
 SELECT
     Id,
     CustomerCode,
@@ -92,10 +107,10 @@ SELECT
     CAST(NULL AS nvarchar(64)) AS FirstName,
     CAST(NULL AS nvarchar(64)) AS MiddleName,
     CAST(NULL AS nvarchar(64)) AS LastName,
-    CAST(NULL AS date) AS BirthDate,
-    CAST(NULL AS int) AS Age,
-    CAST(NULL AS nvarchar(16)) AS Gender,
-    CAST(NULL AS nvarchar(32)) AS MaritalStatus,
+    {birthDateExpr} AS BirthDate,
+    {ageExpr} AS Age,
+    {genderExpr} AS Gender,
+    {maritalStatusExpr} AS MaritalStatus,
     ContactPerson,
     Email,
     PhoneNumber,
@@ -113,13 +128,15 @@ SELECT
     RegistrationOtp,
     RegistrationOtpGeneratedUtc,
     RegistrationOtpVerified,
-    CAST(NULL AS nvarchar(32)) AS TIN,
-    CAST(NULL AS nvarchar(32)) AS SSS,
-    CAST(NULL AS nvarchar(128)) AS BankAccount,
-    CAST(NULL AS nvarchar(128)) AS BankName,
-    CAST(0 AS int) AS BankVerificationStatus,
-    CAST(NULL AS datetime2) AS BankVerifiedAtUtc
-FROM Customers");
+    {tinExpr} AS TIN,
+    {sssExpr} AS SSS,
+    {bankAccountExpr} AS BankAccount,
+    {bankNameExpr} AS BankName,
+    {bankStatusExpr} AS BankVerificationStatus,
+    {bankVerifiedExpr} AS BankVerifiedAtUtc
+FROM Customers";
+
+        var legacySafeQuery = _dbContext.Customers.FromSqlRaw(query);
 
         if (customerId.HasValue)
         {
