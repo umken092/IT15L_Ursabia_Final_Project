@@ -327,6 +327,40 @@ public class AuthController : ControllerBase
             return BadRequest(new { message = "Please provide valid registration details." });
         }
 
+        var firstName = request.FirstName?.Trim() ?? string.Empty;
+        var middleName = request.MiddleName?.Trim() ?? string.Empty;
+        var lastName = request.LastName?.Trim() ?? string.Empty;
+
+        // Backward compatibility for older clients that still send only FullName.
+        if ((string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName))
+            && !string.IsNullOrWhiteSpace(request.FullName))
+        {
+            var split = SplitName(request.FullName.Trim());
+            if (string.IsNullOrWhiteSpace(firstName)) firstName = split.firstName;
+            if (string.IsNullOrWhiteSpace(middleName)) middleName = split.middleName;
+            if (string.IsNullOrWhiteSpace(lastName)) lastName = split.lastName;
+        }
+
+        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName))
+        {
+            return BadRequest(new { message = "First name and last name are required." });
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (request.BirthDate > today)
+        {
+            return BadRequest(new { message = "Birthdate cannot be in the future." });
+        }
+
+        var computedAge = today.Year - request.BirthDate.Year;
+        var birthDateThisYear = request.BirthDate.AddYears(computedAge);
+        if (birthDateThisYear > today) computedAge--;
+
+        if (Math.Abs(computedAge - request.Age) > 1)
+        {
+            return BadRequest(new { message = "Age does not match the selected birthdate." });
+        }
+
         var normalizedEmail = request.Email.Trim();
         var existingUser = await _userManager.FindByEmailAsync(normalizedEmail);
         if (existingUser is not null)
@@ -334,11 +368,7 @@ public class AuthController : ControllerBase
             return Conflict(new { message = "An account with this email already exists." });
         }
 
-        var fullName = request.FullName.Trim();
-        if (string.IsNullOrWhiteSpace(fullName))
-        {
-            return BadRequest(new { message = "Full name is required." });
-        }
+        var fullName = string.Join(' ', new[] { firstName, middleName, lastName }.Where(x => !string.IsNullOrWhiteSpace(x))).Trim();
 
         var existingCustomer = await _dbContext.Customers
             .FirstOrDefaultAsync(c => c.Email != null && c.Email.ToLower() == normalizedEmail.ToLower());
@@ -350,6 +380,22 @@ public class AuthController : ControllerBase
             {
                 return BadRequest(new { message = "This customer profile is inactive. Please contact support." });
             }
+
+            existingCustomer.FirstName = firstName;
+            existingCustomer.MiddleName = middleName;
+            existingCustomer.LastName = lastName;
+            existingCustomer.BirthDate = request.BirthDate;
+            existingCustomer.Age = request.Age;
+            existingCustomer.Gender = request.Gender.Trim();
+            existingCustomer.MaritalStatus = request.MaritalStatus.Trim();
+            existingCustomer.Address = request.Address.Trim();
+            existingCustomer.City = request.City.Trim();
+            existingCustomer.Country = request.Country.Trim();
+            existingCustomer.PostalCode = request.PostalCode.Trim();
+            existingCustomer.PhoneNumber = request.ContactNumber.Trim();
+            existingCustomer.ContactPerson = fullName;
+            existingCustomer.Name = string.IsNullOrWhiteSpace(request.CompanyName) ? fullName : request.CompanyName.Trim();
+            existingCustomer.LastUpdatedUtc = DateTime.UtcNow;
             customer = existingCustomer;
         }
         else
@@ -362,8 +408,20 @@ public class AuthController : ControllerBase
                 Id = Guid.NewGuid(),
                 CustomerCode = generatedCode,
                 Name = string.IsNullOrWhiteSpace(request.CompanyName) ? fullName : request.CompanyName.Trim(),
+                FirstName = firstName,
+                MiddleName = middleName,
+                LastName = lastName,
+                BirthDate = request.BirthDate,
+                Age = request.Age,
+                Gender = request.Gender.Trim(),
+                MaritalStatus = request.MaritalStatus.Trim(),
                 ContactPerson = fullName,
                 Email = normalizedEmail,
+                PhoneNumber = request.ContactNumber.Trim(),
+                Address = request.Address.Trim(),
+                City = request.City.Trim(),
+                Country = request.Country.Trim(),
+                PostalCode = request.PostalCode.Trim(),
                 IsActive = true,
                 CreatedUtc = DateTime.UtcNow,
                 RegistrationOtp = otp,
@@ -373,7 +431,6 @@ public class AuthController : ControllerBase
             _dbContext.Customers.Add(customer);
         }
 
-        var (firstName, middleName, lastName) = SplitName(fullName);
         var user = new ApplicationUser
         {
             Id = Guid.NewGuid(),
@@ -382,6 +439,10 @@ public class AuthController : ControllerBase
             FirstName = firstName,
             MiddleName = middleName,
             LastName = lastName,
+            Birthdate = request.BirthDate,
+            Gender = request.Gender.Trim(),
+            Address = request.Address.Trim(),
+            PhoneNumber = request.ContactNumber.Trim(),
             IsActive = true,
             EmailConfirmed = true,
             CustomerId = customer.Id,

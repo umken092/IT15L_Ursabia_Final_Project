@@ -269,6 +269,13 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
         {
             entity.Property(x => x.CustomerCode).HasMaxLength(32).IsRequired();
             entity.Property(x => x.Name).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.FirstName).HasMaxLength(64);
+            entity.Property(x => x.MiddleName).HasMaxLength(64);
+            entity.Property(x => x.LastName).HasMaxLength(64);
+            entity.Property(x => x.BirthDate).HasColumnType("date");
+            entity.Property(x => x.Age);
+            entity.Property(x => x.Gender).HasMaxLength(16);
+            entity.Property(x => x.MaritalStatus).HasMaxLength(32);
             entity.Property(x => x.ContactPerson).HasMaxLength(128);
             entity.Property(x => x.Email).HasMaxLength(256);
             entity.Property(x => x.PhoneNumber).HasMaxLength(32);

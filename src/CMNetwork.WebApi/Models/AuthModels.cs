@@ -120,8 +120,55 @@ public class ResetPasswordRequest
 
 public class RegisterCustomerRequest
 {
+    [MaxLength(128)]
+    public string? FullName { get; set; }
+
     [Required]
-    public string FullName { get; set; } = string.Empty;
+    [StringLength(64)]
+    public string FirstName { get; set; } = string.Empty;
+
+    [StringLength(64)]
+    public string? MiddleName { get; set; }
+
+    [Required]
+    [StringLength(64)]
+    public string LastName { get; set; } = string.Empty;
+
+    [Required]
+    public DateOnly BirthDate { get; set; }
+
+    [Required]
+    [Range(0, 150)]
+    public int Age { get; set; }
+
+    [Required]
+    [RegularExpression("^(Male|Female|Other|Prefer not to say)$")]
+    public string Gender { get; set; } = string.Empty;
+
+    [Required]
+    [RegularExpression("^(Single|Married|Separated|Divorced|Widowed)$")]
+    public string MaritalStatus { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(512)]
+    public string Address { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(128)]
+    public string City { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(128)]
+    public string Country { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(16)]
+    public string PostalCode { get; set; } = string.Empty;
+
+    [Required]
+    [Phone]
+    [StringLength(32)]
+    public string ContactNumber { get; set; } = string.Empty;
 
     [Required]
     [EmailAddress]

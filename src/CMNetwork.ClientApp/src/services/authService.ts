@@ -63,7 +63,19 @@ export interface ResetPasswordRequest {
 }
 
 export interface RegisterCustomerRequest {
-  fullName: string
+  fullName?: string
+  firstName: string
+  middleName?: string
+  lastName: string
+  birthDate: string
+  age: number
+  gender: 'Male' | 'Female' | 'Other' | 'Prefer not to say'
+  maritalStatus: 'Single' | 'Married' | 'Separated' | 'Divorced' | 'Widowed'
+  address: string
+  city: string
+  country: string
+  postalCode: string
+  contactNumber: string
   email: string
   password: string
   confirmPassword: string

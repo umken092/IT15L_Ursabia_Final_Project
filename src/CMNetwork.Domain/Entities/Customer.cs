@@ -12,6 +12,13 @@ public class Customer
     public Guid Id { get; set; }
     public string CustomerCode { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    public string? FirstName { get; set; }
+    public string? MiddleName { get; set; }
+    public string? LastName { get; set; }
+    public DateOnly? BirthDate { get; set; }
+    public int? Age { get; set; }
+    public string? Gender { get; set; }
+    public string? MaritalStatus { get; set; }
     public string? ContactPerson { get; set; }
     public string? Email { get; set; }
     public string? PhoneNumber { get; set; }
