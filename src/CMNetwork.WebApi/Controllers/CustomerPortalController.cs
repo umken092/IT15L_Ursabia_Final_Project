@@ -578,6 +578,11 @@ SELECT CASE
             state = customer.State,
             country = customer.Country,
             postalCode = customer.PostalCode,
+            zipCode = customer.PostalCode,
+            birthDate = customer.BirthDate,
+            age = customer.Age,
+            gender = customer.Gender,
+            maritalStatus = customer.MaritalStatus,
             tin = hasExtendedColumns ? customer.TIN : null,
             sss = hasExtendedColumns ? customer.SSS : null,
             bankAccount = hasExtendedColumns ? customer.BankAccount : null,
@@ -592,7 +597,7 @@ SELECT CASE
     {
         var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
 
-        // On legacy schemas, TIN/SSS/Bank columns do not exist yet.
+        // On legacy schemas, extended columns do not exist yet.
         // Ignore extended field validation so profile updates do not fail with 400.
         if (!hasExtendedColumns)
         {
@@ -600,6 +605,10 @@ SELECT CASE
             ModelState.Remove(nameof(UpdateCustomerProfileRequest.SSS));
             ModelState.Remove(nameof(UpdateCustomerProfileRequest.BankAccount));
             ModelState.Remove(nameof(UpdateCustomerProfileRequest.BankName));
+            ModelState.Remove(nameof(UpdateCustomerProfileRequest.BirthDate));
+            ModelState.Remove(nameof(UpdateCustomerProfileRequest.Age));
+            ModelState.Remove(nameof(UpdateCustomerProfileRequest.Gender));
+            ModelState.Remove(nameof(UpdateCustomerProfileRequest.MaritalStatus));
         }
 
         if (!ModelState.IsValid)
@@ -632,22 +641,35 @@ SELECT CASE
         if (!string.IsNullOrWhiteSpace(request.Country))
             customer.Country = request.Country;
 
-        if (!string.IsNullOrWhiteSpace(request.PostalCode))
-            customer.PostalCode = request.PostalCode;
+        var postalCode = string.IsNullOrWhiteSpace(request.PostalCode) ? request.ZipCode : request.PostalCode;
+        if (!string.IsNullOrWhiteSpace(postalCode))
+            customer.PostalCode = postalCode;
 
         if (hasExtendedColumns)
         {
-            if (!string.IsNullOrWhiteSpace(request.TIN))
-                customer.TIN = request.TIN;
+            if (request.TIN is not null)
+                customer.TIN = string.IsNullOrWhiteSpace(request.TIN) ? null : request.TIN;
 
-            if (!string.IsNullOrWhiteSpace(request.SSS))
-                customer.SSS = request.SSS;
+            if (request.SSS is not null)
+                customer.SSS = string.IsNullOrWhiteSpace(request.SSS) ? null : request.SSS;
 
-            if (!string.IsNullOrWhiteSpace(request.BankAccount))
-                customer.BankAccount = request.BankAccount;
+            if (request.BankAccount is not null)
+                customer.BankAccount = string.IsNullOrWhiteSpace(request.BankAccount) ? null : request.BankAccount;
 
-            if (!string.IsNullOrWhiteSpace(request.BankName))
-                customer.BankName = request.BankName;
+            if (request.BankName is not null)
+                customer.BankName = string.IsNullOrWhiteSpace(request.BankName) ? null : request.BankName;
+
+            if (request.BirthDate.HasValue)
+                customer.BirthDate = request.BirthDate.Value;
+
+            if (request.Age.HasValue)
+                customer.Age = request.Age.Value;
+
+            if (!string.IsNullOrWhiteSpace(request.Gender))
+                customer.Gender = request.Gender;
+
+            if (!string.IsNullOrWhiteSpace(request.MaritalStatus))
+                customer.MaritalStatus = request.MaritalStatus;
         }
 
         customer.LastUpdatedUtc = DateTime.UtcNow;
@@ -656,6 +678,28 @@ SELECT CASE
 
         return Ok(new
         {
+            id = customer.Id,
+            firstName = customer.ContactPerson ?? string.Empty,
+            lastName = customer.Name,
+            email = customer.Email,
+            phoneNumber = customer.PhoneNumber,
+            companyName = customer.Name,
+            address = customer.Address,
+            city = customer.City,
+            state = customer.State,
+            country = customer.Country,
+            postalCode = customer.PostalCode,
+            zipCode = customer.PostalCode,
+            birthDate = customer.BirthDate,
+            age = customer.Age,
+            gender = customer.Gender,
+            maritalStatus = customer.MaritalStatus,
+            tin = hasExtendedColumns ? customer.TIN : null,
+            sss = hasExtendedColumns ? customer.SSS : null,
+            bankAccount = hasExtendedColumns ? customer.BankAccount : null,
+            bankName = hasExtendedColumns ? customer.BankName : null,
+            bankVerificationStatus = hasExtendedColumns ? customer.BankVerificationStatus.ToString() : BankVerificationStatus.NotVerified.ToString(),
+            bankVerifiedAtUtc = hasExtendedColumns ? customer.BankVerifiedAtUtc : null,
             message = hasExtendedColumns
                 ? "Profile updated successfully"
                 : "Profile updated. Extended profile fields (TIN/SSS/Bank) will be available after database migration."
@@ -1260,12 +1304,26 @@ public sealed class UpdateCustomerProfileRequest
     [StringLength(16)]
     public string? PostalCode { get; set; }
 
+    [StringLength(16)]
+    public string? ZipCode { get; set; }
+
+    public DateOnly? BirthDate { get; set; }
+
+    [Range(0, 150)]
+    public int? Age { get; set; }
+
+    [StringLength(16)]
+    [RegularExpression("^(Male|Female|Other|Prefer not to say)$")]
+    public string? Gender { get; set; }
+
     [StringLength(32)]
-    [RegularExpression("^[0-9]{3}-[0-9]{3}-[0-9]{3}-[0-9]{3}$", ErrorMessage = "TIN must be in format XXX-XXX-XXX-XXX")]
+    [RegularExpression("^(Single|Married|Separated|Divorced|Widowed)$")]
+    public string? MaritalStatus { get; set; }
+
+    [StringLength(32)]
     public string? TIN { get; set; }
 
     [StringLength(32)]
-    [RegularExpression("^[0-9]{2}-[0-9]{7}-[0-9]$", ErrorMessage = "SSS must be in format XX-XXXXXXX-X")]
     public string? SSS { get; set; }
 
     [StringLength(128)]

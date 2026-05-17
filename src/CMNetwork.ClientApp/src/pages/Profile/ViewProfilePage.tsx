@@ -16,13 +16,46 @@ type EditableProfile = {
   bankAccount?: string
   bankName?: string
   birthDate?: string
+  age?: string
   gender?: string
+  maritalStatus?: string
 }
 
 const emptyProfileForm: EditableProfile = {
   firstName: '', lastName: '', phoneNumber: '', companyName: '',
   address: '', city: '', state: '', country: '', zipCode: '',
-  tin: '', sss: '', bankAccount: '', bankName: '', birthDate: '', gender: '',
+  tin: '', sss: '', bankAccount: '', bankName: '', birthDate: '', age: '', gender: '', maritalStatus: '',
+}
+
+const calculateAgeFromBirthDate = (birthDate: string): string => {
+  if (!birthDate) return ''
+  const dob = new Date(birthDate)
+  if (Number.isNaN(dob.getTime())) return ''
+
+  const today = new Date()
+  let age = today.getFullYear() - dob.getFullYear()
+  const monthDiff = today.getMonth() - dob.getMonth()
+  const hasBirthdayPassed = monthDiff > 0 || (monthDiff === 0 && today.getDate() >= dob.getDate())
+  if (!hasBirthdayPassed) age -= 1
+  return age >= 0 ? String(age) : ''
+}
+
+const parseApiError = (error: unknown): string => {
+  if (typeof error !== 'object' || error === null) return 'Unable to update profile.'
+  const maybeError = error as { response?: { data?: any } }
+  const data = maybeError.response?.data
+
+  if (!data) return 'Unable to update profile.'
+  if (typeof data.message === 'string' && data.message.trim()) return data.message
+  if (typeof data.title === 'string' && data.title.trim()) return data.title
+
+  const errors = data.errors as Record<string, string[]> | undefined
+  if (errors) {
+    const first = Object.values(errors).flat().find(Boolean)
+    if (first) return first
+  }
+
+  return 'Unable to update profile.'
 }
 
 // ─── Shared input style ───────────────────────────────────────────────────────
@@ -96,9 +129,9 @@ const ViewProfilePage: React.FC = () => {
           firstName: data.firstName ?? '', lastName: data.lastName ?? '',
           phoneNumber: data.phoneNumber ?? '', companyName: data.companyName ?? '',
           address: data.address ?? '', city: data.city ?? '',
-          state: data.state ?? '', country: data.country ?? '', zipCode: data.zipCode ?? '',
+          state: data.state ?? '', country: data.country ?? '', zipCode: data.zipCode ?? data.postalCode ?? '',
           tin: data.tin ?? '', sss: data.sss ?? '', bankAccount: data.bankAccount ?? '', bankName: data.bankName ?? '',
-          birthDate: data.birthDate ?? '', gender: data.gender ?? '',
+          birthDate: data.birthDate ?? '', age: typeof data.age === 'number' ? String(data.age) : '', gender: data.gender ?? '', maritalStatus: data.maritalStatus ?? '',
         })
         const loanCheck = await customerPortalService.checkLoanAccess()
         setLoanAccess(loanCheck)
@@ -111,9 +144,14 @@ const ViewProfilePage: React.FC = () => {
     fetchProfile()
   }, [])
 
-  const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
-    setProfileForm((prev) => ({ ...prev, [name]: value }))
+    setProfileForm((prev) => {
+      if (name === 'birthDate') {
+        return { ...prev, birthDate: value, age: calculateAgeFromBirthDate(value) }
+      }
+      return { ...prev, [name]: value }
+    })
   }
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
@@ -125,26 +163,29 @@ const ViewProfilePage: React.FC = () => {
     try {
       setSavingProfile(true)
       setProfileError(null)
+      const parsedAge = profileForm.age?.trim() ? Number(profileForm.age) : undefined
       const updated = await customerPortalService.updateMyProfile({
         ...profileForm,
         firstName: profileForm.firstName.trim(),
         lastName: profileForm.lastName.trim(),
+        age: Number.isFinite(parsedAge) ? parsedAge : undefined,
+        postalCode: profileForm.zipCode,
       })
       setProfile(updated)
       setProfileForm({
         firstName: updated.firstName ?? '', lastName: updated.lastName ?? '',
         phoneNumber: updated.phoneNumber ?? '', companyName: updated.companyName ?? '',
         address: updated.address ?? '', city: updated.city ?? '',
-        state: updated.state ?? '', country: updated.country ?? '', zipCode: updated.zipCode ?? '',
+        state: updated.state ?? '', country: updated.country ?? '', zipCode: updated.zipCode ?? updated.postalCode ?? '',
         tin: updated.tin ?? '', sss: updated.sss ?? '', bankAccount: updated.bankAccount ?? '', bankName: updated.bankName ?? '',
-        birthDate: updated.birthDate ?? '', gender: updated.gender ?? '',
+        birthDate: updated.birthDate ?? '', age: typeof updated.age === 'number' ? String(updated.age) : '', gender: updated.gender ?? '', maritalStatus: updated.maritalStatus ?? '',
       })
       const loanCheck = await customerPortalService.checkLoanAccess()
       setLoanAccess(loanCheck)
       setProfileSuccess('Profile updated successfully.')
       setTimeout(() => setProfileSuccess(null), 3000)
-    } catch {
-      setProfileError('Unable to update profile.')
+    } catch (error) {
+      setProfileError(parseApiError(error))
     } finally {
       setSavingProfile(false)
     }
@@ -174,7 +215,7 @@ const ViewProfilePage: React.FC = () => {
     profileForm.firstName, profileForm.lastName, profileForm.phoneNumber,
     profileForm.companyName, profileForm.address, profileForm.city,
     profileForm.state, profileForm.country, profileForm.zipCode,
-    profileForm.birthDate, profileForm.gender,
+    profileForm.birthDate, profileForm.age, profileForm.gender, profileForm.maritalStatus,
     profileForm.tin, profileForm.sss, profileForm.bankAccount, profileForm.bankName,
   ]
   const filledCount = strengthFields.filter((v) => v && v.trim().length > 0).length
@@ -276,7 +317,7 @@ const ViewProfilePage: React.FC = () => {
               </div>
             </div>
 
-            {/* Birthdate and Gender */}
+            {/* Birthdate and Age */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div>
                 <FieldLabel>Birthdate</FieldLabel>
@@ -284,14 +325,35 @@ const ViewProfilePage: React.FC = () => {
                   style={inputStyle} />
               </div>
               <div>
+                <FieldLabel>Age</FieldLabel>
+                <input type="number" name="age" value={profileForm.age} onChange={handleProfileChange}
+                  min={0} max={150} style={inputStyle} />
+              </div>
+            </div>
+
+            {/* Gender and Marital Status */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
                 <FieldLabel>Gender</FieldLabel>
-                <select name="gender" value={profileForm.gender} onChange={(e: any) => handleProfileChange(e)}
+                <select name="gender" value={profileForm.gender} onChange={handleProfileChange}
                   style={inputStyle}>
                   <option value="">Select gender</option>
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
                   <option value="Other">Other</option>
                   <option value="Prefer not to say">Prefer not to say</option>
+                </select>
+              </div>
+              <div>
+                <FieldLabel>Marital Status</FieldLabel>
+                <select name="maritalStatus" value={profileForm.maritalStatus} onChange={handleProfileChange}
+                  style={inputStyle}>
+                  <option value="">Select marital status</option>
+                  <option value="Single">Single</option>
+                  <option value="Married">Married</option>
+                  <option value="Separated">Separated</option>
+                  <option value="Divorced">Divorced</option>
+                  <option value="Widowed">Widowed</option>
                 </select>
               </div>
             </div>
