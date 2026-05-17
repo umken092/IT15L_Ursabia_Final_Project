@@ -44,6 +44,12 @@ export interface CustomerProfile {
   state: string
   country: string
   zipCode: string
+  tin?: string
+  sss?: string
+  bankAccount?: string
+  bankName?: string
+  bankVerificationStatus?: 'NotVerified' | 'Pending' | 'Verified'
+  bankVerifiedAtUtc?: string
 }
 
 export interface Budget {
@@ -199,17 +205,10 @@ export const customerPortalService = {
   },
 
   async submitExpenseClaim(claim: SubmitExpenseClaimRequest): Promise<{ message: string; claimId: string }> {
-    const formData = new FormData()
-    formData.append('description', claim.description)
-    formData.append('amount', claim.amount.toString())
-    formData.append('category', claim.category)
-    if (claim.attachments) {
-      claim.attachments.forEach((file, index) => {
-        formData.append(`attachments[${index}]`, file)
-      })
-    }
-    const response = await apiClient.post<{ message: string; claimId: string }>('/customer/expense-claims/submit', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    const response = await apiClient.post<{ message: string; claimId: string }>('/customer/expense-claims/submit', {
+      description: claim.description,
+      amount: claim.amount,
+      category: claim.category,
     })
     return response.data
   },
@@ -249,6 +248,12 @@ export const customerPortalService = {
   async getFAQs(): Promise<FAQ[]> {
     const response = await apiClient.get<{ faqs: FAQ[] } | FAQ[]>('/customer/support/faqs')
     return Array.isArray(response.data) ? response.data : ((response.data as { faqs: FAQ[] })?.faqs ?? [])
+  },
+
+  // Loan access check
+  async checkLoanAccess(): Promise<{ canAccessLoans: boolean; profileCompletionPercentage: number; isBankVerified: boolean; message: string }> {
+    const response = await apiClient.get<{ canAccessLoans: boolean; profileCompletionPercentage: number; isBankVerified: boolean; message: string }>('/customer/loan-access-check')
+    return response.data
   },
 }
 

@@ -3,12 +3,13 @@ import { customerPortalService, type CustomerProfile } from '../../services/cust
 
 type EditableProfile = Pick<
   CustomerProfile,
-  'firstName' | 'lastName' | 'phoneNumber' | 'companyName' | 'address' | 'city' | 'state' | 'country' | 'zipCode'
+  'firstName' | 'lastName' | 'phoneNumber' | 'companyName' | 'address' | 'city' | 'state' | 'country' | 'zipCode' | 'tin' | 'sss' | 'bankAccount' | 'bankName'
 >
 
 const emptyProfileForm: EditableProfile = {
   firstName: '', lastName: '', phoneNumber: '', companyName: '',
   address: '', city: '', state: '', country: '', zipCode: '',
+  tin: '', sss: '', bankAccount: '', bankName: '',
 }
 
 // ─── Shared input style ───────────────────────────────────────────────────────
@@ -70,6 +71,7 @@ const ViewProfilePage: React.FC = () => {
   const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [loanAccess, setLoanAccess] = useState<{ canAccessLoans: boolean; profileCompletionPercentage: number; isBankVerified: boolean } | null>(null)
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -82,7 +84,10 @@ const ViewProfilePage: React.FC = () => {
           phoneNumber: data.phoneNumber ?? '', companyName: data.companyName ?? '',
           address: data.address ?? '', city: data.city ?? '',
           state: data.state ?? '', country: data.country ?? '', zipCode: data.zipCode ?? '',
+          tin: data.tin ?? '', sss: data.sss ?? '', bankAccount: data.bankAccount ?? '', bankName: data.bankName ?? '',
         })
+        const loanCheck = await customerPortalService.checkLoanAccess()
+        setLoanAccess(loanCheck)
       } catch {
         setProfileError('Unable to load profile information.')
       } finally {
@@ -117,7 +122,10 @@ const ViewProfilePage: React.FC = () => {
         phoneNumber: updated.phoneNumber ?? '', companyName: updated.companyName ?? '',
         address: updated.address ?? '', city: updated.city ?? '',
         state: updated.state ?? '', country: updated.country ?? '', zipCode: updated.zipCode ?? '',
+        tin: updated.tin ?? '', sss: updated.sss ?? '', bankAccount: updated.bankAccount ?? '', bankName: updated.bankName ?? '',
       })
+      const loanCheck = await customerPortalService.checkLoanAccess()
+      setLoanAccess(loanCheck)
       setProfileSuccess('Profile updated successfully.')
       setTimeout(() => setProfileSuccess(null), 3000)
     } catch {
@@ -151,8 +159,9 @@ const ViewProfilePage: React.FC = () => {
     profileForm.firstName, profileForm.lastName, profileForm.phoneNumber,
     profileForm.companyName, profileForm.address, profileForm.city,
     profileForm.state, profileForm.country, profileForm.zipCode,
+    profileForm.tin, profileForm.sss, profileForm.bankAccount, profileForm.bankName,
   ]
-  const filledCount = strengthFields.filter((v) => v.trim().length > 0).length
+  const filledCount = strengthFields.filter((v) => v && v.trim().length > 0).length
   const strengthPct = Math.round(((filledCount + 1) / (strengthFields.length + 1)) * 100)
   const strengthColor = strengthPct < 40 ? '#dc2626' : strengthPct < 70 ? '#ca8a04' : '#059669'
 
@@ -310,11 +319,78 @@ const ViewProfilePage: React.FC = () => {
                   placeholder="Country" style={inputStyle} />
               </div>
             </div>
+
+            <SectionDivider title="Tax & Government IDs" />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <FieldLabel>TIN (Tax ID)</FieldLabel>
+                <input type="text" name="tin" value={profileForm.tin} onChange={handleProfileChange}
+                  placeholder="xxx-xxx-xxx-xxx" style={inputStyle} />
+                <p style={{ fontSize: 11, color: 'var(--muted)', margin: '4px 0 0' }}>Tax Identification Number</p>
+              </div>
+              <div>
+                <FieldLabel>SSS Number</FieldLabel>
+                <input type="text" name="sss" value={profileForm.sss} onChange={handleProfileChange}
+                  placeholder="xx-xxxxxxx-x" style={inputStyle} />
+                <p style={{ fontSize: 11, color: 'var(--muted)', margin: '4px 0 0' }}>Social Security System</p>
+              </div>
+            </div>
+
+            <SectionDivider title="Bank Information" />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <FieldLabel>Bank Name</FieldLabel>
+                <input type="text" name="bankName" value={profileForm.bankName} onChange={handleProfileChange}
+                  placeholder="Bank name" style={inputStyle} />
+              </div>
+              <div>
+                <FieldLabel>Bank Account Number</FieldLabel>
+                <input type="text" name="bankAccount" value={profileForm.bankAccount} onChange={handleProfileChange}
+                  placeholder="Account number" style={inputStyle} />
+              </div>
+            </div>
           </form>
         </div>
 
         {/* RIGHT — Sidebar panels */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* Loan Access Status */}
+          {loanAccess && (
+            <div style={{ background: 'var(--card-bg)', border: `1px solid ${loanAccess.canAccessLoans ? '#d1fae5' : '#fee2e2'}`, borderRadius: 10, padding: 16, boxShadow: 'var(--shadow)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: 6,
+                  background: loanAccess.canAccessLoans ? '#d1fae5' : '#fee2e2',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 16, fontWeight: 700,
+                  color: loanAccess.canAccessLoans ? '#059669' : '#dc2626'
+                }}>
+                  {loanAccess.canAccessLoans ? '✓' : '○'}
+                </div>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+                  {loanAccess.canAccessLoans ? 'Loan Access Enabled' : 'Loan Access Locked'}
+                </p>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+                <p style={{ margin: '0 0 8px' }}>
+                  <strong>Profile Completion:</strong> {loanAccess.profileCompletionPercentage}%
+                </p>
+                <p style={{ margin: 0 }}>
+                  <strong>Bank Verified:</strong> {loanAccess.isBankVerified ? <span style={{ color: '#059669' }}>Yes ✓</span> : <span style={{ color: '#dc2626' }}>No</span>}
+                </p>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--muted)', margin: 0 }}>
+                {loanAccess.canAccessLoans
+                  ? 'You can now access loan products.'
+                  : loanAccess.profileCompletionPercentage < 80
+                    ? `Complete ${100 - loanAccess.profileCompletionPercentage}% more of your profile to unlock loans.`
+                    : 'Verify your bank account to access loans.'}
+              </p>
+            </div>
+          )}
 
           {/* Profile Strength */}
           <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10, padding: 18, boxShadow: 'var(--shadow)' }}>

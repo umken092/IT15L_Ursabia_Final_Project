@@ -275,6 +275,11 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
             entity.Property(x => x.PostalCode).HasMaxLength(16);
             entity.Property(x => x.Country).HasMaxLength(128);
             entity.Property(x => x.TaxId).HasMaxLength(64);
+            entity.Property(x => x.TIN).HasMaxLength(32);
+            entity.Property(x => x.SSS).HasMaxLength(32);
+            entity.Property(x => x.BankAccount).HasMaxLength(128);
+            entity.Property(x => x.BankName).HasMaxLength(128);
+            entity.Property(x => x.BankVerificationStatus).HasDefaultValue(BankVerificationStatus.NotVerified);
             entity.Property(x => x.PaymentTerms).HasMaxLength(64);
             entity.Property(x => x.CreditLimit).HasPrecision(18, 2);
             entity.Property(x => x.IsActive).HasDefaultValue(true);

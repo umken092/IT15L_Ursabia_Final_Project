@@ -527,12 +527,58 @@ public class CustomerPortalController : ControllerBase
         if (!string.IsNullOrWhiteSpace(request.PostalCode))
             customer.PostalCode = request.PostalCode;
 
+        if (!string.IsNullOrWhiteSpace(request.TIN))
+            customer.TIN = request.TIN;
+
+        if (!string.IsNullOrWhiteSpace(request.SSS))
+            customer.SSS = request.SSS;
+
+        if (!string.IsNullOrWhiteSpace(request.BankAccount))
+            customer.BankAccount = request.BankAccount;
+
+        if (!string.IsNullOrWhiteSpace(request.BankName))
+            customer.BankName = request.BankName;
+
         customer.LastUpdatedUtc = DateTime.UtcNow;
 
         _dbContext.Customers.Update(customer);
         await _dbContext.SaveChangesAsync();
 
         return Ok(new { message = "Profile updated successfully" });
+    }
+
+    [HttpGet("loan-access-check")]
+    public async Task<IActionResult> CheckLoanAccess()
+    {
+        var customer = await GetCurrentCustomerAsync();
+        if (customer is null)
+        {
+            return NotFound(new { message = MissingCustomerMessage });
+        }
+
+        var profileFields = new[] 
+        { 
+            customer.ContactPerson, customer.Email, customer.PhoneNumber, 
+            customer.Address, customer.City, customer.State, customer.Country, 
+            customer.PostalCode, customer.TIN, customer.SSS, customer.BankAccount, customer.BankName 
+        };
+        
+        var filledCount = profileFields.Count(f => !string.IsNullOrWhiteSpace(f));
+        var completionPercentage = (int)Math.Round((filledCount / (double)profileFields.Length) * 100);
+        var isBankVerified = customer.BankVerificationStatus == BankVerificationStatus.Verified;
+        var canAccessLoans = completionPercentage >= 80 && isBankVerified;
+
+        return Ok(new LoanAccessCheckResponse
+        {
+            CanAccessLoans = canAccessLoans,
+            ProfileCompletionPercentage = completionPercentage,
+            IsBankVerified = isBankVerified,
+            Message = canAccessLoans
+                ? "Your profile is complete and bank is verified. Loan access is enabled."
+                : completionPercentage < 80
+                    ? $"Complete {100 - completionPercentage}% more of your profile to unlock loan access."
+                    : "Bank verification is required to access loans. Please verify your bank account."
+        });
     }
 
     [HttpPost("change-password")]
@@ -1040,4 +1086,54 @@ public sealed class CreateSupportTicketRequest
 
     [RegularExpression("^(Low|Medium|High|Urgent)$")]
     public string Priority { get; set; } = "Medium";
+}
+
+public sealed class UpdateCustomerProfileRequest
+{
+    [StringLength(64)]
+    public string? FirstName { get; set; }
+
+    [StringLength(64)]
+    public string? LastName { get; set; }
+
+    [Phone]
+    [StringLength(32)]
+    public string? PhoneNumber { get; set; }
+
+    [StringLength(512)]
+    public string? Address { get; set; }
+
+    [StringLength(128)]
+    public string? City { get; set; }
+
+    [StringLength(64)]
+    public string? State { get; set; }
+
+    [StringLength(128)]
+    public string? Country { get; set; }
+
+    [StringLength(16)]
+    public string? PostalCode { get; set; }
+
+    [StringLength(32)]
+    [RegularExpression("^[0-9]{3}-[0-9]{3}-[0-9]{3}-[0-9]{3}$", ErrorMessage = "TIN must be in format XXX-XXX-XXX-XXX")]
+    public string? TIN { get; set; }
+
+    [StringLength(32)]
+    [RegularExpression("^[0-9]{2}-[0-9]{7}-[0-9]$", ErrorMessage = "SSS must be in format XX-XXXXXXX-X")]
+    public string? SSS { get; set; }
+
+    [StringLength(128)]
+    public string? BankAccount { get; set; }
+
+    [StringLength(128)]
+    public string? BankName { get; set; }
+}
+
+public sealed class LoanAccessCheckResponse
+{
+    public bool CanAccessLoans { get; set; }
+    public int ProfileCompletionPercentage { get; set; }
+    public bool IsBankVerified { get; set; }
+    public string? Message { get; set; }
 }

@@ -1,5 +1,12 @@
 namespace CMNetwork.Domain.Entities;
 
+public enum BankVerificationStatus
+{
+    NotVerified = 0,
+    Pending = 1,
+    Verified = 2
+}
+
 public class Customer
 {
     public Guid Id { get; set; }
@@ -24,4 +31,12 @@ public class Customer
     public string? RegistrationOtp { get; set; }
     public DateTime? RegistrationOtpGeneratedUtc { get; set; }
     public bool RegistrationOtpVerified { get; set; } = false;
+
+    // Profile completion fields
+    public string? TIN { get; set; }
+    public string? SSS { get; set; }
+    public string? BankAccount { get; set; }
+    public string? BankName { get; set; }
+    public BankVerificationStatus BankVerificationStatus { get; set; } = BankVerificationStatus.NotVerified;
+    public DateTime? BankVerifiedAtUtc { get; set; }
 }
