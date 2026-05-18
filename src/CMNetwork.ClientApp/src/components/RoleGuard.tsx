@@ -99,6 +99,9 @@ export const moduleRoleMap: Record<string, Role[]> = {
   'loan-review': ['accountant'],
   'loan-approval': ['cfo'],
   'loan-tiers': ['cfo', 'super-admin'],
+
+  // Customers module
+  customers: ['accountant', 'cfo', 'super-admin'],
 }
 
 /**

@@ -26,6 +26,7 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
       children: [
         { label: 'Fiscal Periods', path: '/module/fiscal-periods' },
         { label: 'Integration Settings', path: '/module/integration-settings' },
+        { label: 'Customers', path: '/module/customers' },
         { label: 'Bank Directory', path: '/module/bank-directory' },
         { label: 'Security Policy', path: '/module/security-policy' },
         { label: 'Backup & Restore', path: '/module/system-settings#backup-restore' },
@@ -63,6 +64,7 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
         { label: 'Disbursement Queue', path: '/module/loan-review/disbursement' },
       ],
     },
+    { label: 'Customers', path: '/module/customers' },
     { label: 'Reports', path: '/module/reports' },
   ],
   'faculty-admin': [
@@ -148,6 +150,7 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
         { label: 'Interest Rate Tiers', path: '/module/loan-tiers' },
       ],
     },
+    { label: 'Customers', path: '/module/customers' },
     { label: 'Reports', path: '/module/reports' },
   ],
   customer: [

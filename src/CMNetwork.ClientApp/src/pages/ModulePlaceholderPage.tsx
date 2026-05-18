@@ -27,6 +27,7 @@ import { SecurityPolicyModule } from './modules/SecurityPolicyModule'
 import { SystemHealthModule } from './modules/SystemHealthModule'
 import { SystemSettingsModule } from './modules/SystemSettingsModule'
 import { UserManagementModule } from './modules/UserManagementModule'
+import { CustomersModule } from './modules/CustomersModule'
 
 const labelize = (value: string) =>
   value
@@ -47,6 +48,7 @@ const SIMPLE_MODULE_MAP: Partial<Record<string, () => ReactElement>> = {
   'bank-directory': () => <BankDirectoryModule />,
   'accounts-payable': () => <APInvoicesModule />,
   'accounts-receivable': () => <ARInvoicesModule />,
+  'customers': () => <CustomersModule />,
 }
 
 function renderSpecialModule(moduleKey: string): ReactElement | null {
