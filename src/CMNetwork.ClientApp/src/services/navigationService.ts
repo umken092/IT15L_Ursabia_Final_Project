@@ -62,7 +62,6 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
       path: '/module/loan-review',
       children: [
         { label: 'Review Applications', path: '/module/loan-review' },
-        { label: 'Disbursement Queue', path: '/module/loan-review/disbursement' },
       ],
     },
     { label: 'Customers', path: '/module/customers' },

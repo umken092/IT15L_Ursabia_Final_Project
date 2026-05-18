@@ -52,17 +52,21 @@ public class LoanReviewController : ControllerBase
                 approvedAmount = x.ApprovedAmount,
                 requestedTermMonths = x.TermMonths,
                 approvedTermMonths = x.ApprovedTermMonths,
+                annualInterestRate = x.InterestRate,
                 purpose = x.Purpose,
                 interestRate = x.InterestRate,
                 status = x.Status.ToString(),
-                submittedAt = x.SubmittedAtUtc
+                submittedAt = x.SubmittedAtUtc,
+                reviewedAt = x.ReviewedAtUtc,
+                approvedAt = x.ApprovedOrRejectedAtUtc,
+                accountantNotes = x.AccountantReviewNotes
             })
             .ToListAsync();
 
         return Ok(applications);
     }
 
-    [Authorize(Roles = "accountant")]
+    [Authorize(Roles = "accountant,cfo")]
     [HttpGet("applications/{applicationId:guid}")]
     public async Task<IActionResult> GetApplicationForReview(Guid applicationId)
     {

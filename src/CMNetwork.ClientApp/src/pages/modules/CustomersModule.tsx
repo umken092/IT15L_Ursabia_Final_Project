@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@progress/kendo-react-buttons'
+import { pencilIcon, trashIcon } from '@progress/kendo-svg-icons'
 import { Dialog, DialogActionsBar } from '@progress/kendo-react-dialogs'
 import { Input, type InputChangeEvent } from '@progress/kendo-react-inputs'
 import type { ColumnDef } from '@tanstack/react-table'
@@ -167,10 +168,16 @@ export function CustomersModule() {
           <div className="customers-row-actions">
             <Button
               className="customers-action-icon"
-              icon="edit"
+              svgIcon={pencilIcon}
+              title="Edit"
               onClick={() => handleEditClick(row.original)}
             />
-            <Button className="customers-action-icon" icon="delete" onClick={() => handleDeleteClick(row.original)} />
+            <Button
+              className="customers-action-icon"
+              svgIcon={trashIcon}
+              title="Delete"
+              onClick={() => handleDeleteClick(row.original)}
+            />
             {canManageCustomers && (
               <>
                 <Button

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@progress/kendo-react-buttons'
+import { pencilIcon, trashIcon } from '@progress/kendo-svg-icons'
 import { Dialog, DialogActionsBar } from '@progress/kendo-react-dialogs'
 import { Input, type InputChangeEvent } from '@progress/kendo-react-inputs'
 import type { ColumnDef } from '@tanstack/react-table'
@@ -115,11 +116,12 @@ export function VendorsModule() {
         cell: ({ row }) => (
           <div className="flex gap-2">
             <Button
-              icon="edit"
+              svgIcon={pencilIcon}
+              title="Edit"
               onClick={() => handleEditClick(row.original)}
               style={{ marginRight: '8px' }}
             />
-            <Button icon="delete" onClick={() => handleDeleteClick(row.original)} />
+            <Button svgIcon={trashIcon} title="Delete" onClick={() => handleDeleteClick(row.original)} />
           </div>
         ),
       },
