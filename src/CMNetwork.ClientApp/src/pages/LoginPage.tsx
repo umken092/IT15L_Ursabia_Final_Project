@@ -22,6 +22,7 @@ export const LoginPage = () => {
   const login = useAuthStore((state) => state.login)
   const logout = useAuthStore((state) => state.logout)
   const loading = useAuthStore((state) => state.loading)
+  const authError = useAuthStore((state) => state.error)
   const user = useAuthStore((state) => state.user)
   const token = useAuthStore((state) => state.token)
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
@@ -53,16 +54,34 @@ export const LoginPage = () => {
 
   const onSubmit = async (values: LoginCredentials) => {
     let recaptchaToken: string | undefined
-    try {
-      recaptchaToken = executeRecaptcha ? await executeRecaptcha('login') : undefined
-    } catch {
-      // reCAPTCHA optional in dev
+
+    if (executeRecaptcha) {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const token = await executeRecaptcha('login')
+          if (token?.trim()) {
+            recaptchaToken = token
+            break
+          }
+        } catch {
+          // Retry once in case script initialization is still in progress.
+        }
+
+        if (attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 250))
+        }
+      }
+
+      if (!recaptchaToken) {
+        pushToast('warning', 'Security verification is not ready. Please wait a moment and try signing in again.')
+        return
+      }
     }
 
     const result = await login(values, recaptchaToken)
 
     if (result === 'error') {
-      pushToast('error', 'Invalid email or password.')
+      pushToast('error', authError ?? 'Invalid email or password.')
       return
     }
 

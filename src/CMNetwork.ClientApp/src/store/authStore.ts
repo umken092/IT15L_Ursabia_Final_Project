@@ -110,7 +110,7 @@ export const useAuthStore = create<AuthState>()(
 
           set({
             loading: false,
-            error: 'Invalid email or password.',
+            error: loginError?.message ?? 'Invalid email or password.',
             isAuthenticated: false,
             loginBlockedVerification: null,
           })
