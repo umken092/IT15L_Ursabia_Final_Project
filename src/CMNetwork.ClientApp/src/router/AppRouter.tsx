@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { useAuthStore } from '../store/authStore'
 import { roleLabels, type Role } from '../types/auth'
 
 const MainLayout = lazy(() => import('../layout/MainLayout').then((m) => ({ default: m.MainLayout })))
@@ -169,6 +170,19 @@ const DocumentTitle = () => {
   return null
 }
 
+const ReportsRoute = () => {
+  const selectedRole = useAuthStore((state) => state.selectedRole)
+  const user = useAuthStore((state) => state.user)
+  const activeRole = selectedRole ?? user?.role
+
+  if (activeRole === 'customer') {
+    return <FinancialReportsPage />
+  }
+
+  // Non-customer roles should use the role-scoped reports modules.
+  return <ModulePlaceholderPage />
+}
+
 const RouterFallback = () => (
   <div
     style={{
@@ -229,9 +243,9 @@ export const AppRouter = () => {
             <Route path="/module/approvals/approved" element={<PendingApprovalsPage />} />
             
             {/* Customer Reports Routes */}
-            <Route path="/module/reports" element={<FinancialReportsPage />} />
-            <Route path="/module/reports/financial" element={<FinancialReportsPage />} />
-            <Route path="/module/reports/statements" element={<FinancialReportsPage />} />
+            <Route path="/module/reports" element={<ReportsRoute />} />
+            <Route path="/module/reports/financial" element={<ReportsRoute />} />
+            <Route path="/module/reports/statements" element={<ReportsRoute />} />
             
             {/* Customer Support Routes */}
             <Route path="/module/support" element={<ContactSupportPage />} />

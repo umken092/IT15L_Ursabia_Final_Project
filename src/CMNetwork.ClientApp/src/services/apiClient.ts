@@ -93,10 +93,6 @@ class ApiClient {
           }
         }
 
-        if (status === 403) {
-          window.location.href = '/login'
-        }
-
         return Promise.reject(error)
       },
     )

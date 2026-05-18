@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import type { AxiosError } from 'axios'
 import { customerPortalService, type FinancialReport } from '../../services/customerPortalService'
 
 type Tab = 'reports' | 'statement'
@@ -32,7 +33,8 @@ const FinancialReportsPage: React.FC = () => {
         const data = await customerPortalService.getFinancialReports()
         setReports(data); setError(null)
       } catch (err) {
-        setError('Unable to load financial reports.')
+        const status = (err as AxiosError)?.response?.status
+        setError(status === 403 ? 'You do not have permission to view customer financial reports.' : 'Unable to load financial reports.')
         console.error('Error loading reports:', err)
       } finally { setLoading(false) }
     }
