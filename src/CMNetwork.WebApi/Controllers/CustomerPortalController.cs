@@ -12,6 +12,7 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using System.ComponentModel.DataAnnotations;
+using System.Data;
 using System.Security.Claims;
 
 namespace CMNetwork.Controllers;
@@ -671,28 +672,95 @@ SELECT
 
         if (payment.Status == CustomerPaymentStatus.Completed)
         {
-            return Ok(new { message = "Payment already completed.", paymentId = payment.Id });
+            return Ok(new
+            {
+                message = "Payment already completed.",
+                paymentId = payment.Id,
+                status = payment.Status.ToString(),
+                providerStatus = "paid",
+                completed = true,
+                completedAt = payment.CompletedAt,
+            });
         }
 
         var status = await _payMongoService.GetCheckoutSessionStatusAsync(refId);
         if (!string.Equals(status, "paid", StringComparison.OrdinalIgnoreCase))
         {
-            return BadRequest(new { message = $"Payment is not completed yet (status: {status})." });
+            return Ok(new
+            {
+                message = $"Payment is not completed yet (status: {status}).",
+                paymentId = payment.Id,
+                status = payment.Status.ToString(),
+                providerStatus = status,
+                completed = false,
+                completedAt = payment.CompletedAt,
+            });
         }
 
-        await ApplyCompletedPaymentAsync(payment);
+        await ApplyCompletedPaymentAsync(payment.Id);
 
-        return Ok(new { message = "Payment confirmed and applied.", paymentId = payment.Id });
+        var latest = await _dbContext.CustomerPayments
+            .AsNoTracking()
+            .Where(x => x.Id == payment.Id)
+            .Select(x => new { x.Id, x.Status, x.CompletedAt })
+            .FirstAsync();
+
+        return Ok(new
+        {
+            message = "Payment confirmed and applied.",
+            paymentId = latest.Id,
+            status = latest.Status.ToString(),
+            providerStatus = status,
+            completed = latest.Status == CustomerPaymentStatus.Completed,
+            completedAt = latest.CompletedAt,
+        });
     }
 
-    private async Task ApplyCompletedPaymentAsync(CustomerPayment payment)
+    [HttpGet("payments/status")]
+    public async Task<IActionResult> GetPaymentStatus([FromQuery] string refId)
     {
-        if (payment.Status == CustomerPaymentStatus.Completed)
+        if (string.IsNullOrWhiteSpace(refId))
         {
-            return;
+            return BadRequest(new { message = "Missing checkout session reference." });
         }
 
-        await using var tx = await _dbContext.Database.BeginTransactionAsync();
+        var customer = await GetCurrentCustomerAsync();
+        if (customer is null)
+        {
+            return NotFound(new { message = MissingCustomerMessage });
+        }
+
+        var payment = await _dbContext.CustomerPayments
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.PayMongoCheckoutSessionId == refId && x.CustomerId == customer.Id);
+
+        if (payment is null)
+        {
+            return NotFound(new { message = "Payment record not found." });
+        }
+
+        return Ok(new
+        {
+            paymentId = payment.Id,
+            status = payment.Status.ToString(),
+            isTerminal = payment.Status is CustomerPaymentStatus.Completed or CustomerPaymentStatus.Failed or CustomerPaymentStatus.Refunded,
+            completedAt = payment.CompletedAt,
+        });
+    }
+
+    private async Task ApplyCompletedPaymentAsync(Guid paymentId)
+    {
+        await using var tx = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+        var payment = await _dbContext.CustomerPayments
+            .FromSqlInterpolated($"SELECT * FROM [CustomerPayments] WITH (UPDLOCK, ROWLOCK) WHERE [Id] = {paymentId}")
+            .FirstOrDefaultAsync();
+
+        if (payment is null || payment.Status == CustomerPaymentStatus.Completed)
+        {
+            await tx.CommitAsync();
+            return;
+        }
 
         var invoiceIds = payment.InvoiceIds
             .Split(',', StringSplitOptions.RemoveEmptyEntries)
@@ -706,6 +774,11 @@ SELECT
 
         foreach (var invoice in invoices)
         {
+            if (invoice.Status is ARInvoiceStatus.Paid or ARInvoiceStatus.Void)
+            {
+                continue;
+            }
+
             invoice.Status = ARInvoiceStatus.Paid;
         }
 

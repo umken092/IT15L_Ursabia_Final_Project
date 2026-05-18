@@ -32,6 +32,22 @@ export interface CreatePaymentIntentResponse {
   amount: number
 }
 
+export interface PaymentStatusResponse {
+  paymentId: string
+  status: string
+  isTerminal?: boolean
+  completedAt?: string
+}
+
+export interface ConfirmPaymentResponse {
+  message: string
+  paymentId: string
+  status?: string
+  providerStatus?: string
+  completed?: boolean
+  completedAt?: string
+}
+
 export interface CustomerProfile {
   id: string
   firstName: string
@@ -169,9 +185,16 @@ export const customerPortalService = {
     return response.data
   },
 
-  async confirmPayment(refId: string): Promise<{ message: string; paymentId: string }> {
-    const response = await apiClient.post<{ message: string; paymentId: string }>(
+  async confirmPayment(refId: string): Promise<ConfirmPaymentResponse> {
+    const response = await apiClient.post<ConfirmPaymentResponse>(
       `/customer/payments/confirm?refId=${encodeURIComponent(refId)}`,
+    )
+    return response.data
+  },
+
+  async getPaymentStatus(refId: string): Promise<PaymentStatusResponse> {
+    const response = await apiClient.get<PaymentStatusResponse>(
+      `/customer/payments/status?refId=${encodeURIComponent(refId)}`,
     )
     return response.data
   },

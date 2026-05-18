@@ -4,6 +4,7 @@ using CMNetwork.Infrastructure.Persistence;
 using CMNetwork.Infrastructure.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 
 namespace CMNetwork.Controllers;
 
@@ -88,21 +89,24 @@ public class PayMongoWebhookController : ControllerBase
 
     private async Task CompletePaymentAsync(string checkoutSessionId)
     {
+        await using var tx = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
         var payment = await _dbContext.CustomerPayments
-            .FirstOrDefaultAsync(x => x.PayMongoCheckoutSessionId == checkoutSessionId);
+            .FromSqlInterpolated($"SELECT * FROM [CustomerPayments] WITH (UPDLOCK, ROWLOCK) WHERE [PayMongoCheckoutSessionId] = {checkoutSessionId}")
+            .FirstOrDefaultAsync();
 
         if (payment is null)
         {
             _logger.LogWarning("Customer payment not found for checkout session {SessionId}", checkoutSessionId);
+            await tx.CommitAsync();
             return;
         }
 
         if (payment.Status == CustomerPaymentStatus.Completed)
         {
+            await tx.CommitAsync();
             return;
         }
-
-        await using var tx = await _dbContext.Database.BeginTransactionAsync();
 
         var invoiceIds = payment.InvoiceIds
             .Split(',', StringSplitOptions.RemoveEmptyEntries)
@@ -116,6 +120,11 @@ public class PayMongoWebhookController : ControllerBase
 
         foreach (var invoice in invoices)
         {
+            if (invoice.Status is ARInvoiceStatus.Paid or ARInvoiceStatus.Void)
+            {
+                continue;
+            }
+
             invoice.Status = ARInvoiceStatus.Paid;
         }
 

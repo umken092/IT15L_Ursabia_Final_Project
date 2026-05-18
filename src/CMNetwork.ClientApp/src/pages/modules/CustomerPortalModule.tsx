@@ -145,8 +145,17 @@ export const CustomerPortalModule = () => {
     const confirmFromReturnUrl = async () => {
       if (!paymentRef) return
       try {
-        await customerPortalService.confirmPayment(paymentRef)
-        pushToast('success', 'Payment confirmed and applied successfully.')
+        const confirmation = await customerPortalService.confirmPayment(paymentRef)
+        if (confirmation.completed) {
+          pushToast('success', 'Payment confirmed and applied successfully.')
+        } else {
+          const status = await customerPortalService.getPaymentStatus(paymentRef)
+          if (status.status === 'Completed') {
+            pushToast('success', 'Payment confirmed and applied successfully.')
+          } else {
+            pushToast('warning', 'Payment return detected, but verification is still pending. Please refresh in a few seconds.')
+          }
+        }
         setSearchParams({}, { replace: true })
         await loadInvoices()
       } catch {
