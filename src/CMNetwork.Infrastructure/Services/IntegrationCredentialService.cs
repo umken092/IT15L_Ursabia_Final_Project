@@ -235,8 +235,8 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
 
         if (credential is null)
         {
-            var fallbackSiteKey = _configuration["Recaptcha:SiteKey"] ?? string.Empty;
-            var fallbackSecret = _configuration["Recaptcha:SecretKey"] ?? string.Empty;
+            var fallbackSiteKey = SanitizeRecaptchaConfigValue(_configuration["Recaptcha:SiteKey"]);
+            var fallbackSecret = SanitizeRecaptchaConfigValue(_configuration["Recaptcha:SecretKey"]);
             var fallbackMinScore = ParseMinScore(_configuration["Recaptcha:MinScore"]);
 
             return new RecaptchaAdminSettings(
@@ -343,8 +343,8 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
 
     private RecaptchaRuntimeSettings BuildRecaptchaFallbackFromConfiguration()
     {
-        var siteKey = _configuration["Recaptcha:SiteKey"] ?? string.Empty;
-        var secretKey = _configuration["Recaptcha:SecretKey"] ?? string.Empty;
+        var siteKey = SanitizeRecaptchaConfigValue(_configuration["Recaptcha:SiteKey"]);
+        var secretKey = SanitizeRecaptchaConfigValue(_configuration["Recaptcha:SecretKey"]);
         var minScore = ParseMinScore(_configuration["Recaptcha:MinScore"]);
         var verifyEndpoint = _configuration["Recaptcha:VerifyEndpoint"] ?? "https://www.google.com/recaptcha/api/siteverify";
 
@@ -354,6 +354,23 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
             Enabled: !string.IsNullOrWhiteSpace(siteKey) && !string.IsNullOrWhiteSpace(secretKey),
             MinScore: minScore,
             VerifyEndpoint: verifyEndpoint);
+    }
+
+    private static string SanitizeRecaptchaConfigValue(string? rawValue)
+    {
+        if (string.IsNullOrWhiteSpace(rawValue))
+        {
+            return string.Empty;
+        }
+
+        var value = rawValue.Trim();
+        if (value.Contains("set-this-in-user-secrets-or-env-var", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("set-in-dotnet-user-secrets", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
+
+        return value;
     }
 
     private static double ParseMinScore(string? value)
