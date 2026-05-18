@@ -35,6 +35,14 @@ interface EmailConfig {
   connectionMessage: string
 }
 
+interface RecaptchaConfig {
+  siteKey: string
+  secretKey: string
+  secretKeyConfigured: boolean
+  enabled: boolean
+  minScore: string
+}
+
 // ─── Initial state ────────────────────────────────────────────────────────────
 
 const INITIAL_PAYMONGO: PayMongoConfig = {
@@ -59,6 +67,14 @@ const INITIAL_EMAIL: EmailConfig = {
   fromName: 'CMNetwork',
   connectionStatus: 'idle',
   connectionMessage: '',
+}
+
+const INITIAL_RECAPTCHA: RecaptchaConfig = {
+  siteKey: '',
+  secretKey: '',
+  secretKeyConfigured: false,
+  enabled: false,
+  minScore: '0.5',
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -114,10 +130,12 @@ export const IntegrationSettingsModule = () => {
   const pushToast = useNotificationStore((state) => state.push)
 
   const [paymongo, setPaymongo] = useState<PayMongoConfig>(INITIAL_PAYMONGO)
+  const [recaptcha, setRecaptcha] = useState<RecaptchaConfig>(INITIAL_RECAPTCHA)
   const [email, setEmail] = useState<EmailConfig>(INITIAL_EMAIL)
   const [integrations, setIntegrations] = useState<IntegrationSetting[]>([])
   const [loadingIntegrations, setLoadingIntegrations] = useState(false)
   const [savingPm, setSavingPm] = useState(false)
+  const [savingRecaptcha, setSavingRecaptcha] = useState(false)
   const [savingEmail, setSavingEmail] = useState(false)
 
   useEffect(() => {
@@ -137,9 +155,10 @@ export const IntegrationSettingsModule = () => {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const [emailData, pmData] = await Promise.all([
+        const [emailData, pmData, recaptchaData] = await Promise.all([
           adminService.getSmtpSettings(),
           adminService.getPayMongoSettings(),
+          adminService.getRecaptchaSettings(),
         ])
         setEmail((e) => ({
           ...e,
@@ -160,6 +179,14 @@ export const IntegrationSettingsModule = () => {
           mode: pmData.mode,
           secretKeyConfigured: Boolean(pmData.secretKeyConfigured),
           baseUrl: pmData.baseUrl || '',
+        }))
+        setRecaptcha((r) => ({
+          ...r,
+          siteKey: recaptchaData.siteKey,
+          secretKey: '',
+          secretKeyConfigured: Boolean(recaptchaData.secretKeyConfigured),
+          enabled: Boolean(recaptchaData.enabled),
+          minScore: String(recaptchaData.minScore ?? 0.5),
         }))
       } catch {
         // Non-fatal — form stays at defaults if settings haven't been saved yet
@@ -215,6 +242,44 @@ export const IntegrationSettingsModule = () => {
       pushToast('error', 'Failed to save PayMongo settings.')
     } finally {
       setSavingPm(false)
+    }
+  }
+
+  // ── reCAPTCHA ────────────────────────────────────────────────────────────
+
+  const handleSaveRecaptcha = async () => {
+    const normalizedSiteKey = recaptcha.siteKey.trim()
+    const normalizedMinScore = Number.parseFloat(recaptcha.minScore)
+    const minScore = Number.isNaN(normalizedMinScore) ? 0.5 : Math.max(0.1, Math.min(1, normalizedMinScore))
+
+    if (recaptcha.enabled && !normalizedSiteKey) {
+      pushToast('error', 'Site key is required when reCAPTCHA is enabled.')
+      return
+    }
+    if (recaptcha.enabled && !recaptcha.secretKeyConfigured && !recaptcha.secretKey.trim()) {
+      pushToast('error', 'Secret key is required for initial reCAPTCHA setup.')
+      return
+    }
+
+    setSavingRecaptcha(true)
+    try {
+      await adminService.updateRecaptchaSettings({
+        siteKey: normalizedSiteKey,
+        secretKey: recaptcha.secretKey,
+        enabled: recaptcha.enabled,
+        minScore,
+      })
+      setRecaptcha((r) => ({
+        ...r,
+        secretKey: '',
+        secretKeyConfigured: r.enabled ? true : false,
+        minScore: String(minScore),
+      }))
+      pushToast('success', 'reCAPTCHA settings saved.')
+    } catch {
+      pushToast('error', 'Failed to save reCAPTCHA settings.')
+    } finally {
+      setSavingRecaptcha(false)
     }
   }
 
@@ -412,6 +477,91 @@ export const IntegrationSettingsModule = () => {
               }}
             >
               {savingPm ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── reCAPTCHA ───────────────────────────────────────────────────── */}
+      <div className="is-card">
+        <SectionHeader
+          icon="🛡️"
+          title="Google reCAPTCHA v3"
+          sub="Protect login and customer registration endpoints using score-based bot detection."
+        />
+
+        <div className="is-field-grid">
+          <div className="is-field is-field-wide">
+            <label className="is-label" htmlFor="rc-site-key">
+              Site Key (Public)
+            </label>
+            <input
+              id="rc-site-key"
+              className="is-input"
+              type="text"
+              placeholder="6Le..."
+              value={recaptcha.siteKey}
+              onChange={(e) => setRecaptcha((r) => ({ ...r, siteKey: e.target.value }))}
+            />
+          </div>
+          <div className="is-field is-field-wide">
+            <label className="is-label" htmlFor="rc-secret-key">
+              Secret Key
+            </label>
+            <input
+              id="rc-secret-key"
+              className="is-input is-secret"
+              type="password"
+              placeholder={recaptcha.secretKeyConfigured ? 'Configured (leave blank to keep existing)' : 'Enter secret key'}
+              value={recaptcha.secretKey}
+              onChange={(e) => setRecaptcha((r) => ({ ...r, secretKey: e.target.value }))}
+            />
+            {recaptcha.secretKeyConfigured && !recaptcha.secretKey && (
+              <small className="is-muted">A secret key is already configured.</small>
+            )}
+          </div>
+          <div className="is-field">
+            <label className="is-label" htmlFor="rc-min-score">
+              Minimum Score
+            </label>
+            <input
+              id="rc-min-score"
+              className="is-input"
+              type="number"
+              min="0.1"
+              max="1"
+              step="0.1"
+              value={recaptcha.minScore}
+              onChange={(e) => setRecaptcha((r) => ({ ...r, minScore: e.target.value }))}
+            />
+          </div>
+          <div className="is-field">
+            <label className="is-label" htmlFor="rc-enabled">
+              Status
+            </label>
+            <select
+              id="rc-enabled"
+              className="is-select"
+              value={recaptcha.enabled ? 'enabled' : 'disabled'}
+              onChange={(e) => setRecaptcha((r) => ({ ...r, enabled: e.target.value === 'enabled' }))}
+            >
+              <option value="enabled">Enabled</option>
+              <option value="disabled">Disabled</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="is-card-footer">
+          <span className="is-muted">This applies to login and customer registration.</span>
+          <div className="is-action-row">
+            <button
+              className="is-btn-primary"
+              disabled={savingRecaptcha}
+              onClick={() => {
+                void handleSaveRecaptcha()
+              }}
+            >
+              {savingRecaptcha ? 'Saving…' : 'Save'}
             </button>
           </div>
         </div>

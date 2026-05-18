@@ -56,11 +56,13 @@ builder.Services.AddScoped<IAuthService, IdentityAuthService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IPayrollService, PayrollService>();
 builder.Services.AddScoped<IInvoicePostingService, InvoicePostingService>();
+builder.Services.AddScoped<IRecaptchaVerificationService, RecaptchaVerificationService>();
 builder.Services.AddScoped<SmtpEmailService>();
 builder.Services.AddScoped<SendGridEmailService>();
 builder.Services.AddScoped<IEmailServiceFactory, EmailServiceFactory>();
 builder.Services.AddScoped<SystemMaintenanceJobs>();
 builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient();
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
 var configuredCorsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();

@@ -648,6 +648,73 @@ public class AdminController : ControllerBase
         return result.Success ? Ok(payload) : BadRequest(payload);
     }
 
+    [HttpGet("recaptcha-settings")]
+    public async Task<IActionResult> GetRecaptchaSettings()
+    {
+        var settings = await _integrationCredentialService.GetRecaptchaAdminSettingsAsync();
+        return Ok(new RecaptchaSettingsDto
+        {
+            SiteKey = settings.SiteKey,
+            SecretKey = settings.SecretKeyConfigured ? "•••••" : string.Empty,
+            SecretKeyConfigured = settings.SecretKeyConfigured,
+            Enabled = settings.Enabled,
+            MinScore = settings.MinScore,
+            Version = settings.Version,
+            UpdatedAtUtc = settings.UpdatedAtUtc,
+            UpdatedByUserId = settings.UpdatedByUserId,
+        });
+    }
+
+    [HttpPut("recaptcha-settings")]
+    public async Task<IActionResult> UpdateRecaptchaSettings([FromBody] RecaptchaSettingsDto? request)
+    {
+        if (request is null)
+        {
+            return BadRequest(new { message = "reCAPTCHA settings payload is required." });
+        }
+
+        if (request.Enabled && string.IsNullOrWhiteSpace(request.SiteKey))
+        {
+            return BadRequest(new { message = "reCAPTCHA site key is required when enabled." });
+        }
+
+        var current = await _integrationCredentialService.GetRecaptchaAdminSettingsAsync();
+        if (request.Enabled && !current.SecretKeyConfigured && string.IsNullOrWhiteSpace(request.SecretKey))
+        {
+            return BadRequest(new { message = "reCAPTCHA secret key is required for initial setup." });
+        }
+
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue(ClaimTypes.Email)
+            ?? "system";
+
+        var updated = await _integrationCredentialService.UpsertRecaptchaSettingsAsync(
+            siteKey: request.SiteKey,
+            secretKey: request.SecretKey,
+            enabled: request.Enabled,
+            minScore: request.MinScore,
+            updatedByUserId: userId);
+
+        await _audit.LogAsync(
+            entityName: "RecaptchaSettings",
+            action: "Updated",
+            category: AuditCategories.System,
+            recordId: "recaptcha",
+            details: new { updated.Enabled, updated.MinScore, updated.Version, updated.UpdatedByUserId });
+
+        return Ok(new RecaptchaSettingsDto
+        {
+            SiteKey = updated.SiteKey,
+            SecretKey = updated.SecretKeyConfigured ? "•••••" : string.Empty,
+            SecretKeyConfigured = updated.SecretKeyConfigured,
+            Enabled = updated.Enabled,
+            MinScore = updated.MinScore,
+            Version = updated.Version,
+            UpdatedAtUtc = updated.UpdatedAtUtc,
+            UpdatedByUserId = updated.UpdatedByUserId,
+        });
+    }
+
     private static string? ValidateSmtpSettings(SmtpSettingsDto request)
     {
         var provider = string.IsNullOrWhiteSpace(request.Provider) ? "smtp" : request.Provider.ToLowerInvariant().Trim();

@@ -184,6 +184,8 @@ public class RegisterCustomerRequest
 
     [MaxLength(120)]
     public string? CompanyName { get; set; }
+
+    public string? RecaptchaToken { get; set; }
 }
 
 // ── Generic ──────────────────────────────────────────────────────────────────

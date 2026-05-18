@@ -47,6 +47,17 @@ export interface PayMongoConnectionTestResult {
   message: string
 }
 
+export interface RecaptchaSettings {
+  siteKey: string
+  secretKey: string
+  secretKeyConfigured?: boolean
+  enabled: boolean
+  minScore: number
+  version?: number
+  updatedAtUtc?: string
+  updatedByUserId?: string
+}
+
 export interface AdminUser {
   id: string
   email: string
@@ -532,6 +543,18 @@ export const adminService = {
       }
       throw error
     }
+  },
+
+  // ── reCAPTCHA Settings ──────────────────────────────────────────────────
+
+  async getRecaptchaSettings(): Promise<RecaptchaSettings> {
+    const response = await apiClient.get<RecaptchaSettings>('/admin/recaptcha-settings')
+    return response.data
+  },
+
+  async updateRecaptchaSettings(payload: RecaptchaSettings): Promise<RecaptchaSettings> {
+    const response = await apiClient.put<RecaptchaSettings>('/admin/recaptcha-settings', payload)
+    return response.data
   },
 
   // ── Role Permissions ────────────────────────────────────────────────────

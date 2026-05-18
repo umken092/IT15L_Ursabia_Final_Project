@@ -25,12 +25,30 @@ if (!rootElement) {
   throw new Error('Root element not found')
 }
 
-createRoot(rootElement).render(
-  <StrictMode>
-    <GoogleReCaptchaProvider reCaptchaKey={RECAPTCHA_SITE_KEY}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </GoogleReCaptchaProvider>
-  </StrictMode>,
-)
+const bootstrap = async () => {
+  let runtimeSiteKey = RECAPTCHA_SITE_KEY
+
+  try {
+    const response = await fetch('/api/auth/recaptcha/site-key')
+    if (response.ok) {
+      const data = await response.json() as { enabled?: boolean; siteKey?: string }
+      if (data.enabled && typeof data.siteKey === 'string' && data.siteKey.trim().length > 0) {
+        runtimeSiteKey = data.siteKey.trim()
+      }
+    }
+  } catch {
+    // Fall back to env-provided site key
+  }
+
+  createRoot(rootElement).render(
+    <StrictMode>
+      <GoogleReCaptchaProvider reCaptchaKey={runtimeSiteKey}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </GoogleReCaptchaProvider>
+    </StrictMode>,
+  )
+}
+
+void bootstrap()

@@ -13,6 +13,7 @@ namespace CMNetwork.Infrastructure.Services;
 public sealed class IntegrationCredentialService : IIntegrationCredentialService
 {
     private const string PayMongoProvider = "paymongo";
+    private const string RecaptchaProvider = "recaptcha";
     private readonly CMNetworkDbContext _dbContext;
     private readonly IDataProtector _protector;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -201,6 +202,112 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
         }
     }
 
+    public async Task<RecaptchaRuntimeSettings> GetRecaptchaRuntimeSettingsAsync(CancellationToken cancellationToken = default)
+    {
+        var credential = await _dbContext.Set<IntegrationCredential>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Provider == RecaptchaProvider && x.IsActive, cancellationToken);
+
+        if (credential is null)
+        {
+            return BuildRecaptchaFallbackFromConfiguration();
+        }
+
+        var secretKey = DecryptOrEmpty(credential.SecretKeyEncrypted);
+        var minScore = ParseMinScore(credential.Mode);
+        var verifyEndpoint = string.IsNullOrWhiteSpace(credential.BaseUrl)
+            ? "https://www.google.com/recaptcha/api/siteverify"
+            : credential.BaseUrl.Trim();
+
+        return new RecaptchaRuntimeSettings(
+            SiteKey: credential.PublicKey,
+            SecretKey: secretKey,
+            Enabled: !string.IsNullOrWhiteSpace(credential.PublicKey) && !string.IsNullOrWhiteSpace(secretKey),
+            MinScore: minScore,
+            VerifyEndpoint: verifyEndpoint);
+    }
+
+    public async Task<RecaptchaAdminSettings> GetRecaptchaAdminSettingsAsync(CancellationToken cancellationToken = default)
+    {
+        var credential = await _dbContext.Set<IntegrationCredential>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Provider == RecaptchaProvider && x.IsActive, cancellationToken);
+
+        if (credential is null)
+        {
+            var fallbackSiteKey = _configuration["Recaptcha:SiteKey"] ?? string.Empty;
+            var fallbackSecret = _configuration["Recaptcha:SecretKey"] ?? string.Empty;
+            var fallbackMinScore = ParseMinScore(_configuration["Recaptcha:MinScore"]);
+
+            return new RecaptchaAdminSettings(
+                SiteKey: fallbackSiteKey,
+                SecretKeyConfigured: !string.IsNullOrWhiteSpace(fallbackSecret),
+                Enabled: !string.IsNullOrWhiteSpace(fallbackSiteKey) && !string.IsNullOrWhiteSpace(fallbackSecret),
+                MinScore: fallbackMinScore,
+                Version: 0,
+                UpdatedAtUtc: null,
+                UpdatedByUserId: null);
+        }
+
+        var hasSecret = !string.IsNullOrWhiteSpace(credential.SecretKeyEncrypted);
+        return new RecaptchaAdminSettings(
+            SiteKey: credential.PublicKey,
+            SecretKeyConfigured: hasSecret,
+            Enabled: !string.IsNullOrWhiteSpace(credential.PublicKey) && hasSecret,
+            MinScore: ParseMinScore(credential.Mode),
+            Version: credential.Version,
+            UpdatedAtUtc: credential.UpdatedAtUtc,
+            UpdatedByUserId: credential.UpdatedByUserId);
+    }
+
+    public async Task<RecaptchaAdminSettings> UpsertRecaptchaSettingsAsync(
+        string siteKey,
+        string secretKey,
+        bool enabled,
+        double minScore,
+        string updatedByUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedMinScore = Math.Clamp(minScore, 0.1d, 1.0d);
+
+        var credential = await _dbContext.Set<IntegrationCredential>()
+            .FirstOrDefaultAsync(x => x.Provider == RecaptchaProvider && x.IsActive, cancellationToken);
+
+        if (credential is null)
+        {
+            credential = new IntegrationCredential
+            {
+                Id = Guid.NewGuid(),
+                Provider = RecaptchaProvider,
+                IsActive = true,
+                Version = 0,
+            };
+            _dbContext.Set<IntegrationCredential>().Add(credential);
+        }
+
+        credential.PublicKey = siteKey.Trim();
+        credential.Mode = normalizedMinScore.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+        credential.BaseUrl = "https://www.google.com/recaptcha/api/siteverify";
+        credential.UpdatedByUserId = string.IsNullOrWhiteSpace(updatedByUserId) ? "system" : updatedByUserId;
+        credential.UpdatedAtUtc = DateTime.UtcNow;
+        credential.Version += 1;
+
+        if (!string.IsNullOrWhiteSpace(secretKey))
+        {
+            credential.SecretKeyEncrypted = _protector.Protect(secretKey.Trim());
+        }
+
+        if (!enabled)
+        {
+            credential.PublicKey = string.Empty;
+            credential.SecretKeyEncrypted = string.Empty;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return await GetRecaptchaAdminSettingsAsync(cancellationToken);
+    }
+
     private PayMongoRuntimeCredentials BuildFallbackFromConfiguration()
     {
         var secretKey = _configuration["PayMongo:SecretKey"] ?? string.Empty;
@@ -233,4 +340,29 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
 
     private static string NormalizeMode(string mode)
         => string.Equals(mode, "live", StringComparison.OrdinalIgnoreCase) ? "live" : "test";
+
+    private RecaptchaRuntimeSettings BuildRecaptchaFallbackFromConfiguration()
+    {
+        var siteKey = _configuration["Recaptcha:SiteKey"] ?? string.Empty;
+        var secretKey = _configuration["Recaptcha:SecretKey"] ?? string.Empty;
+        var minScore = ParseMinScore(_configuration["Recaptcha:MinScore"]);
+        var verifyEndpoint = _configuration["Recaptcha:VerifyEndpoint"] ?? "https://www.google.com/recaptcha/api/siteverify";
+
+        return new RecaptchaRuntimeSettings(
+            SiteKey: siteKey,
+            SecretKey: secretKey,
+            Enabled: !string.IsNullOrWhiteSpace(siteKey) && !string.IsNullOrWhiteSpace(secretKey),
+            MinScore: minScore,
+            VerifyEndpoint: verifyEndpoint);
+    }
+
+    private static double ParseMinScore(string? value)
+    {
+        if (!double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var score))
+        {
+            return 0.5d;
+        }
+
+        return Math.Clamp(score, 0.1d, 1.0d);
+    }
 }

@@ -80,6 +80,7 @@ export interface RegisterCustomerRequest {
   password: string
   confirmPassword: string
   companyName?: string
+  recaptchaToken?: string
 }
 
 export const authService = {

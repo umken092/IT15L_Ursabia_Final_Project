@@ -269,6 +269,18 @@ public class PayMongoConnectionTestResultDto
     public string Message { get; set; } = string.Empty;
 }
 
+public class RecaptchaSettingsDto
+{
+    public string SiteKey { get; set; } = string.Empty;
+    public string SecretKey { get; set; } = string.Empty;
+    public bool SecretKeyConfigured { get; set; }
+    public bool Enabled { get; set; }
+    public double MinScore { get; set; } = 0.5d;
+    public int Version { get; set; }
+    public DateTime? UpdatedAtUtc { get; set; }
+    public string? UpdatedByUserId { get; set; }
+}
+
 public class RolePermissionSetDto
 {
     /// <summary>List of permission strings in "module:action" format, e.g. "general-ledger:view".</summary>

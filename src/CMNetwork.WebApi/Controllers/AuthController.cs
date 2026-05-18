@@ -33,6 +33,8 @@ public class AuthController : ControllerBase
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly CMNetworkDbContext _dbContext;
     private readonly IEmailServiceFactory _emailServiceFactory;
+    private readonly IRecaptchaVerificationService _recaptchaVerificationService;
+    private readonly IIntegrationCredentialService _integrationCredentialService;
 
     public AuthController(
         IAuthService authService,
@@ -41,7 +43,9 @@ public class AuthController : ControllerBase
         RuntimeHealthStatus runtimeHealth,
         UserManager<ApplicationUser> userManager,
         CMNetworkDbContext dbContext,
-        IEmailServiceFactory emailServiceFactory)
+        IEmailServiceFactory emailServiceFactory,
+        IRecaptchaVerificationService recaptchaVerificationService,
+        IIntegrationCredentialService integrationCredentialService)
     {
         _authService = authService;
         _audit       = audit;
@@ -50,6 +54,8 @@ public class AuthController : ControllerBase
         _userManager = userManager;
         _dbContext = dbContext;
         _emailServiceFactory = emailServiceFactory;
+        _recaptchaVerificationService = recaptchaVerificationService;
+        _integrationCredentialService = integrationCredentialService;
     }
 
     [HttpPost("login")]
@@ -58,6 +64,17 @@ public class AuthController : ControllerBase
     {
         if (!ModelState.IsValid)
             return BadRequest(new { message = "Invalid request" });
+
+        var recaptchaCheck = await _recaptchaVerificationService.VerifyAsync(
+            request.RecaptchaToken,
+            expectedAction: "login",
+            remoteIp: HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken: HttpContext.RequestAborted);
+
+        if (!recaptchaCheck.IsValid)
+        {
+            return BadRequest(new { message = recaptchaCheck.Message });
+        }
 
         var ip       = HttpContext.Connection.RemoteIpAddress?.ToString();
         var response = await _authService.LoginAsync(request, ip);
@@ -325,6 +342,17 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
         {
             return BadRequest(new { message = "Please provide valid registration details." });
+        }
+
+        var recaptchaCheck = await _recaptchaVerificationService.VerifyAsync(
+            request.RecaptchaToken,
+            expectedAction: "register_customer",
+            remoteIp: HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken: HttpContext.RequestAborted);
+
+        if (!recaptchaCheck.IsValid)
+        {
+            return BadRequest(new { message = recaptchaCheck.Message });
         }
 
         var firstName = request.FirstName?.Trim() ?? string.Empty;
@@ -619,6 +647,18 @@ public class AuthController : ControllerBase
                 started = _runtimeHealth.HangfireStarted
             }
         });
+
+    [HttpGet("recaptcha/site-key")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetRecaptchaSiteKey()
+    {
+        var settings = await _integrationCredentialService.GetRecaptchaRuntimeSettingsAsync(HttpContext.RequestAborted);
+        return Ok(new
+        {
+            enabled = settings.Enabled,
+            siteKey = settings.SiteKey,
+        });
+    }
 
     private async Task<SmtpSettingsDto?> GetSmtpSettingsAsync()
     {

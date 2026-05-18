@@ -20,6 +20,22 @@ public sealed record PayMongoAdminSettings(
 
 public sealed record PayMongoConnectionTestResult(bool Success, string Message);
 
+public sealed record RecaptchaRuntimeSettings(
+    string SiteKey,
+    string SecretKey,
+    bool Enabled,
+    double MinScore,
+    string VerifyEndpoint);
+
+public sealed record RecaptchaAdminSettings(
+    string SiteKey,
+    bool SecretKeyConfigured,
+    bool Enabled,
+    double MinScore,
+    int Version,
+    DateTime? UpdatedAtUtc,
+    string? UpdatedByUserId);
+
 public interface IIntegrationCredentialService
 {
     Task<PayMongoRuntimeCredentials> GetPayMongoRuntimeCredentialsAsync(CancellationToken cancellationToken = default);
@@ -35,5 +51,15 @@ public interface IIntegrationCredentialService
     Task<PayMongoConnectionTestResult> TestPayMongoConnectionAsync(
         string? secretKey,
         string? baseUrl,
+        CancellationToken cancellationToken = default);
+
+    Task<RecaptchaRuntimeSettings> GetRecaptchaRuntimeSettingsAsync(CancellationToken cancellationToken = default);
+    Task<RecaptchaAdminSettings> GetRecaptchaAdminSettingsAsync(CancellationToken cancellationToken = default);
+    Task<RecaptchaAdminSettings> UpsertRecaptchaSettingsAsync(
+        string siteKey,
+        string secretKey,
+        bool enabled,
+        double minScore,
+        string updatedByUserId,
         CancellationToken cancellationToken = default);
 }

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '@progress/kendo-react-buttons'
 import { Input } from '@progress/kendo-react-inputs'
 import { Card, CardBody } from '@progress/kendo-react-layout'
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3'
 import { authService } from '../services/authService'
 import { useNotificationStore } from '../store/notificationStore'
 
@@ -104,6 +105,7 @@ const getRegistrationErrorState = (error: unknown): { message: string; fieldErro
 export const RegisterCustomerPage = () => {
   const navigate = useNavigate()
   const pushToast = useNotificationStore((state) => state.push)
+  const { executeRecaptcha } = useGoogleReCaptcha()
 
   const [firstName, setFirstName] = useState('')
   const [middleName, setMiddleName] = useState('')
@@ -199,6 +201,12 @@ export const RegisterCustomerPage = () => {
 
     try {
       setSubmitting(true)
+      let recaptchaToken: string | undefined
+      try {
+        recaptchaToken = executeRecaptcha ? await executeRecaptcha('register_customer') : undefined
+      } catch {
+        // reCAPTCHA can be unavailable in local environments
+      }
 
       const normalizedFirstName = firstName.trim()
       const normalizedMiddleName = middleName.trim()
@@ -222,6 +230,7 @@ export const RegisterCustomerPage = () => {
         email: email.trim(),
         password,
         confirmPassword,
+        recaptchaToken,
       })
 
       pushToast('success', 'Registration successful. Please check your email for your OTP.')
