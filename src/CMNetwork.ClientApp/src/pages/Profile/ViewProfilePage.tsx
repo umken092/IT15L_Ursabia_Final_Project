@@ -140,6 +140,7 @@ const ViewProfilePage: React.FC = () => {
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null)
   const [showPasswordForm, setShowPasswordForm] = useState(false)
+  const [requestingBankVerification, setRequestingBankVerification] = useState(false)
   const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -273,6 +274,27 @@ const ViewProfilePage: React.FC = () => {
     }
   }
 
+  const handleRequestBankVerification = async () => {
+    try {
+      setRequestingBankVerification(true)
+      setProfileError(null)
+      const result = await customerPortalService.requestBankVerification()
+      setProfile((prev) => prev ? {
+        ...prev,
+        bankVerificationStatus: result.bankVerificationStatus,
+        bankVerifiedAtUtc: result.bankVerifiedAtUtc,
+      } : prev)
+      const loanCheck = await customerPortalService.checkLoanAccess()
+      setLoanAccess(loanCheck)
+      setProfileSuccess(result.message)
+      setTimeout(() => setProfileSuccess(null), 4000)
+    } catch (error) {
+      setProfileError(parseApiError(error))
+    } finally {
+      setRequestingBankVerification(false)
+    }
+  }
+
   const strengthFields = [
     profileForm.firstName, profileForm.lastName, profileForm.phoneNumber,
     profileForm.companyName, profileForm.address, profileForm.city,
@@ -287,6 +309,10 @@ const ViewProfilePage: React.FC = () => {
   const hasCustomGender = !!profileForm.gender && !GENDER_OPTIONS.includes(profileForm.gender as (typeof GENDER_OPTIONS)[number])
   const hasCustomMaritalStatus = !!profileForm.maritalStatus && !MARITAL_STATUS_OPTIONS.includes(profileForm.maritalStatus as (typeof MARITAL_STATUS_OPTIONS)[number])
   const hasCustomBank = !!profileForm.bankName && !bankDirectory.some((x) => x.name === profileForm.bankName)
+  const bankVerificationStatus = profile?.bankVerificationStatus ?? 'NotVerified'
+  const canRequestBankVerification = !!profileForm.bankName?.trim()
+    && !!profileForm.bankAccount?.trim()
+    && bankVerificationStatus === 'NotVerified'
 
   if (loading) {
     return (
@@ -555,7 +581,10 @@ const ViewProfilePage: React.FC = () => {
                   <strong>Profile Completion:</strong> {loanAccess.profileCompletionPercentage}%
                 </p>
                 <p style={{ margin: 0 }}>
-                  <strong>Bank Verified:</strong> {loanAccess.isBankVerified ? <span style={{ color: '#059669' }}>Yes ✓</span> : <span style={{ color: '#dc2626' }}>No</span>}
+                  <strong>Bank Status:</strong>{' '}
+                  {bankVerificationStatus === 'Verified' && <span style={{ color: '#059669' }}>Verified ✓</span>}
+                  {bankVerificationStatus === 'Pending' && <span style={{ color: '#ca8a04' }}>Pending review</span>}
+                  {bankVerificationStatus === 'NotVerified' && <span style={{ color: '#dc2626' }}>Not verified</span>}
                 </p>
               </div>
               <p style={{ fontSize: 11, color: 'var(--muted)', margin: '0 0 12px' }}>
@@ -563,8 +592,31 @@ const ViewProfilePage: React.FC = () => {
                   ? 'You can now access loan products.'
                   : loanAccess.profileCompletionPercentage < 80
                     ? `Complete ${100 - loanAccess.profileCompletionPercentage}% more of your profile to unlock loans.`
-                    : 'Verify your bank account to access loans.'}
+                    : bankVerificationStatus === 'Pending'
+                      ? 'Your verification request is pending finance team review.'
+                      : 'Verify your bank account to access loans.'}
               </p>
+              {canRequestBankVerification && (
+                <button
+                  type="button"
+                  onClick={() => { void handleRequestBankVerification() }}
+                  disabled={requestingBankVerification}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    background: '#ca8a04',
+                    color: '#fff',
+                    border: 'none',
+                    cursor: requestingBankVerification ? 'not-allowed' : 'pointer',
+                    opacity: requestingBankVerification ? 0.7 : 1,
+                    marginRight: 8,
+                  }}
+                >
+                  {requestingBankVerification ? 'Submitting...' : 'Request Bank Verification'}
+                </button>
+              )}
               {loanAccess.canAccessLoans && (
                 <button
                   type="button"

@@ -113,27 +113,6 @@ export const LoginPage = () => {
       <div className="login-bg-orb login-bg-orb-a" aria-hidden="true" />
       <div className="login-bg-orb login-bg-orb-b" aria-hidden="true" />
       <div className="login-shell">
-        <section className="login-brand-panel" aria-label="Brand and trust information">
-          <img src="/CMN.png" alt="CMNetwork logo" className="login-logo" />
-          <h1>CMNetwork ERP</h1>
-          <p className="login-brand-subtitle">Enterprise-grade finance operations for accounting, lending, and control teams.</p>
-          <div className="login-brand-metrics">
-            <div>
-              <strong>99.99%</strong>
-              <span>Platform uptime</span>
-            </div>
-            <div>
-              <strong>24/7</strong>
-              <span>Audit readiness</span>
-            </div>
-            <div>
-              <strong>70+</strong>
-              <span>Policy regions</span>
-            </div>
-          </div>
-          <p className="login-brand-foot">Secure sign-in with role-aware access and monitored activity trails.</p>
-        </section>
-
         <Card className="login-card">
           <CardBody>
             <div className="login-card-head">

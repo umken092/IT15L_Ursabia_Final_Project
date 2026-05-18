@@ -57,6 +57,14 @@ export interface CustomerProfile {
   bankVerifiedAtUtc?: string
 }
 
+export type BankVerificationStatus = 'NotVerified' | 'Pending' | 'Verified'
+
+export interface BankVerificationResponse {
+  message: string
+  bankVerificationStatus: BankVerificationStatus
+  bankVerifiedAtUtc?: string
+}
+
 export interface CustomerBankDirectoryEntry {
   name: string
   accountNumberPattern: string
@@ -195,6 +203,16 @@ export const customerPortalService = {
   async getCustomerBanks(): Promise<CustomerBankDirectoryEntry[]> {
     const response = await apiClient.get<CustomerBankDirectoryEntry[]>('/customer/banks')
     return Array.isArray(response.data) ? response.data : []
+  },
+
+  async requestBankVerification(): Promise<BankVerificationResponse> {
+    const response = await apiClient.post<BankVerificationResponse>('/customer/bank-verification/request')
+    return response.data
+  },
+
+  async setBankVerificationStatus(customerId: string, status: BankVerificationStatus): Promise<BankVerificationResponse> {
+    const response = await apiClient.post<BankVerificationResponse>(`/customers/${customerId}/bank-verification`, { status })
+    return response.data
   },
 
   async changePassword(oldPassword: string, newPassword: string): Promise<{ message: string }> {

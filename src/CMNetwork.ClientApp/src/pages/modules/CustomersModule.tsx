@@ -15,6 +15,8 @@ import {
   type UpdateCustomerInput,
 } from '../../schemas/vendorCustomerSchemas'
 
+type BankVerificationStatus = 'NotVerified' | 'Pending' | 'Verified'
+
 interface CustomerFormData {
   customerCode: string
   name: string
@@ -66,6 +68,8 @@ export function CustomersModule() {
   const [formData, setFormData] = useState<CustomerFormData>(defaultFormData)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [searchText, setSearchText] = useState('')
+  const [bankActionCustomerId, setBankActionCustomerId] = useState<string | null>(null)
+  const [pendingBankAction, setPendingBankAction] = useState<{ customer: Customer; status: BankVerificationStatus } | null>(null)
 
   const loadCustomers = useCallback(async () => {
     try {
@@ -92,6 +96,8 @@ export function CustomersModule() {
       )
     : customers
 
+  const canManageCustomers = !!user && ['accountant', 'cfo', 'super-admin'].includes(user.role)
+
   const customerColumns = useMemo<ColumnDef<Customer>[]>(
     () => [
       { accessorKey: 'customerCode', header: 'Code' },
@@ -105,6 +111,36 @@ export function CustomersModule() {
         cell: ({ row }) => formatCurrency(row.original.creditLimit),
       },
       {
+        id: 'bankVerificationStatus',
+        header: 'Bank Verification',
+        cell: ({ row }) => {
+          const status = row.original.bankVerificationStatus ?? 'NotVerified'
+          const color =
+            status === 'Verified'
+              ? { bg: '#dcfce7', text: '#166534' }
+              : status === 'Pending'
+                ? { bg: '#fef3c7', text: '#92400e' }
+                : { bg: '#fee2e2', text: '#991b1b' }
+
+          return (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '2px 8px',
+                borderRadius: 999,
+                background: color.bg,
+                color: color.text,
+                fontSize: 12,
+                fontWeight: 700,
+              }}
+            >
+              {status}
+            </span>
+          )
+        },
+      },
+      {
         id: 'isActive',
         header: 'Active',
         cell: ({ row }) => (row.original.isActive ? 'Yes' : 'No'),
@@ -113,18 +149,46 @@ export function CustomersModule() {
         id: 'actions',
         header: 'Actions',
         cell: ({ row }) => (
-          <div className="flex gap-2">
+          <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
             <Button
               icon="edit"
               onClick={() => handleEditClick(row.original)}
               style={{ marginRight: '8px' }}
             />
             <Button icon="delete" onClick={() => handleDeleteClick(row.original)} />
+            {canManageCustomers && (
+              <>
+                <Button
+                  size="small"
+                  themeColor="success"
+                  disabled={bankActionCustomerId === row.original.id}
+                  onClick={() => requestBankVerificationAction(row.original, 'Verified')}
+                >
+                  Verify
+                </Button>
+                <Button
+                  size="small"
+                  themeColor="warning"
+                  disabled={bankActionCustomerId === row.original.id}
+                  onClick={() => requestBankVerificationAction(row.original, 'Pending')}
+                >
+                  Pending
+                </Button>
+                <Button
+                  size="small"
+                  themeColor="error"
+                  disabled={bankActionCustomerId === row.original.id}
+                  onClick={() => requestBankVerificationAction(row.original, 'NotVerified')}
+                >
+                  Reset
+                </Button>
+              </>
+            )}
           </div>
         ),
       },
     ],
-    [],
+    [bankActionCustomerId, canManageCustomers],
   )
 
   const handleAddClick = () => {
@@ -166,6 +230,42 @@ export function CustomersModule() {
         push('error', 'Failed to delete customer')
       }
     }
+  }
+
+  const handleBankVerificationAction = async (customer: Customer, status: BankVerificationStatus) => {
+    if (!customer.bankName || !customer.bankAccount) {
+      push('warning', 'Customer must have bank name and bank account before verification.')
+      return
+    }
+
+    try {
+      setBankActionCustomerId(customer.id)
+      await customerService.setBankVerificationStatus(customer.id, status)
+      push('success', `Bank verification status set to ${status} for ${customer.name}.`)
+      await loadCustomers()
+    } catch {
+      push('error', 'Failed to update bank verification status.')
+    } finally {
+      setBankActionCustomerId(null)
+    }
+  }
+
+  const requestBankVerificationAction = (customer: Customer, status: BankVerificationStatus) => {
+    if (status === 'Pending') {
+      void handleBankVerificationAction(customer, status)
+      return
+    }
+
+    setPendingBankAction({ customer, status })
+  }
+
+  const confirmBankVerificationAction = async () => {
+    if (!pendingBankAction) {
+      return
+    }
+
+    await handleBankVerificationAction(pendingBankAction.customer, pendingBankAction.status)
+    setPendingBankAction(null)
   }
 
   const handleFormChange = (e: InputChangeEvent | React.ChangeEvent<HTMLInputElement>) => {
@@ -284,7 +384,7 @@ export function CustomersModule() {
             <Button
               themeColor="primary"
               onClick={handleAddClick}
-              disabled={!user || !['accountant', 'cfo', 'super-admin'].includes(user.role)}
+              disabled={!canManageCustomers}
             >
               + Add Customer
             </Button>
@@ -295,6 +395,31 @@ export function CustomersModule() {
           <DataTable data={filteredCustomers} columns={customerColumns} pageSizeOptions={[20, 50, 100]} />
         </div>
       </DashboardCard>
+
+      {pendingBankAction && (
+        <Dialog
+          title={pendingBankAction.status === 'Verified' ? 'Confirm Bank Verification' : 'Confirm Bank Verification Reset'}
+          onClose={() => setPendingBankAction(null)}
+        >
+          <div className="p-4" style={{ minWidth: '360px' }}>
+            <p style={{ margin: 0, color: 'var(--text)' }}>
+              {pendingBankAction.status === 'Verified'
+                ? `Mark ${pendingBankAction.customer.name} as bank verified?`
+                : `Reset bank verification for ${pendingBankAction.customer.name}?`}
+            </p>
+          </div>
+          <DialogActionsBar>
+            <Button onClick={() => setPendingBankAction(null)}>Cancel</Button>
+            <Button
+              themeColor={pendingBankAction.status === 'Verified' ? 'success' : 'error'}
+              onClick={() => { void confirmBankVerificationAction() }}
+              disabled={bankActionCustomerId === pendingBankAction.customer.id}
+            >
+              Confirm
+            </Button>
+          </DialogActionsBar>
+        </Dialog>
+      )}
 
       {showDialog && (
         <Dialog title={editingId ? 'Edit Customer' : 'Add Customer'} onClose={handleDialogClose}>

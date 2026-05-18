@@ -386,11 +386,14 @@ SELECT
         await _userManager.UpdateAsync(user);
     }
 
-    private static void ApplyExtendedProfileUpdates(
+    private static bool ApplyExtendedProfileUpdates(
         Customer customer,
         UpdateCustomerProfileRequest request,
         CustomerExtendedColumns extendedColumns)
     {
+        var bankAccountBefore = customer.BankAccount;
+        var bankNameBefore = customer.BankName;
+
         // Apply each field independently if the column exists
         if (extendedColumns.HasTIN && request.TIN is not null)
             customer.TIN = string.IsNullOrWhiteSpace(request.TIN) ? null : request.TIN;
@@ -400,6 +403,17 @@ SELECT
             customer.BankAccount = string.IsNullOrWhiteSpace(request.BankAccount) ? null : request.BankAccount;
         if (extendedColumns.HasBankName && request.BankName is not null)
             customer.BankName = string.IsNullOrWhiteSpace(request.BankName) ? null : request.BankName;
+
+        var bankDetailsChanged = !string.Equals(bankAccountBefore, customer.BankAccount, StringComparison.Ordinal)
+            || !string.Equals(bankNameBefore, customer.BankName, StringComparison.Ordinal);
+
+        if (extendedColumns.HasBankVerificationStatus && bankDetailsChanged)
+        {
+            customer.BankVerificationStatus = BankVerificationStatus.NotVerified;
+            customer.BankVerifiedAtUtc = null;
+        }
+
+        return bankDetailsChanged;
     }
 
     [HttpGet("dashboard")]
@@ -934,6 +948,49 @@ SELECT
             ProfileCompletionPercentage = completionPercentage,
             IsBankVerified = isBankVerified,
             Message = message
+        });
+    }
+
+    [HttpPost("bank-verification/request")]
+    public async Task<IActionResult> RequestBankVerification()
+    {
+        var customer = await GetCurrentCustomerAsync();
+        if (customer is null)
+        {
+            return NotFound(new { message = MissingCustomerMessage });
+        }
+
+        var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
+        if (!hasExtendedColumns)
+        {
+            return BadRequest(new { message = "Bank verification requires the extended profile migration to be applied." });
+        }
+
+        if (string.IsNullOrWhiteSpace(customer.BankName) || string.IsNullOrWhiteSpace(customer.BankAccount))
+        {
+            return BadRequest(new { message = "Provide both bank name and bank account number before requesting verification." });
+        }
+
+        if (customer.BankVerificationStatus == BankVerificationStatus.Verified)
+        {
+            return Ok(new
+            {
+                message = "Bank account is already verified.",
+                bankVerificationStatus = customer.BankVerificationStatus.ToString(),
+                bankVerifiedAtUtc = customer.BankVerifiedAtUtc
+            });
+        }
+
+        customer.BankVerificationStatus = BankVerificationStatus.Pending;
+        customer.BankVerifiedAtUtc = null;
+        customer.LastUpdatedUtc = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Bank verification request submitted. Please wait for finance team approval.",
+            bankVerificationStatus = customer.BankVerificationStatus.ToString(),
+            bankVerifiedAtUtc = customer.BankVerifiedAtUtc
         });
     }
 

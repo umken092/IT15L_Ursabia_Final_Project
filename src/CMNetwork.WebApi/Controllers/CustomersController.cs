@@ -42,6 +42,10 @@ public class CustomersController : ControllerBase
                 x.TaxId,
                 x.CreditLimit,
                 x.PaymentTerms,
+                x.BankName,
+                x.BankAccount,
+                BankVerificationStatus = x.BankVerificationStatus.ToString(),
+                x.BankVerifiedAtUtc,
                 x.IsActive,
                 x.CreatedUtc,
                 x.LastUpdatedUtc
@@ -72,6 +76,10 @@ public class CustomersController : ControllerBase
                 x.TaxId,
                 x.CreditLimit,
                 x.PaymentTerms,
+                x.BankName,
+                x.BankAccount,
+                BankVerificationStatus = x.BankVerificationStatus.ToString(),
+                x.BankVerifiedAtUtc,
                 x.IsActive,
                 x.CreatedUtc,
                 x.LastUpdatedUtc
@@ -201,4 +209,51 @@ public class CustomersController : ControllerBase
 
         return Ok(new { message = "Customer deleted successfully." });
     }
+
+    [HttpPost("{id:guid}/bank-verification")]
+    [Authorize(Roles = "accountant,cfo,super-admin")]
+    public async Task<IActionResult> SetBankVerificationStatus(Guid id, [FromBody] SetBankVerificationStatusRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var customer = await _dbContext.Customers.FirstOrDefaultAsync(x => x.Id == id);
+        if (customer == null)
+            return NotFound(new { message = "Customer not found." });
+
+        if (string.IsNullOrWhiteSpace(customer.BankName) || string.IsNullOrWhiteSpace(customer.BankAccount))
+            return BadRequest(new { message = "Customer must have bank name and account number before verification." });
+
+        if (request.Status == BankVerificationStatus.Verified)
+        {
+            customer.BankVerificationStatus = BankVerificationStatus.Verified;
+            customer.BankVerifiedAtUtc = DateTime.UtcNow;
+        }
+        else if (request.Status == BankVerificationStatus.Pending)
+        {
+            customer.BankVerificationStatus = BankVerificationStatus.Pending;
+            customer.BankVerifiedAtUtc = null;
+        }
+        else
+        {
+            customer.BankVerificationStatus = BankVerificationStatus.NotVerified;
+            customer.BankVerifiedAtUtc = null;
+        }
+
+        customer.LastUpdatedUtc = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Bank verification status updated.",
+            customerId = customer.Id,
+            bankVerificationStatus = customer.BankVerificationStatus.ToString(),
+            customer.BankVerifiedAtUtc
+        });
+    }
+}
+
+public class SetBankVerificationStatusRequest
+{
+    public BankVerificationStatus Status { get; set; }
 }

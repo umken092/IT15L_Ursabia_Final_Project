@@ -1315,12 +1315,7 @@ p {
   }
 
   .login-shell {
-    grid-template-columns: 1fr;
-    width: min(100%, 560px);
-  }
-
-  .login-brand-panel {
-    display: none;
+    width: min(100%, 460px);
   }
 }
 
@@ -1429,11 +1424,7 @@ p {
 .login-shell {
   position: relative;
   z-index: 1;
-  width: min(100%, 1060px);
-  display: grid;
-  grid-template-columns: 1fr 460px;
-  gap: 1rem;
-  align-items: stretch;
+  width: min(100%, 460px);
 }
 
 .login-brand-panel {

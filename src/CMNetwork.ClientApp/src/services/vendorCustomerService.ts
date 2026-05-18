@@ -53,11 +53,22 @@ export interface Customer {
   postalCode?: string
   country?: string
   taxId?: string
+  bankName?: string
+  bankAccount?: string
+  bankVerificationStatus?: 'NotVerified' | 'Pending' | 'Verified'
+  bankVerifiedAtUtc?: string
   creditLimit: number
   paymentTerms?: string
   isActive: boolean
   createdUtc: string
   lastUpdatedUtc?: string
+}
+
+export interface SetBankVerificationStatusResponse {
+  message: string
+  customerId: string
+  bankVerificationStatus: 'NotVerified' | 'Pending' | 'Verified'
+  bankVerifiedAtUtc?: string
 }
 
 export interface CreateCustomerInput {
@@ -131,5 +142,9 @@ export const customerService = {
 
   deleteCustomer: async (id: string) => {
     return apiClient.delete(`/customers/${id}`)
+  },
+
+  setBankVerificationStatus: async (id: string, status: 'NotVerified' | 'Pending' | 'Verified') => {
+    return apiClient.post<SetBankVerificationStatusResponse>(`/customers/${id}/bank-verification`, { status })
   },
 }
