@@ -171,26 +171,30 @@ FROM Customers";
 
     private async Task<bool> HasExtendedCustomerProfileColumnsAsync()
     {
-        return await MemoryCache.GetOrCreateAsync("customer:extended-profile-columns:v1", async entry =>
+        var columns = await GetExtendedCustomerProfileColumnsAsync();
+        return columns.HasTIN && columns.HasSSS && columns.HasBankAccount && columns.HasBankName && columns.HasBankVerificationStatus;
+    }
+
+    private async Task<CustomerExtendedColumns> GetExtendedCustomerProfileColumnsAsync()
+    {
+        return await MemoryCache.GetOrCreateAsync("customer:extended-profile-columns:v2", async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
             try
             {
                 var query = @"
-SELECT CASE
-    WHEN COL_LENGTH('Customers', 'TIN') IS NOT NULL
-     AND COL_LENGTH('Customers', 'SSS') IS NOT NULL
-     AND COL_LENGTH('Customers', 'BankAccount') IS NOT NULL
-     AND COL_LENGTH('Customers', 'BankName') IS NOT NULL
-     AND COL_LENGTH('Customers', 'BankVerificationStatus') IS NOT NULL
-    THEN 1 ELSE 0 END";
+SELECT
+    CASE WHEN COL_LENGTH('Customers', 'TIN') IS NOT NULL THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS HasTIN,
+    CASE WHEN COL_LENGTH('Customers', 'SSS') IS NOT NULL THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS HasSSS,
+    CASE WHEN COL_LENGTH('Customers', 'BankAccount') IS NOT NULL THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS HasBankAccount,
+    CASE WHEN COL_LENGTH('Customers', 'BankName') IS NOT NULL THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS HasBankName,
+    CASE WHEN COL_LENGTH('Customers', 'BankVerificationStatus') IS NOT NULL THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS HasBankVerificationStatus";
 
-                var hasColumns = await _dbContext.Database.SqlQueryRaw<int>(query).SingleAsync();
-                return hasColumns == 1;
+                return await _dbContext.Database.SqlQueryRaw<CustomerExtendedColumns>(query).SingleAsync();
             }
             catch
             {
-                return false;
+                return new CustomerExtendedColumns();
             }
         });
     }
@@ -385,18 +389,16 @@ SELECT
     private static void ApplyExtendedProfileUpdates(
         Customer customer,
         UpdateCustomerProfileRequest request,
-        bool hasExtendedColumns)
+        CustomerExtendedColumns extendedColumns)
     {
-        if (!hasExtendedColumns)
-            return;
-
-        if (request.TIN is not null)
+        // Apply each field independently if the column exists
+        if (extendedColumns.HasTIN && request.TIN is not null)
             customer.TIN = string.IsNullOrWhiteSpace(request.TIN) ? null : request.TIN;
-        if (request.SSS is not null)
+        if (extendedColumns.HasSSS && request.SSS is not null)
             customer.SSS = string.IsNullOrWhiteSpace(request.SSS) ? null : request.SSS;
-        if (request.BankAccount is not null)
+        if (extendedColumns.HasBankAccount && request.BankAccount is not null)
             customer.BankAccount = string.IsNullOrWhiteSpace(request.BankAccount) ? null : request.BankAccount;
-        if (request.BankName is not null)
+        if (extendedColumns.HasBankName && request.BankName is not null)
             customer.BankName = string.IsNullOrWhiteSpace(request.BankName) ? null : request.BankName;
     }
 
@@ -827,6 +829,7 @@ SELECT
     [HttpPut("profile")]
     public async Task<IActionResult> UpdateProfile([FromBody] UpdateCustomerProfileRequest request)
     {
+        var extendedColumns = await GetExtendedCustomerProfileColumnsAsync();
         var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
         var demographicColumns = await GetDemographicCustomerProfileColumnsAsync();
         var user = await _userManager.GetUserAsync(User);
@@ -845,7 +848,7 @@ SELECT
         ApplyCoreProfileUpdates(customer, request);
         ApplyDemographicProfileUpdates(customer, request, demographicColumns);
         await ApplyLegacyDemographicFallbackAsync(user, request, demographicColumns);
-        ApplyExtendedProfileUpdates(customer, request, hasExtendedColumns);
+        ApplyExtendedProfileUpdates(customer, request, extendedColumns);
 
         customer.LastUpdatedUtc = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync();
@@ -1569,6 +1572,15 @@ public sealed class CustomerDemographicColumns
     public bool HasAge { get; set; }
     public bool HasGender { get; set; }
     public bool HasMaritalStatus { get; set; }
+}
+
+public sealed class CustomerExtendedColumns
+{
+    public bool HasTIN { get; set; }
+    public bool HasSSS { get; set; }
+    public bool HasBankAccount { get; set; }
+    public bool HasBankName { get; set; }
+    public bool HasBankVerificationStatus { get; set; }
 }
 
 public sealed class LoanAccessCheckResponse
