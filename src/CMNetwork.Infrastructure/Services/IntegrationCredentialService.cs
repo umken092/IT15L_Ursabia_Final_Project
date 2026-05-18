@@ -213,16 +213,17 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
             return BuildRecaptchaFallbackFromConfiguration();
         }
 
-        var secretKey = DecryptOrEmpty(credential.SecretKeyEncrypted);
+        var siteKey = SanitizeRecaptchaConfigValue(credential.PublicKey);
+        var secretKey = SanitizeRecaptchaConfigValue(DecryptOrEmpty(credential.SecretKeyEncrypted));
         var minScore = ParseMinScore(credential.Mode);
         var verifyEndpoint = string.IsNullOrWhiteSpace(credential.BaseUrl)
             ? "https://www.google.com/recaptcha/api/siteverify"
             : credential.BaseUrl.Trim();
 
         return new RecaptchaRuntimeSettings(
-            SiteKey: credential.PublicKey,
+            SiteKey: siteKey,
             SecretKey: secretKey,
-            Enabled: !string.IsNullOrWhiteSpace(credential.PublicKey) && !string.IsNullOrWhiteSpace(secretKey),
+            Enabled: !string.IsNullOrWhiteSpace(siteKey) && !string.IsNullOrWhiteSpace(secretKey),
             MinScore: minScore,
             VerifyEndpoint: verifyEndpoint);
     }
