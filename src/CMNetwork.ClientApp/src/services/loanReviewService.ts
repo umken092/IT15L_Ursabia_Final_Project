@@ -90,67 +90,67 @@ export interface RejectApplicationRequest {
 // ─── Accountant: Loan Review ──────────────────────────────────────────────────
 
 const getPendingApplications = async (): Promise<LoanApplicationSummary[]> => {
-  const res = await apiClient.get<LoanApplicationSummary[]>('/api/loan-review/pending-applications')
+  const res = await apiClient.get<LoanApplicationSummary[]>('/loan-review/pending-applications')
   return res.data
 }
 
 const getApplicationForReview = async (id: string): Promise<LoanApplicationDetail> => {
-  const res = await apiClient.get<LoanApplicationDetail>(`/api/loan-review/applications/${id}`)
+  const res = await apiClient.get<LoanApplicationDetail>(`/loan-review/applications/${id}`)
   return res.data
 }
 
 const reviewApplication = async (id: string, payload: ReviewApplicationRequest): Promise<void> => {
-  await apiClient.post(`/api/loan-review/applications/${id}/review`, payload)
+  await apiClient.post(`/loan-review/applications/${id}/review`, payload)
 }
 
 const getApprovedForDisbursement = async (): Promise<DisbursementApplication[]> => {
-  const res = await apiClient.get<DisbursementApplication[]>('/api/loan-review/approved-for-disbursement')
+  const res = await apiClient.get<DisbursementApplication[]>('/loan-review/approved-for-disbursement')
   return res.data
 }
 
 const disburseLoan = async (id: string): Promise<void> => {
-  await apiClient.post(`/api/loan-review/applications/${id}/disburse`, {})
+  await apiClient.post(`/loan-review/applications/${id}/disburse`, {})
 }
 
 const getActiveLoans = async (): Promise<ActiveLoanSummary[]> => {
-  const res = await apiClient.get<ActiveLoanSummary[]>('/api/loan-review/active-loans')
+  const res = await apiClient.get<ActiveLoanSummary[]>('/loan-review/active-loans')
   return res.data
 }
 
 // ─── CFO: Loan Approval ───────────────────────────────────────────────────────
 
 const getPendingCfoApproval = async (): Promise<LoanApplicationSummary[]> => {
-  const res = await apiClient.get<LoanApplicationSummary[]>('/api/loan-review/pending-cfo-approval')
+  const res = await apiClient.get<LoanApplicationSummary[]>('/loan-review/pending-cfo-approval')
   return res.data
 }
 
 const approveLoan = async (id: string, payload: ApproveApplicationRequest): Promise<void> => {
-  await apiClient.post(`/api/loan-review/applications/${id}/approve`, payload)
+  await apiClient.post(`/loan-review/applications/${id}/approve`, payload)
 }
 
 const rejectLoan = async (id: string, payload: RejectApplicationRequest): Promise<void> => {
-  await apiClient.post(`/api/loan-review/applications/${id}/reject`, payload)
+  await apiClient.post(`/loan-review/applications/${id}/reject`, payload)
 }
 
 // ─── Loan Interest Tier Management ────────────────────────────────────────────
 
 const getLoanTiers = async (includeInactive = false): Promise<LoanInterestTier[]> => {
-  const res = await apiClient.get<LoanInterestTier[]>('/api/system/loan-configuration/tiers', {
+  const res = await apiClient.get<LoanInterestTier[]>('/system/loan-configuration/tiers', {
     params: { includeInactive },
   })
   return res.data
 }
 
 const createTier = async (payload: UpsertTierRequest): Promise<void> => {
-  await apiClient.post('/api/system/loan-configuration/tiers', payload)
+  await apiClient.post('/system/loan-configuration/tiers', payload)
 }
 
 const updateTier = async (id: string, payload: UpsertTierRequest): Promise<void> => {
-  await apiClient.put(`/api/system/loan-configuration/tiers/${id}`, payload)
+  await apiClient.put(`/system/loan-configuration/tiers/${id}`, payload)
 }
 
 const deleteTier = async (id: string): Promise<void> => {
-  await apiClient.delete(`/api/system/loan-configuration/tiers/${id}`)
+  await apiClient.delete(`/system/loan-configuration/tiers/${id}`)
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────
