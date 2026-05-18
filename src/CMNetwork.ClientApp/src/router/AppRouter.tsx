@@ -47,6 +47,15 @@ const ContactSupportPage = lazy(() =>
 const ViewLoansPage = lazy(() =>
   import('../pages/Loans/ViewLoansPage').then((m) => ({ default: m.ViewLoansPage })),
 )
+const AccountantLoanReviewPage = lazy(() =>
+  import('../pages/Loans/AccountantLoanReviewPage').then((m) => ({ default: m.default })),
+)
+const CfoLoanApprovalPage = lazy(() =>
+  import('../pages/Loans/CfoLoanApprovalPage').then((m) => ({ default: m.default })),
+)
+const LoanTierManagementPage = lazy(() =>
+  import('../pages/Loans/LoanTierManagementPage').then((m) => ({ default: m.default })),
+)
 
 const APP_TITLE = 'CMNetwork ERP'
 
@@ -84,6 +93,9 @@ const modulePageTitles: Record<string, string> = {
   'financial-reports': 'Financial Reports',
   profile: 'Profile',
   reports: 'Reports',
+  'loan-review': 'Loan Review',
+  'loan-approval': 'Loan Approval',
+  'loan-tiers': 'Loan Interest Tiers',
   'roles-permissions': 'Roles & Permissions',
   'job-queue': 'Job Queue',
   'fiscal-periods': 'Fiscal Periods',
@@ -231,6 +243,18 @@ export const AppRouter = () => {
             <Route path="/module/loans/apply" element={<ViewLoansPage />} />
             <Route path="/module/loans/active" element={<ViewLoansPage />} />
             <Route path="/module/loans/applications" element={<ViewLoansPage />} />
+
+            {/* Accountant Loan Review */}
+            <Route path="/module/loan-review" element={<AccountantLoanReviewPage />} />
+            <Route path="/module/loan-review/pending" element={<AccountantLoanReviewPage />} />
+            <Route path="/module/loan-review/disbursement" element={<AccountantLoanReviewPage />} />
+
+            {/* CFO Loan Approval */}
+            <Route path="/module/loan-approval" element={<CfoLoanApprovalPage />} />
+            <Route path="/module/loan-approval/pending" element={<CfoLoanApprovalPage />} />
+
+            {/* Loan Tier Management (CFO / Super-Admin) */}
+            <Route path="/module/loan-tiers" element={<LoanTierManagementPage />} />
           </Route>
         </Route>
 

@@ -274,9 +274,21 @@ export const customerPortalService = {
     return response.data
   },
 
+  async getLoanInterestTiers(): Promise<Array<{ termMonths: number; annualInterestRate: number }>> {
+    const response = await apiClient.get<Array<{ termMonths: number; annualInterestRate: number }>>('/customer/loans/interest-tiers')
+    return Array.isArray(response.data) ? response.data : []
+  },
+
+  async estimateLoan(requestedAmount: number, termMonths: number): Promise<{ annualInterestRate: number; monthlyPayment: number; totalRepayment: number; totalInterest: number; availableCredit: number }> {
+    const response = await apiClient.get<{ annualInterestRate: number; monthlyPayment: number; totalRepayment: number; totalInterest: number; availableCredit: number }>(
+      `/customer/loans/estimate?requestedAmount=${requestedAmount}&termMonths=${termMonths}`,
+    )
+    return response.data
+  },
+
   // Loan application
-  async applyForLoan(request: { requestedAmount: number; interestRate: number; termMonths: number; purpose: string }): Promise<{ message: string; applicationId: string; status: string }> {
-    const response = await apiClient.post<{ message: string; applicationId: string; status: string }>('/customer/loans/apply', request)
+  async applyForLoan(request: { requestedAmount: number; termMonths: number; purpose: string }): Promise<{ message: string; applicationId: string; status: string; annualInterestRate?: number; estimatedMonthlyPayment?: number }> {
+    const response = await apiClient.post<{ message: string; applicationId: string; status: string; annualInterestRate?: number; estimatedMonthlyPayment?: number }>('/customer/loans/apply', request)
     return response.data
   },
 

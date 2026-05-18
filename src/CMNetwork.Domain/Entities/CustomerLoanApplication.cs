@@ -25,6 +25,12 @@ public class CustomerLoanApplication
     /// <summary>Application status: Submitted, Approved, Rejected, Withdrawn.</summary>
     public LoanApplicationStatus Status { get; set; } = LoanApplicationStatus.Submitted;
 
+    /// <summary>Amount prepared by accountant/CFO for final approval; if null, requested amount is used.</summary>
+    public decimal? ApprovedAmount { get; set; }
+
+    /// <summary>Term prepared by accountant/CFO for final approval; if null, requested term is used.</summary>
+    public int? ApprovedTermMonths { get; set; }
+
     /// <summary>Accountant notes after review.</summary>
     public string? AccountantReviewNotes { get; set; }
 

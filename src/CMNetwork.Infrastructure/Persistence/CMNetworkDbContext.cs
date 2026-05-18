@@ -52,6 +52,7 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
     public DbSet<CustomerLoanApplication> CustomerLoanApplications => Set<CustomerLoanApplication>();
     public DbSet<CustomerLoan> CustomerLoans => Set<CustomerLoan>();
     public DbSet<CustomerLoanPayment> CustomerLoanPayments => Set<CustomerLoanPayment>();
+    public DbSet<LoanInterestTier> LoanInterestTiers => Set<LoanInterestTier>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -694,6 +695,112 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
                 .WithMany()
                 .HasForeignKey(x => x.CustomerId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<CustomerLoanApplication>(entity =>
+        {
+            entity.Property(x => x.RequestedAmount).HasPrecision(18, 2);
+            entity.Property(x => x.ApprovedAmount).HasPrecision(18, 2);
+            entity.Property(x => x.InterestRate).HasPrecision(5, 2);
+            entity.Property(x => x.Purpose).HasMaxLength(512).IsRequired();
+            entity.Property(x => x.AccountantReviewNotes).HasMaxLength(1024);
+            entity.Property(x => x.CfoNotes).HasMaxLength(1024);
+            entity.HasIndex(x => new { x.CustomerId, x.Status, x.SubmittedAtUtc });
+            entity.HasOne(x => x.Customer)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CustomerLoan>(entity =>
+        {
+            entity.Property(x => x.PrincipalAmount).HasPrecision(18, 2);
+            entity.Property(x => x.OutstandingPrincipal).HasPrecision(18, 2);
+            entity.Property(x => x.TotalInterestAccrued).HasPrecision(18, 2);
+            entity.Property(x => x.InterestRate).HasPrecision(5, 2);
+            entity.Property(x => x.StatusNotes).HasMaxLength(1024);
+            entity.HasIndex(x => x.CustomerId);
+            entity.HasIndex(x => x.LoanApplicationId).IsUnique();
+            entity.HasOne(x => x.Customer)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.LoanApplication)
+                .WithMany()
+                .HasForeignKey(x => x.LoanApplicationId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<CustomerLoanPayment>(entity =>
+        {
+            entity.Property(x => x.PrincipalAmount).HasPrecision(18, 2);
+            entity.Property(x => x.InterestAmount).HasPrecision(18, 2);
+            entity.Property(x => x.TotalAmount).HasPrecision(18, 2);
+            entity.Property(x => x.PaymentMethod).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.PayMongoCheckoutSessionId).HasMaxLength(256);
+            entity.Property(x => x.ExternalReference).HasMaxLength(256);
+            entity.HasIndex(x => new { x.LoanId, x.Status, x.DueAtUtc });
+            entity.HasOne(x => x.Loan)
+                .WithMany(x => x.Payments)
+                .HasForeignKey(x => x.LoanId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<LoanInterestTier>(entity =>
+        {
+            entity.Property(x => x.AnnualInterestRate).HasPrecision(5, 2);
+            entity.Property(x => x.CreatedBy).HasMaxLength(256);
+            entity.Property(x => x.UpdatedBy).HasMaxLength(256);
+            entity.HasIndex(x => x.TermMonths).IsUnique();
+            entity.HasIndex(x => x.IsActive);
+
+            entity.HasData(
+                new LoanInterestTier
+                {
+                    Id = Guid.Parse("80000000-0000-0000-0000-000000000001"),
+                    TermMonths = 3,
+                    AnnualInterestRate = 5m,
+                    IsActive = true,
+                    CreatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, DateTimeKind.Utc),
+                    CreatedBy = "system"
+                },
+                new LoanInterestTier
+                {
+                    Id = Guid.Parse("80000000-0000-0000-0000-000000000002"),
+                    TermMonths = 6,
+                    AnnualInterestRate = 7m,
+                    IsActive = true,
+                    CreatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, DateTimeKind.Utc),
+                    CreatedBy = "system"
+                },
+                new LoanInterestTier
+                {
+                    Id = Guid.Parse("80000000-0000-0000-0000-000000000003"),
+                    TermMonths = 12,
+                    AnnualInterestRate = 10m,
+                    IsActive = true,
+                    CreatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, DateTimeKind.Utc),
+                    CreatedBy = "system"
+                },
+                new LoanInterestTier
+                {
+                    Id = Guid.Parse("80000000-0000-0000-0000-000000000004"),
+                    TermMonths = 24,
+                    AnnualInterestRate = 14m,
+                    IsActive = true,
+                    CreatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, DateTimeKind.Utc),
+                    CreatedBy = "system"
+                },
+                new LoanInterestTier
+                {
+                    Id = Guid.Parse("80000000-0000-0000-0000-000000000005"),
+                    TermMonths = 36,
+                    AnnualInterestRate = 18m,
+                    IsActive = true,
+                    CreatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, DateTimeKind.Utc),
+                    CreatedBy = "system"
+                }
+            );
         });
     }
 

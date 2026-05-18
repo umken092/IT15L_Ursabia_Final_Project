@@ -50,6 +50,9 @@ const baseSidebarIconByPath: Record<string, SVGIcon> = {
   '/module/financial-reports': fileReportIcon,
   '/module/profile': userOutlineIcon,
   '/module/loans': banknoteOutlineIcon,
+  '/module/loan-review': banknoteOutlineIcon,
+  '/module/loan-approval': banknoteOutlineIcon,
+  '/module/loan-tiers': slidersIcon,
   '/module/reports': fileReportIcon,
 }
 

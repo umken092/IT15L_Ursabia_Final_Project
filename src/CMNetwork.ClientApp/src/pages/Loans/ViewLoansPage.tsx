@@ -62,11 +62,12 @@ export const ViewLoansPage = () => {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [tab, setTab] = useState<'overview' | 'apply' | 'active' | 'applications'>('overview')
+  const [tiers, setTiers] = useState<Array<{ termMonths: number; annualInterestRate: number }>>([])
+  const [estimate, setEstimate] = useState<{ annualInterestRate: number; monthlyPayment: number; totalRepayment: number; totalInterest: number; availableCredit: number } | null>(null)
 
   // Form state
   const [formData, setFormData] = useState({
     requestedAmount: '',
-    interestRate: '0',
     termMonths: '12',
     purpose: '',
   })
@@ -78,8 +79,17 @@ export const ViewLoansPage = () => {
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const access = await customerPortalService.checkLoanAccess()
+      const [access, tierData] = await Promise.all([
+        customerPortalService.checkLoanAccess(),
+        customerPortalService.getLoanInterestTiers(),
+      ])
       setLoanAccess(access)
+      setTiers(tierData)
+
+      if (tierData.length > 0 && !tierData.some((x) => String(x.termMonths) === formData.termMonths)) {
+        setFormData((prev) => ({ ...prev, termMonths: String(tierData[0].termMonths) }))
+      }
+
       // Page unlocks at 80% profile completion; apply eligibility remains backend-enforced.
       if (access.profileCompletionPercentage >= 80) {
         const loans = await customerPortalService.getMyLoans()
@@ -90,11 +100,41 @@ export const ViewLoansPage = () => {
     } finally {
       setLoading(false)
     }
-  }, [pushToast])
+  }, [formData.termMonths, pushToast])
 
   useEffect(() => {
     void loadData()
   }, [loadData])
+
+  useEffect(() => {
+    const requestedAmount = parseFloat(formData.requestedAmount)
+    const termMonths = parseInt(formData.termMonths)
+
+    if (!Number.isFinite(requestedAmount) || requestedAmount < 10000 || !Number.isFinite(termMonths) || termMonths <= 0) {
+      setEstimate(null)
+      return
+    }
+
+    let cancelled = false
+    const run = async () => {
+      try {
+        const result = await customerPortalService.estimateLoan(requestedAmount, termMonths)
+        if (!cancelled) {
+          setEstimate(result)
+        }
+      } catch {
+        if (!cancelled) {
+          setEstimate(null)
+        }
+      }
+    }
+
+    void run()
+
+    return () => {
+      cancelled = true
+    }
+  }, [formData.requestedAmount, formData.termMonths])
 
   const handleApplySubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -111,12 +151,11 @@ export const ViewLoansPage = () => {
     try {
       const result = await customerPortalService.applyForLoan({
         requestedAmount: parseFloat(formData.requestedAmount),
-        interestRate: parseFloat(formData.interestRate),
         termMonths: parseInt(formData.termMonths),
         purpose: formData.purpose,
       })
       pushToast('success', result.message)
-      setFormData({ requestedAmount: '', interestRate: '0', termMonths: '12', purpose: '' })
+      setFormData((prev) => ({ requestedAmount: '', termMonths: prev.termMonths, purpose: '' }))
       setTab('applications')
       await loadData()
     } catch (error: any) {
@@ -410,7 +449,7 @@ export const ViewLoansPage = () => {
                 <input
                   type="number"
                   step="0.01"
-                  min="0"
+                  min="10000"
                   placeholder="e.g., 50000"
                   value={formData.requestedAmount}
                   onChange={(e) => setFormData({ ...formData, requestedAmount: e.target.value })}
@@ -426,35 +465,36 @@ export const ViewLoansPage = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: C.text, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    Interest Rate (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.interestRate}
-                    onChange={(e) => setFormData({ ...formData, interestRate: e.target.value })}
-                    style={{
-                      padding: '10px 12px', borderRadius: 6, fontSize: 13,
-                      border: `1px solid ${C.border}`, background: 'var(--surface)',
-                      color: C.text,
-                    }}
-                  />
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: C.text, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                     Term (Months)
                   </label>
-                  <input
-                    type="number"
-                    step="1"
-                    min="1"
+                  <select
                     value={formData.termMonths}
                     onChange={(e) => setFormData({ ...formData, termMonths: e.target.value })}
                     style={{
                       padding: '10px 12px', borderRadius: 6, fontSize: 13,
                       border: `1px solid ${C.border}`, background: 'var(--surface)',
+                      color: C.text,
+                    }}
+                  >
+                    {tiers.map((tier) => (
+                      <option key={tier.termMonths} value={tier.termMonths}>
+                        {tier.termMonths} months ({tier.annualInterestRate}% annual)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: C.text, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    Interest Rate (%)
+                  </label>
+                  <input
+                    type="text"
+                    value={estimate ? `${estimate.annualInterestRate}%` : (tiers.find((x) => String(x.termMonths) === formData.termMonths)?.annualInterestRate ? `${tiers.find((x) => String(x.termMonths) === formData.termMonths)?.annualInterestRate}%` : 'Auto')}
+                    readOnly
+                    style={{
+                      padding: '10px 12px', borderRadius: 6, fontSize: 13,
+                      border: `1px solid ${C.border}`, background: '#f8fafc',
                       color: C.text,
                     }}
                   />
@@ -480,9 +520,30 @@ export const ViewLoansPage = () => {
                 />
               </div>
 
+              {estimate && (
+                <div style={{
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 8,
+                  padding: 12,
+                  background: '#f8fafc',
+                  display: 'grid',
+                  gap: 6,
+                }}>
+                  <p style={{ margin: 0, fontSize: 12, color: C.text }}>
+                    <strong>Estimated monthly payment:</strong> {formatCurrency(estimate.monthlyPayment)}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 12, color: C.text }}>
+                    <strong>Total repayment:</strong> {formatCurrency(estimate.totalRepayment)}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 12, color: C.text }}>
+                    <strong>Available credit:</strong> {formatCurrency(estimate.availableCredit)}
+                  </p>
+                </div>
+              )}
+
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || tiers.length === 0}
                 style={{
                   padding: '10px 20px', borderRadius: 6, fontSize: 13,
                   background: C.primary, color: '#fff', border: 'none',

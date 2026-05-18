@@ -55,6 +55,14 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
     { label: 'Accounts Payable', path: '/module/accounts-payable' },
     { label: 'Accounts Receivable', path: '/module/accounts-receivable' },
     { label: 'Bank Reconciliation', path: '/module/bank-reconciliation' },
+    {
+      label: 'Loans',
+      path: '/module/loan-review',
+      children: [
+        { label: 'Review Applications', path: '/module/loan-review' },
+        { label: 'Disbursement Queue', path: '/module/loan-review/disbursement' },
+      ],
+    },
     { label: 'Reports', path: '/module/reports' },
   ],
   'faculty-admin': [
@@ -132,6 +140,14 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
     { label: 'Payroll', path: '/module/payroll' },
     { label: 'Approval Inbox', path: '/module/approvals-inbox' },
     { label: 'Budget Control', path: '/module/budget-control' },
+    {
+      label: 'Loans',
+      path: '/module/loan-approval',
+      children: [
+        { label: 'Approve Applications', path: '/module/loan-approval' },
+        { label: 'Interest Rate Tiers', path: '/module/loan-tiers' },
+      ],
+    },
     { label: 'Reports', path: '/module/reports' },
   ],
   customer: [
