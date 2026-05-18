@@ -99,13 +99,13 @@ public class CustomerPortalController : ControllerBase
 
     private async Task<Customer?> GetCurrentCustomerLegacySafeAsync(Guid? customerId, string? email)
     {
-        var hasDemographicColumns = await HasDemographicCustomerProfileColumnsAsync();
+        var demographicColumns = await GetDemographicCustomerProfileColumnsAsync();
         var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
 
-        var birthDateExpr = hasDemographicColumns ? "[BirthDate]" : "CAST(NULL AS date)";
-        var ageExpr = hasDemographicColumns ? "[Age]" : "CAST(NULL AS int)";
-        var genderExpr = hasDemographicColumns ? "[Gender]" : "CAST(NULL AS nvarchar(16))";
-        var maritalStatusExpr = hasDemographicColumns ? "[MaritalStatus]" : "CAST(NULL AS nvarchar(32))";
+        var birthDateExpr = demographicColumns.HasBirthDate ? "[BirthDate]" : "CAST(NULL AS date)";
+        var ageExpr = demographicColumns.HasAge ? "[Age]" : "CAST(NULL AS int)";
+        var genderExpr = demographicColumns.HasGender ? "[Gender]" : "CAST(NULL AS nvarchar(16))";
+        var maritalStatusExpr = demographicColumns.HasMaritalStatus ? "[MaritalStatus]" : "CAST(NULL AS nvarchar(32))";
 
         var tinExpr = hasExtendedColumns ? "[TIN]" : "CAST(NULL AS nvarchar(32))";
         var sssExpr = hasExtendedColumns ? "[SSS]" : "CAST(NULL AS nvarchar(32))";
@@ -197,25 +197,29 @@ SELECT CASE
 
     private async Task<bool> HasDemographicCustomerProfileColumnsAsync()
     {
-        return await MemoryCache.GetOrCreateAsync("customer:demographic-profile-columns:v1", async entry =>
+        var columns = await GetDemographicCustomerProfileColumnsAsync();
+        return columns.HasBirthDate && columns.HasAge && columns.HasGender && columns.HasMaritalStatus;
+    }
+
+    private async Task<CustomerDemographicColumns> GetDemographicCustomerProfileColumnsAsync()
+    {
+        return await MemoryCache.GetOrCreateAsync("customer:demographic-profile-columns:v2", async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
             try
             {
                 var query = @"
-SELECT CASE
-    WHEN COL_LENGTH('Customers', 'BirthDate') IS NOT NULL
-     AND COL_LENGTH('Customers', 'Age') IS NOT NULL
-     AND COL_LENGTH('Customers', 'Gender') IS NOT NULL
-     AND COL_LENGTH('Customers', 'MaritalStatus') IS NOT NULL
-    THEN 1 ELSE 0 END";
+SELECT
+    CASE WHEN COL_LENGTH('Customers', 'BirthDate') IS NOT NULL THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS HasBirthDate,
+    CASE WHEN COL_LENGTH('Customers', 'Age') IS NOT NULL THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS HasAge,
+    CASE WHEN COL_LENGTH('Customers', 'Gender') IS NOT NULL THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS HasGender,
+    CASE WHEN COL_LENGTH('Customers', 'MaritalStatus') IS NOT NULL THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS HasMaritalStatus";
 
-                var hasColumns = await _dbContext.Database.SqlQueryRaw<int>(query).SingleAsync();
-                return hasColumns == 1;
+                return await _dbContext.Database.SqlQueryRaw<CustomerDemographicColumns>(query).SingleAsync();
             }
             catch
             {
-                return false;
+                return new CustomerDemographicColumns();
             }
         });
     }
@@ -623,14 +627,14 @@ SELECT CASE
         }
 
         var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
-        var hasDemographicColumns = await HasDemographicCustomerProfileColumnsAsync();
+        var demographicColumns = await GetDemographicCustomerProfileColumnsAsync();
         var user = await _userManager.GetUserAsync(User);
 
-        var responseBirthDate = hasDemographicColumns ? customer.BirthDate : user?.Birthdate;
-        var responseGender = hasDemographicColumns
+        var responseBirthDate = demographicColumns.HasBirthDate ? customer.BirthDate : user?.Birthdate;
+        var responseGender = demographicColumns.HasGender
             ? customer.Gender
             : (string.IsNullOrWhiteSpace(user?.Gender) ? null : user!.Gender);
-        var responseAge = hasDemographicColumns
+        var responseAge = demographicColumns.HasAge
             ? customer.Age
             : responseBirthDate.HasValue
                 ? Math.Max(0, DateTime.UtcNow.Year - responseBirthDate.Value.Year
@@ -655,7 +659,7 @@ SELECT CASE
             birthDate = responseBirthDate,
             age = responseAge,
             gender = responseGender,
-            maritalStatus = hasDemographicColumns ? customer.MaritalStatus : null,
+            maritalStatus = demographicColumns.HasMaritalStatus ? customer.MaritalStatus : null,
             tin = hasExtendedColumns ? customer.TIN : null,
             sss = hasExtendedColumns ? customer.SSS : null,
             bankAccount = hasExtendedColumns ? customer.BankAccount : null,
@@ -669,7 +673,7 @@ SELECT CASE
     public async Task<IActionResult> UpdateProfile([FromBody] UpdateCustomerProfileRequest request)
     {
         var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
-        var hasDemographicColumns = await HasDemographicCustomerProfileColumnsAsync();
+        var demographicColumns = await GetDemographicCustomerProfileColumnsAsync();
         var user = await _userManager.GetUserAsync(User);
 
         // On legacy schemas, extended columns do not exist yet.
@@ -682,13 +686,17 @@ SELECT CASE
             ModelState.Remove(nameof(UpdateCustomerProfileRequest.BankName));
         }
 
-        if (!hasDemographicColumns)
-        {
+        if (!demographicColumns.HasBirthDate)
             ModelState.Remove(nameof(UpdateCustomerProfileRequest.BirthDate));
+
+        if (!demographicColumns.HasAge)
             ModelState.Remove(nameof(UpdateCustomerProfileRequest.Age));
+
+        if (!demographicColumns.HasGender)
             ModelState.Remove(nameof(UpdateCustomerProfileRequest.Gender));
+
+        if (!demographicColumns.HasMaritalStatus)
             ModelState.Remove(nameof(UpdateCustomerProfileRequest.MaritalStatus));
-        }
 
         if (!ModelState.IsValid)
             return ValidationProblem(ModelState);
@@ -724,27 +732,29 @@ SELECT CASE
         if (!string.IsNullOrWhiteSpace(postalCode))
             customer.PostalCode = postalCode;
 
-        if (hasDemographicColumns)
-        {
+        if (demographicColumns.HasBirthDate)
             if (request.BirthDate.HasValue)
                 customer.BirthDate = request.BirthDate.Value;
 
+        if (demographicColumns.HasAge)
             if (request.Age.HasValue)
                 customer.Age = request.Age.Value;
 
+        if (demographicColumns.HasGender)
             if (!string.IsNullOrWhiteSpace(request.Gender))
                 customer.Gender = request.Gender;
 
+        if (demographicColumns.HasMaritalStatus)
             if (!string.IsNullOrWhiteSpace(request.MaritalStatus))
                 customer.MaritalStatus = request.MaritalStatus;
-        }
-        else if (user is not null)
+
+        if ((!demographicColumns.HasBirthDate || !demographicColumns.HasGender) && user is not null)
         {
             // Legacy fallback: preserve demographic info in AspNetUsers when Customers columns are unavailable.
-            if (request.BirthDate.HasValue)
+            if (!demographicColumns.HasBirthDate && request.BirthDate.HasValue)
                 user.Birthdate = request.BirthDate.Value;
 
-            if (!string.IsNullOrWhiteSpace(request.Gender))
+            if (!demographicColumns.HasGender && !string.IsNullOrWhiteSpace(request.Gender))
                 user.Gender = request.Gender;
 
             await _userManager.UpdateAsync(user);
@@ -770,11 +780,11 @@ SELECT CASE
 
         await _dbContext.SaveChangesAsync();
 
-        var responseBirthDate = hasDemographicColumns ? customer.BirthDate : user?.Birthdate;
-        var responseGender = hasDemographicColumns
+        var responseBirthDate = demographicColumns.HasBirthDate ? customer.BirthDate : user?.Birthdate;
+        var responseGender = demographicColumns.HasGender
             ? customer.Gender
             : (string.IsNullOrWhiteSpace(user?.Gender) ? null : user!.Gender);
-        var responseAge = hasDemographicColumns
+        var responseAge = demographicColumns.HasAge
             ? customer.Age
             : responseBirthDate.HasValue
                 ? Math.Max(0, DateTime.UtcNow.Year - responseBirthDate.Value.Year
@@ -799,7 +809,7 @@ SELECT CASE
             birthDate = responseBirthDate,
             age = responseAge,
             gender = responseGender,
-            maritalStatus = hasDemographicColumns ? customer.MaritalStatus : null,
+            maritalStatus = demographicColumns.HasMaritalStatus ? customer.MaritalStatus : null,
             tin = hasExtendedColumns ? customer.TIN : null,
             sss = hasExtendedColumns ? customer.SSS : null,
             bankAccount = hasExtendedColumns ? customer.BankAccount : null,
@@ -808,10 +818,38 @@ SELECT CASE
             bankVerifiedAtUtc = hasExtendedColumns ? customer.BankVerifiedAtUtc : null,
             message = hasExtendedColumns
                 ? "Profile updated successfully"
-                : hasDemographicColumns
+                : demographicColumns.HasBirthDate || demographicColumns.HasAge || demographicColumns.HasGender || demographicColumns.HasMaritalStatus
                     ? "Profile updated. TIN/SSS/Bank fields will be available after database migration."
                     : "Profile updated. Demographic and extended profile fields will be available after database migration."
         });
+    }
+
+    [HttpGet("banks")]
+    public async Task<IActionResult> GetCustomerBankDirectory()
+    {
+        try
+        {
+            var items = await _dbContext.BankDirectoryEntries
+                .AsNoTracking()
+                .Where(x => x.IsActive)
+                .OrderBy(x => x.Name)
+                .Select(x => new
+                {
+                    x.Name,
+                    x.AccountNumberPattern,
+                    x.AccountNumberSample,
+                    x.Country,
+                    x.BranchName
+                })
+                .ToListAsync();
+
+            return Ok(items);
+        }
+        catch
+        {
+            // Keep profile page functional even if bank directory schema is unavailable in older databases.
+            return Ok(Array.Empty<object>());
+        }
     }
 
     [HttpGet("loan-access-check")]
@@ -1454,6 +1492,14 @@ public sealed class UpdateCustomerProfileRequest
 
     [StringLength(128)]
     public string? BankName { get; set; }
+}
+
+public sealed class CustomerDemographicColumns
+{
+    public bool HasBirthDate { get; set; }
+    public bool HasAge { get; set; }
+    public bool HasGender { get; set; }
+    public bool HasMaritalStatus { get; set; }
 }
 
 public sealed class LoanAccessCheckResponse

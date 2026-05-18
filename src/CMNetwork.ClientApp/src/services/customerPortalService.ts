@@ -57,6 +57,14 @@ export interface CustomerProfile {
   bankVerifiedAtUtc?: string
 }
 
+export interface CustomerBankDirectoryEntry {
+  name: string
+  accountNumberPattern: string
+  accountNumberSample: string
+  country?: string
+  branchName?: string
+}
+
 export interface Budget {
   id: string
   name: string
@@ -182,6 +190,11 @@ export const customerPortalService = {
   async updateMyProfile(profile: Partial<CustomerProfile>): Promise<CustomerProfile> {
     const response = await apiClient.put<CustomerProfile>('/customer/profile', profile)
     return response.data
+  },
+
+  async getCustomerBanks(): Promise<CustomerBankDirectoryEntry[]> {
+    const response = await apiClient.get<CustomerBankDirectoryEntry[]>('/customer/banks')
+    return Array.isArray(response.data) ? response.data : []
   },
 
   async changePassword(oldPassword: string, newPassword: string): Promise<{ message: string }> {

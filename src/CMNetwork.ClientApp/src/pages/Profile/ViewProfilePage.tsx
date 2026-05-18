@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { customerPortalService, type CustomerProfile } from '../../services/customerPortalService'
+import { customerPortalService, type CustomerBankDirectoryEntry, type CustomerProfile } from '../../services/customerPortalService'
 
 type EditableProfile = {
   firstName: string
@@ -38,6 +38,32 @@ const calculateAgeFromBirthDate = (birthDate: string): string => {
   const hasBirthdayPassed = monthDiff > 0 || (monthDiff === 0 && today.getDate() >= dob.getDate())
   if (!hasBirthdayPassed) age -= 1
   return age >= 0 ? String(age) : ''
+}
+
+const GENDER_OPTIONS = ['Male', 'Female', 'Other', 'Prefer not to say'] as const
+const MARITAL_STATUS_OPTIONS = ['Single', 'Married', 'Separated', 'Divorced', 'Widowed'] as const
+
+const formatTinInput = (value: string): string => {
+  const digits = value.replace(/\D/g, '').slice(0, 12)
+  const parts = [digits.slice(0, 3), digits.slice(3, 6), digits.slice(6, 9), digits.slice(9, 12)].filter(Boolean)
+  return parts.join('-')
+}
+
+const formatSssInput = (value: string): string => {
+  const digits = value.replace(/\D/g, '').slice(0, 10)
+  const parts = [digits.slice(0, 2), digits.slice(2, 9), digits.slice(9, 10)].filter(Boolean)
+  return parts.join('-')
+}
+
+const isValidTin = (value: string): boolean => /^\d{3}-\d{3}-\d{3}-\d{3}$/.test(value)
+const isValidSss = (value: string): boolean => /^\d{2}-\d{7}-\d$/.test(value)
+
+const isBankAccountValidForPattern = (accountNumber: string, regexPattern: string): boolean => {
+  try {
+    return new RegExp(regexPattern).test(accountNumber)
+  } catch {
+    return true
+  }
 }
 
 const parseApiError = (error: unknown): string => {
@@ -118,19 +144,24 @@ const ViewProfilePage: React.FC = () => {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loanAccess, setLoanAccess] = useState<{ canAccessLoans: boolean; profileCompletionPercentage: number; isBankVerified: boolean } | null>(null)
+  const [bankDirectory, setBankDirectory] = useState<CustomerBankDirectoryEntry[]>([])
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
         setLoading(true)
-        const data = await customerPortalService.getMyProfile()
+        const [data, banks] = await Promise.all([
+          customerPortalService.getMyProfile(),
+          customerPortalService.getCustomerBanks().catch(() => []),
+        ])
         setProfile(data)
+        setBankDirectory(banks)
         setProfileForm({
           firstName: data.firstName ?? '', lastName: data.lastName ?? '',
           phoneNumber: data.phoneNumber ?? '', companyName: data.companyName ?? '',
           address: data.address ?? '', city: data.city ?? '',
           state: data.state ?? '', country: data.country ?? '', zipCode: data.zipCode ?? data.postalCode ?? '',
-          tin: data.tin ?? '', sss: data.sss ?? '', bankAccount: data.bankAccount ?? '', bankName: data.bankName ?? '',
+          tin: formatTinInput(data.tin ?? ''), sss: formatSssInput(data.sss ?? ''), bankAccount: data.bankAccount ?? '', bankName: data.bankName ?? '',
           birthDate: data.birthDate ?? '', age: typeof data.age === 'number' ? String(data.age) : '', gender: data.gender ?? '', maritalStatus: data.maritalStatus ?? '',
         })
         const loanCheck = await customerPortalService.checkLoanAccess()
@@ -150,6 +181,12 @@ const ViewProfilePage: React.FC = () => {
       if (name === 'birthDate') {
         return { ...prev, birthDate: value, age: calculateAgeFromBirthDate(value) }
       }
+      if (name === 'tin') {
+        return { ...prev, tin: formatTinInput(value) }
+      }
+      if (name === 'sss') {
+        return { ...prev, sss: formatSssInput(value) }
+      }
       return { ...prev, [name]: value }
     })
   }
@@ -163,11 +200,36 @@ const ViewProfilePage: React.FC = () => {
     try {
       setSavingProfile(true)
       setProfileError(null)
+
+      const tinValue = profileForm.tin?.trim() ?? ''
+      const sssValue = profileForm.sss?.trim() ?? ''
+      if (tinValue && !isValidTin(tinValue)) {
+        setProfileError('TIN format must be 000-000-000-000.')
+        return
+      }
+      if (sssValue && !isValidSss(sssValue)) {
+        setProfileError('SSS format must be 00-0000000-0.')
+        return
+      }
+
+      const selectedBank = bankDirectory.find((x) => x.name === profileForm.bankName)
+      const bankAccountValue = profileForm.bankAccount?.trim() ?? ''
+      if (selectedBank && bankAccountValue && !isBankAccountValidForPattern(bankAccountValue, selectedBank.accountNumberPattern)) {
+        setProfileError(`Bank account format is invalid for ${selectedBank.name}. Example: ${selectedBank.accountNumberSample}`)
+        return
+      }
+
       const parsedAge = profileForm.age?.trim() ? Number(profileForm.age) : undefined
       const updated = await customerPortalService.updateMyProfile({
         ...profileForm,
         firstName: profileForm.firstName.trim(),
         lastName: profileForm.lastName.trim(),
+        gender: profileForm.gender?.trim() || undefined,
+        maritalStatus: profileForm.maritalStatus?.trim() || undefined,
+        tin: tinValue || undefined,
+        sss: sssValue || undefined,
+        bankAccount: bankAccountValue || undefined,
+        bankName: profileForm.bankName?.trim() || undefined,
         age: Number.isFinite(parsedAge) ? parsedAge : undefined,
         postalCode: profileForm.zipCode,
       })
@@ -177,7 +239,7 @@ const ViewProfilePage: React.FC = () => {
         phoneNumber: updated.phoneNumber ?? '', companyName: updated.companyName ?? '',
         address: updated.address ?? '', city: updated.city ?? '',
         state: updated.state ?? '', country: updated.country ?? '', zipCode: updated.zipCode ?? updated.postalCode ?? '',
-        tin: updated.tin ?? '', sss: updated.sss ?? '', bankAccount: updated.bankAccount ?? '', bankName: updated.bankName ?? '',
+        tin: formatTinInput(updated.tin ?? ''), sss: formatSssInput(updated.sss ?? ''), bankAccount: updated.bankAccount ?? '', bankName: updated.bankName ?? '',
         birthDate: updated.birthDate ?? '', age: typeof updated.age === 'number' ? String(updated.age) : '', gender: updated.gender ?? '', maritalStatus: updated.maritalStatus ?? '',
       })
       const loanCheck = await customerPortalService.checkLoanAccess()
@@ -221,6 +283,10 @@ const ViewProfilePage: React.FC = () => {
   const filledCount = strengthFields.filter((v) => v && v.trim().length > 0).length
   const strengthPct = Math.round(((filledCount + 1) / (strengthFields.length + 1)) * 100)
   const strengthColor = strengthPct < 40 ? '#dc2626' : strengthPct < 70 ? '#ca8a04' : '#059669'
+  const selectedBank = bankDirectory.find((x) => x.name === profileForm.bankName)
+  const hasCustomGender = !!profileForm.gender && !GENDER_OPTIONS.includes(profileForm.gender as (typeof GENDER_OPTIONS)[number])
+  const hasCustomMaritalStatus = !!profileForm.maritalStatus && !MARITAL_STATUS_OPTIONS.includes(profileForm.maritalStatus as (typeof MARITAL_STATUS_OPTIONS)[number])
+  const hasCustomBank = !!profileForm.bankName && !bankDirectory.some((x) => x.name === profileForm.bankName)
 
   if (loading) {
     return (
@@ -338,10 +404,10 @@ const ViewProfilePage: React.FC = () => {
                 <select name="gender" value={profileForm.gender} onChange={handleProfileChange}
                   style={inputStyle}>
                   <option value="">Select gender</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                  <option value="Other">Other</option>
-                  <option value="Prefer not to say">Prefer not to say</option>
+                  {hasCustomGender && <option value={profileForm.gender}>{profileForm.gender}</option>}
+                  {GENDER_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -349,11 +415,10 @@ const ViewProfilePage: React.FC = () => {
                 <select name="maritalStatus" value={profileForm.maritalStatus} onChange={handleProfileChange}
                   style={inputStyle}>
                   <option value="">Select marital status</option>
-                  <option value="Single">Single</option>
-                  <option value="Married">Married</option>
-                  <option value="Separated">Separated</option>
-                  <option value="Divorced">Divorced</option>
-                  <option value="Widowed">Widowed</option>
+                  {hasCustomMaritalStatus && <option value={profileForm.maritalStatus}>{profileForm.maritalStatus}</option>}
+                  {MARITAL_STATUS_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -440,13 +505,26 @@ const ViewProfilePage: React.FC = () => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div>
                 <FieldLabel>Bank Name</FieldLabel>
-                <input type="text" name="bankName" value={profileForm.bankName} onChange={handleProfileChange}
-                  placeholder="Bank name" style={inputStyle} />
+                <select
+                  name="bankName"
+                  value={profileForm.bankName}
+                  onChange={handleProfileChange}
+                  style={inputStyle}
+                >
+                  <option value="">Select bank</option>
+                  {hasCustomBank && <option value={profileForm.bankName}>{profileForm.bankName}</option>}
+                  {bankDirectory.map((bank) => (
+                    <option key={bank.name} value={bank.name}>{bank.name}</option>
+                  ))}
+                </select>
+                <p style={{ fontSize: 11, color: 'var(--muted)', margin: '4px 0 0' }}>
+                  {selectedBank ? `Expected account format sample: ${selectedBank.accountNumberSample}` : 'Select a bank to load the expected account number format.'}
+                </p>
               </div>
               <div>
                 <FieldLabel>Bank Account Number</FieldLabel>
                 <input type="text" name="bankAccount" value={profileForm.bankAccount} onChange={handleProfileChange}
-                  placeholder="Account number" style={inputStyle} />
+                  placeholder={selectedBank?.accountNumberSample || 'Account number'} style={inputStyle} />
               </div>
             </div>
           </form>
