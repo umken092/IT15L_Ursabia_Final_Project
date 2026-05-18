@@ -18,7 +18,7 @@ public class LoanConfigurationController : ControllerBase
         _dbContext = dbContext;
     }
 
-    [Authorize(Roles = "cfo,super-admin,auditor")]
+    [Authorize(Roles = "accountant,cfo,super-admin,auditor")]
     [HttpGet("tiers")]
     public async Task<IActionResult> GetLoanInterestTiers([FromQuery] bool includeInactive = false)
     {
