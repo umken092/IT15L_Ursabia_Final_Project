@@ -204,7 +204,7 @@ export const RegisterCustomerPage = () => {
       let recaptchaToken: string | undefined
 
       if (executeRecaptcha) {
-        for (let attempt = 0; attempt < 2; attempt += 1) {
+        for (let attempt = 0; attempt < 6; attempt += 1) {
           try {
             const token = await executeRecaptcha('register_customer')
             if (token?.trim()) {
@@ -212,16 +212,16 @@ export const RegisterCustomerPage = () => {
               break
             }
           } catch {
-            // Retry once in case script initialization is still in progress.
+            // Retry while the script is still initializing or temporarily unavailable.
           }
 
-          if (attempt === 0) {
-            await new Promise((resolve) => setTimeout(resolve, 250))
+          if (attempt < 5) {
+            await new Promise((resolve) => setTimeout(resolve, 400))
           }
         }
 
         if (!recaptchaToken) {
-          pushToast('warning', 'Security verification is not ready. Please wait a moment and try again.')
+          pushToast('warning', 'Security verification is unavailable. Please disable ad-block/privacy blocking for reCAPTCHA and try again.')
           return
         }
       }

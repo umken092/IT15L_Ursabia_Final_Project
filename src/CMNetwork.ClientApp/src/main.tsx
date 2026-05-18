@@ -42,7 +42,11 @@ const bootstrap = async () => {
 
   createRoot(rootElement).render(
     <StrictMode>
-      <GoogleReCaptchaProvider reCaptchaKey={runtimeSiteKey}>
+      <GoogleReCaptchaProvider
+        reCaptchaKey={runtimeSiteKey}
+        useRecaptchaNet
+        scriptProps={{ async: true, defer: true, appendTo: 'head' }}
+      >
         <BrowserRouter>
           <App />
         </BrowserRouter>
