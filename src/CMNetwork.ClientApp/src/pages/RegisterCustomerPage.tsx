@@ -202,10 +202,28 @@ export const RegisterCustomerPage = () => {
     try {
       setSubmitting(true)
       let recaptchaToken: string | undefined
-      try {
-        recaptchaToken = executeRecaptcha ? await executeRecaptcha('register_customer') : undefined
-      } catch {
-        // reCAPTCHA can be unavailable in local environments
+
+      if (executeRecaptcha) {
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          try {
+            const token = await executeRecaptcha('register_customer')
+            if (token?.trim()) {
+              recaptchaToken = token
+              break
+            }
+          } catch {
+            // Retry once in case script initialization is still in progress.
+          }
+
+          if (attempt === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 250))
+          }
+        }
+
+        if (!recaptchaToken) {
+          pushToast('warning', 'Security verification is not ready. Please wait a moment and try again.')
+          return
+        }
       }
 
       const normalizedFirstName = firstName.trim()
