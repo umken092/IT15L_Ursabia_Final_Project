@@ -372,26 +372,49 @@ const CfoLoanApprovalPage: React.FC = () => {
     { id: 'history', label: 'Decision History' },
   ]
 
-  return (
-    <div style={{ maxWidth: 840, margin: '0 auto', padding: '28px 20px' }}>
-      <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: C.text }}>Loan Approval</h1>
-      <p style={{ margin: '0 0 24px', fontSize: 13, color: C.muted }}>Review accountant-forwarded loan applications and make final approval decisions.</p>
+  const pendingRecommended = pending.reduce((sum, app) => sum + (app.approvedAmount ?? app.requestedAmount), 0)
+  const averageRate = pending.length > 0
+    ? pending.reduce((sum, app) => sum + (app.annualInterestRate ?? app.interestRate ?? 0), 0) / pending.length
+    : 0
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 24, borderBottom: `1px solid ${C.border}` }}>
+  return (
+    <div className="loan-module-page">
+      <div className="loan-module-header">
+        <div>
+          <h1 className="loan-module-title">Loan Approval</h1>
+          <p className="loan-module-subtitle">Evaluate accountant recommendations, finalize loan decisions, and preserve policy alignment before disbursement.</p>
+        </div>
+      </div>
+
+      <div className="loan-module-kpis">
+        <div className="loan-module-kpi">
+          <span className="loan-module-kpi-label">Pending Cases</span>
+          <p className="loan-module-kpi-value">{pending.length}</p>
+        </div>
+        <div className="loan-module-kpi">
+          <span className="loan-module-kpi-label">Recommended Value</span>
+          <p className="loan-module-kpi-value" style={{ fontSize: '1.1rem' }}>{fmt(pendingRecommended)}</p>
+        </div>
+        <div className="loan-module-kpi">
+          <span className="loan-module-kpi-label">Average Rate</span>
+          <p className="loan-module-kpi-value">{averageRate.toFixed(2)}%</p>
+        </div>
+        <div className="loan-module-kpi">
+          <span className="loan-module-kpi-label">Available Terms</span>
+          <p className="loan-module-kpi-value">{tiers.length}</p>
+        </div>
+      </div>
+
+      <div className="loan-module-tabs">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            style={{
-              padding: '8px 16px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-              background: 'transparent', borderBottom: tab === t.id ? `2px solid ${C.primary}` : '2px solid transparent',
-              color: tab === t.id ? C.primary : C.muted, marginBottom: -1, transition: 'color 0.15s',
-            }}
+            className={`loan-module-tab ${tab === t.id ? 'active' : ''}`}
           >
             {t.label}
             {t.count !== undefined && t.count > 0 && (
-              <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 10, fontSize: 10, background: tab === t.id ? C.primary : C.border, color: tab === t.id ? '#fff' : C.muted }}>
+              <span className="loan-module-tab-badge">
                 {t.count}
               </span>
             )}
@@ -399,14 +422,15 @@ const CfoLoanApprovalPage: React.FC = () => {
         ))}
       </div>
 
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: 60, color: C.muted }}>Loading…</div>
-      ) : (
-        <>
+      <div className="loan-module-content">
+        {loading ? (
+          <div className="loan-module-state">Loading...</div>
+        ) : (
+          <>
           {tab === 'pending' && (
             <>
               {pending.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 60, color: C.muted }}>No applications pending CFO approval.</div>
+                <div className="loan-module-state">No applications pending CFO approval.</div>
               ) : (
                 pending.map((app) => (
                   <PendingCard key={app.id} app={app} onOpen={() => setDecidingId(app.id)} />
@@ -416,12 +440,13 @@ const CfoLoanApprovalPage: React.FC = () => {
           )}
 
           {tab === 'history' && (
-            <div style={{ textAlign: 'center', padding: 60, color: C.muted }}>
+            <div className="loan-module-state">
               Decision history is available in the Audit Logs module.
             </div>
           )}
-        </>
-      )}
+          </>
+        )}
+      </div>
 
       {decidingId && (
         <ApprovalPanel

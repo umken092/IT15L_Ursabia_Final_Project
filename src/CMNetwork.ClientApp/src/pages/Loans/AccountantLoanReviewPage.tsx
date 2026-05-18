@@ -383,26 +383,47 @@ const AccountantLoanReviewPage: React.FC = () => {
     { id: 'disbursement', label: 'Disbursement Queue', count: disbursementQueue.length },
   ]
 
-  return (
-    <div style={{ maxWidth: 840, margin: '0 auto', padding: '28px 20px' }}>
-      <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: C.text }}>Loan Review</h1>
-      <p style={{ margin: '0 0 24px', fontSize: 13, color: C.muted }}>Review customer loan applications and forward to CFO, then process disbursements.</p>
+  const totalPendingAmount = pending.reduce((sum, item) => sum + item.requestedAmount, 0)
+  const totalDisbursementAmount = disbursementQueue.reduce((sum, item) => sum + (item.approvedAmount ?? item.requestedAmount), 0)
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 24, borderBottom: `1px solid ${C.border}`, paddingBottom: 0 }}>
+  return (
+    <div className="loan-module-page">
+      <div className="loan-module-header">
+        <div>
+          <h1 className="loan-module-title">Loan Review</h1>
+          <p className="loan-module-subtitle">Review customer loan applications, forward recommendations to CFO, and release approved disbursements from one control center.</p>
+        </div>
+      </div>
+
+      <div className="loan-module-kpis">
+        <div className="loan-module-kpi">
+          <span className="loan-module-kpi-label">Pending Review</span>
+          <p className="loan-module-kpi-value">{pending.length}</p>
+        </div>
+        <div className="loan-module-kpi">
+          <span className="loan-module-kpi-label">Forwarded to CFO</span>
+          <p className="loan-module-kpi-value">{forwarded.length}</p>
+        </div>
+        <div className="loan-module-kpi">
+          <span className="loan-module-kpi-label">Pending Amount</span>
+          <p className="loan-module-kpi-value" style={{ fontSize: '1.1rem' }}>{fmt(totalPendingAmount)}</p>
+        </div>
+        <div className="loan-module-kpi">
+          <span className="loan-module-kpi-label">Disbursement Queue</span>
+          <p className="loan-module-kpi-value" style={{ fontSize: '1.1rem' }}>{fmt(totalDisbursementAmount)}</p>
+        </div>
+      </div>
+
+      <div className="loan-module-tabs">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            style={{
-              padding: '8px 16px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-              background: 'transparent', borderBottom: tab === t.id ? `2px solid ${C.primary}` : '2px solid transparent',
-              color: tab === t.id ? C.primary : C.muted, marginBottom: -1, transition: 'color 0.15s',
-            }}
+            className={`loan-module-tab ${tab === t.id ? 'active' : ''}`}
           >
             {t.label}
             {t.count > 0 && (
-              <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 10, fontSize: 10, background: tab === t.id ? C.primary : C.border, color: tab === t.id ? '#fff' : C.muted }}>
+              <span className="loan-module-tab-badge">
                 {t.count}
               </span>
             )}
@@ -410,14 +431,15 @@ const AccountantLoanReviewPage: React.FC = () => {
         ))}
       </div>
 
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: 60, color: C.muted }}>Loading…</div>
-      ) : (
-        <>
+      <div className="loan-module-content">
+        {loading ? (
+          <div className="loan-module-state">Loading...</div>
+        ) : (
+          <>
           {tab === 'pending' && (
             <>
               {pending.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 60, color: C.muted }}>No applications pending review.</div>
+                <div className="loan-module-state">No applications pending review.</div>
               ) : (
                 pending.map((app) => (
                   <AppRow key={app.id} app={app} onReview={() => setReviewingId(app.id)} />
@@ -429,7 +451,7 @@ const AccountantLoanReviewPage: React.FC = () => {
           {tab === 'forwarded' && (
             <>
               {forwarded.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 60, color: C.muted }}>No applications forwarded to CFO yet.</div>
+                <div className="loan-module-state">No applications forwarded to CFO yet.</div>
               ) : (
                 forwarded.map((app) => <ForwardedRow key={app.id} app={app} />)
               )}
@@ -439,7 +461,7 @@ const AccountantLoanReviewPage: React.FC = () => {
           {tab === 'disbursement' && (
             <>
               {disbursementQueue.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 60, color: C.muted }}>No approved loans awaiting disbursement.</div>
+                <div className="loan-module-state">No approved loans awaiting disbursement.</div>
               ) : (
                 disbursementQueue.map((app) => (
                   <DisburseRow
@@ -452,8 +474,9 @@ const AccountantLoanReviewPage: React.FC = () => {
               )}
             </>
           )}
-        </>
-      )}
+          </>
+        )}
+      </div>
 
       {reviewingId && (
         <ReviewPanel

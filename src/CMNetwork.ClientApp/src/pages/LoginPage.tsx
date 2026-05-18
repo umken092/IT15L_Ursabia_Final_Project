@@ -110,13 +110,38 @@ export const LoginPage = () => {
 
   return (
     <div className="login-page">
-      <Card className="login-card">
-        <CardBody style={{ textAlign: 'center' }}>
+      <div className="login-bg-orb login-bg-orb-a" aria-hidden="true" />
+      <div className="login-bg-orb login-bg-orb-b" aria-hidden="true" />
+      <div className="login-shell">
+        <section className="login-brand-panel" aria-label="Brand and trust information">
           <img src="/CMN.png" alt="CMNetwork logo" className="login-logo" />
-          <h2 style={{ margin: '0 0 0.5rem 0', color: 'var(--primary)' }}>CMNetwork ERP</h2>
-          <p style={{ marginBottom: '1.5rem' }}>Sign In to Your Account</p>
+          <h1>CMNetwork ERP</h1>
+          <p className="login-brand-subtitle">Enterprise-grade finance operations for accounting, lending, and control teams.</p>
+          <div className="login-brand-metrics">
+            <div>
+              <strong>99.99%</strong>
+              <span>Platform uptime</span>
+            </div>
+            <div>
+              <strong>24/7</strong>
+              <span>Audit readiness</span>
+            </div>
+            <div>
+              <strong>70+</strong>
+              <span>Policy regions</span>
+            </div>
+          </div>
+          <p className="login-brand-foot">Secure sign-in with role-aware access and monitored activity trails.</p>
+        </section>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="login-form">
+        <Card className="login-card">
+          <CardBody>
+            <div className="login-card-head">
+              <h2>Sign in</h2>
+              <p>Access your operational workspace.</p>
+            </div>
+
+            <form onSubmit={handleSubmit(onSubmit)} className="login-form">
             <label>
               Email
               <Controller
@@ -228,8 +253,9 @@ export const LoginPage = () => {
               This site is protected by reCAPTCHA
             </div>
           </form>
-        </CardBody>
-      </Card>
+          </CardBody>
+        </Card>
+      </div>
     </div>
   )
 }

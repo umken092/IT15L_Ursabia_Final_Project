@@ -44,6 +44,12 @@ const solutionModules = [
 
 const trustLogos = ['Apex Dynamics', 'Meridian Financial', 'Northline Capital', 'Orion Logistics', 'VastGrid Energy', 'Helio Bank', 'Atlas Trade']
 
+const heroMetrics = [
+  { label: 'Close Cycle Reduction', value: '72%' },
+  { label: 'Audit Readiness', value: '24/7' },
+  { label: 'Consolidation Speed', value: '< 90s' },
+]
+
 const footerColumns = [
   { heading: 'Product', links: ['Modules', 'Integrations', 'Roadmap', 'Changelog'] },
   { heading: 'Company', links: ['About', 'Customers', 'Careers', 'Contact'] },
@@ -193,12 +199,11 @@ export const LandingPage = () => {
             New · AI-assisted close engine
           </span>
           <h1>
-            The financial command layer for{' '}
+            The command center for{' '}
             <span className="gradient-text">modern enterprises</span>
           </h1>
           <p className="hero-sub">
-            One unified ERP platform for close, compliance, treasury, and strategic forecasting —
-            built for multi-entity scale and executive accountability.
+            Standardize close, compliance, lending, and treasury workflows in one governed finance platform designed for institutional scale.
           </p>
           <div className="hero-cta-row">
             <Button themeColor="primary" size="large" onClick={() => navigate('/login')}>
@@ -215,7 +220,16 @@ export const LandingPage = () => {
               <span>KP</span>
               <span>+</span>
             </div>
-            <span>Trusted by 1,200+ finance teams worldwide</span>
+            <span>Trusted by 1,200+ finance teams and shared-service centers worldwide</span>
+          </div>
+
+          <div className="hero-metric-strip" aria-label="Enterprise outcomes">
+            {heroMetrics.map((metric) => (
+              <div key={metric.label} className="hero-metric-item">
+                <strong>{metric.value}</strong>
+                <span>{metric.label}</span>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -234,8 +248,8 @@ export const LandingPage = () => {
       <section id="features" className="landing-section features-section">
         <div className="section-head">
           <span className="section-eyebrow">Platform</span>
-          <h2>Elevate every layer of your financial operations</h2>
-          <p>Precision workflows designed for multi-entity scale and executive accountability.</p>
+          <h2>Run every finance operation from one governed platform</h2>
+          <p>Enterprise-ready workflows built for accountable execution across accounting, risk, and treasury teams.</p>
         </div>
         <div className="feature-grid">
           {featureCards.map((card) => (
@@ -263,8 +277,8 @@ export const LandingPage = () => {
       <section id="solutions" className="landing-section solutions-section">
         <div className="section-head">
           <span className="section-eyebrow">Solutions</span>
-          <h2>One platform. Every finance workflow.</h2>
-          <p>Modular suites for every team — unified by a single source of truth.</p>
+          <h2>One platform. Every core finance workflow.</h2>
+          <p>Modular capabilities for controllership, operations, and leadership teams, all under one source of truth.</p>
         </div>
         {solutionModules.map((mod) => (
           <article key={mod.title} className="solution-card">
@@ -281,7 +295,7 @@ export const LandingPage = () => {
       <section id="trusted" className="landing-section trust-section">
         <div className="section-head">
           <span className="section-eyebrow">Customers</span>
-          <h2>Powering finance teams at industry leaders</h2>
+          <h2>Powering institutional finance teams at scale</h2>
         </div>
         <div className="logo-marquee-wrap">
           <button type="button" className="marquee-arrow" aria-label="Previous logos">‹</button>
@@ -328,8 +342,7 @@ export const LandingPage = () => {
             </span>
             <h2>Institutional-grade infrastructure</h2>
             <p>
-              Operate with audited resilience, transparent governance controls, and real-time
-              systems telemetry across every subsidiary.
+                Operate with audited resilience, transparent governance controls, and real-time operational telemetry across every subsidiary.
             </p>
             <div className="metric-grid">
               <div>
@@ -356,8 +369,8 @@ export const LandingPage = () => {
       <section className="landing-section">
         <div className="final-cta">
           <span className="section-eyebrow">Get started</span>
-          <h2>Ready to standardize your operations?</h2>
-          <p>Unify finance, strengthen controls, and accelerate executive decision velocity.</p>
+          <h2>Ready to modernize enterprise finance operations?</h2>
+          <p>Unify data, enforce controls, and accelerate executive decisions with one consistent system.</p>
           <Button themeColor="primary" size="large" onClick={() => navigate('/login')}>
             Request demo
           </Button>

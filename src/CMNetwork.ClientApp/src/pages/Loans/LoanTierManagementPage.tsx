@@ -271,14 +271,11 @@ const LoanTierManagementPage: React.FC = () => {
   const inactiveTiers = tiers.filter((t) => !t.isActive)
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '28px 20px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+    <div className="loan-module-page">
+      <div className="loan-module-header">
         <div>
-          <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: C.text }}>Loan Interest Tiers</h1>
-          <p style={{ margin: 0, fontSize: 13, color: C.muted }}>
-            Configure the interest rates applied to customer loans by term. Changes take effect on new applications immediately.
-          </p>
+          <h1 className="loan-module-title">Loan Interest Tiers</h1>
+          <p className="loan-module-subtitle">Define enterprise loan pricing by term with controlled activation states and immediate policy effect on new applications.</p>
         </div>
         <button
           onClick={() => setModalTier('new')}
@@ -288,23 +285,22 @@ const LoanTierManagementPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+      <div className="loan-module-kpis">
         {[
           { label: 'Active Tiers', value: activeTiers.length, color: C.success },
           { label: 'Inactive Tiers', value: inactiveTiers.length, color: C.muted },
           { label: 'Lowest Rate', value: activeTiers.length ? `${Math.min(...activeTiers.map((t) => t.annualInterestRate))}%` : '—', color: C.primary },
           { label: 'Highest Rate', value: activeTiers.length ? `${Math.max(...activeTiers.map((t) => t.annualInterestRate))}%` : '—', color: C.warning },
         ].map((s) => (
-          <div key={s.label} style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 18px', flex: 1, minWidth: 120, boxShadow: C.shadow }}>
-            <p style={{ margin: '0 0 4px', fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{s.label}</p>
-            <p style={{ margin: 0, fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</p>
+          <div key={s.label} className="loan-module-kpi">
+            <span className="loan-module-kpi-label">{s.label}</span>
+            <p className="loan-module-kpi-value" style={{ color: s.color }}>{s.value}</p>
           </div>
         ))}
       </div>
 
-      {/* Show inactive toggle */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
+      <div className="loan-module-content">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: C.muted, cursor: 'pointer' }}>
           <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
           Show inactive tiers
@@ -312,9 +308,9 @@ const LoanTierManagementPage: React.FC = () => {
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 60, color: C.muted }}>Loading…</div>
+        <div className="loan-module-state">Loading...</div>
       ) : tiers.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 60, color: C.muted }}>
+        <div className="loan-module-state">
           <p style={{ fontSize: 14 }}>No interest tiers configured.</p>
           <button onClick={() => setModalTier('new')} style={{ padding: '8px 20px', borderRadius: 7, border: 'none', background: C.primary, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', marginTop: 8 }}>
             Create First Tier
@@ -354,6 +350,7 @@ const LoanTierManagementPage: React.FC = () => {
           )}
         </>
       )}
+      </div>
 
       {modalTier !== null && (
         <TierFormModal
