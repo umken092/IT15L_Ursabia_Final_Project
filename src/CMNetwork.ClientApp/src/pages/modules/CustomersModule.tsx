@@ -130,22 +130,24 @@ export function CustomersModule() {
           const status = row.original.bankVerificationStatus ?? 'NotVerified'
           const color =
             status === 'Verified'
-              ? { bg: '#dcfce7', text: '#166534' }
+              ? { bg: '#d7e2ff', text: '#004591', border: '#acc7ff' }
               : status === 'Pending'
-                ? { bg: '#fef3c7', text: '#92400e' }
-                : { bg: '#fee2e2', text: '#991b1b' }
+                ? { bg: '#fff4db', text: '#7a5200', border: '#f3d19c' }
+                : { bg: '#f3f3f6', text: '#424752', border: '#c2c6d4' }
 
           return (
             <span
+              className="customers-status-badge"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                padding: '2px 8px',
+                padding: '2px 10px',
                 borderRadius: 999,
                 background: color.bg,
                 color: color.text,
+                border: `1px solid ${color.border}`,
                 fontSize: 12,
-                fontWeight: 700,
+                fontWeight: 600,
               }}
             >
               {status}
@@ -162,34 +164,34 @@ export function CustomersModule() {
         id: 'actions',
         header: 'Actions',
         cell: ({ row }) => (
-          <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
+          <div className="customers-row-actions">
             <Button
+              className="customers-action-icon"
               icon="edit"
               onClick={() => handleEditClick(row.original)}
-              style={{ marginRight: '8px' }}
             />
-            <Button icon="delete" onClick={() => handleDeleteClick(row.original)} />
+            <Button className="customers-action-icon" icon="delete" onClick={() => handleDeleteClick(row.original)} />
             {canManageCustomers && (
               <>
                 <Button
+                  className="customers-action-btn customers-action-btn-verify"
                   size="small"
-                  themeColor="success"
                   disabled={bankActionCustomerId === row.original.id}
                   onClick={() => requestBankVerificationAction(row.original, 'Verified')}
                 >
                   Verify
                 </Button>
                 <Button
+                  className="customers-action-btn customers-action-btn-pending"
                   size="small"
-                  themeColor="warning"
                   disabled={bankActionCustomerId === row.original.id}
                   onClick={() => requestBankVerificationAction(row.original, 'Pending')}
                 >
                   Pending
                 </Button>
                 <Button
+                  className="customers-action-btn customers-action-btn-reset"
                   size="small"
-                  themeColor="error"
                   disabled={bankActionCustomerId === row.original.id}
                   onClick={() => requestBankVerificationAction(row.original, 'NotVerified')}
                 >
@@ -381,45 +383,42 @@ export function CustomersModule() {
   }
 
   return (
-    <div className="space-y-4 p-4" style={{ background: 'linear-gradient(180deg, #f8fbff 0%, #f7f7f7 100%)', borderRadius: 18 }}>
+    <div className="customers-module-page space-y-4 p-4">
       <DashboardCard
+        className="customers-surface-card"
         title="Customer Management"
         subtitle="Create, update, and manage customer master data for accounts receivable"
       >
         <div className="space-y-4">
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-              gap: 10,
-            }}
-          >
-            <div style={{ background: '#ffffff', border: '1px solid #dbeafe', borderRadius: 12, padding: '10px 12px' }}>
-              <div style={{ fontSize: 11, color: '#64748b', letterSpacing: 0.3 }}>Total Customers</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{customerKpis.total}</div>
+          <div className="customers-kpis-grid">
+            <div className="customers-kpi-card">
+              <div className="customers-kpi-label">Total Customers</div>
+              <div className="customers-kpi-value">{customerKpis.total}</div>
             </div>
-            <div style={{ background: '#ecfdf5', border: '1px solid #bbf7d0', borderRadius: 12, padding: '10px 12px' }}>
-              <div style={{ fontSize: 11, color: '#047857', letterSpacing: 0.3 }}>Verified Banks</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#065f46' }}>{customerKpis.verified}</div>
+            <div className="customers-kpi-card">
+              <div className="customers-kpi-label">Verified Banks</div>
+              <div className="customers-kpi-value customers-kpi-value-primary">{customerKpis.verified}</div>
             </div>
-            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '10px 12px' }}>
-              <div style={{ fontSize: 11, color: '#b45309', letterSpacing: 0.3 }}>Pending Verification</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#92400e' }}>{customerKpis.pending}</div>
+            <div className="customers-kpi-card">
+              <div className="customers-kpi-label">Pending Verification</div>
+              <div className="customers-kpi-value">{customerKpis.pending}</div>
             </div>
-            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '10px 12px' }}>
-              <div style={{ fontSize: 11, color: '#475569', letterSpacing: 0.3 }}>Active Accounts</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{customerKpis.active}</div>
+            <div className="customers-kpi-card">
+              <div className="customers-kpi-label">Active Accounts</div>
+              <div className="customers-kpi-value">{customerKpis.active}</div>
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-4">
+          <div className="customers-toolbar">
             <Input
+              className="customers-search-input"
               placeholder="Search by code or name..."
               value={searchText}
               onChange={(e: InputChangeEvent) => setSearchText((e.target.value as string) || '')}
               style={{ width: '300px' }}
             />
             <Button
+              className="customers-add-btn"
               themeColor="primary"
               onClick={handleAddClick}
               disabled={!canManageCustomers}
@@ -428,9 +427,14 @@ export function CustomersModule() {
             </Button>
           </div>
 
-          {loading && <div style={{ marginBottom: '12px', color: 'var(--text-muted)' }}>Loading customers...</div>}
+          {loading && <div style={{ marginBottom: '12px', color: 'var(--on-surface-variant)' }}>Loading customers...</div>}
 
-          <DataTable data={filteredCustomers} columns={customerColumns} pageSizeOptions={[20, 50, 100]} />
+          <DataTable
+            className="customers-table"
+            data={filteredCustomers}
+            columns={customerColumns}
+            pageSizeOptions={[20, 50, 100]}
+          />
         </div>
       </DashboardCard>
 
