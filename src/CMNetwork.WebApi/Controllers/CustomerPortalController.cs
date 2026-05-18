@@ -224,6 +224,182 @@ SELECT
         });
     }
 
+    /// <summary>Calculates age from birth date.</summary>
+    private static int? CalculateAge(DateOnly? birthDate)
+    {
+        if (!birthDate.HasValue)
+            return null;
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var years = today.Year - birthDate.Value.Year;
+        var hasHadBirthdayThisYear = today.Month > birthDate.Value.Month
+            || (today.Month == birthDate.Value.Month && today.Day >= birthDate.Value.Day);
+
+        return hasHadBirthdayThisYear ? years : Math.Max(0, years - 1);
+    }
+
+    /// <summary>Resolves demographic string value with fallback to ApplicationUser.</summary>
+    private static string? GetDemographicStringValue(bool hasColumn, string? customerValue, string? userValue)
+    {
+        if (hasColumn)
+            return string.IsNullOrWhiteSpace(customerValue) ? null : customerValue;
+
+        return string.IsNullOrWhiteSpace(userValue) ? null : userValue;
+    }
+
+    /// <summary>Builds customer profile response object.</summary>
+    private object BuildProfileResponse(
+        Customer customer,
+        DateOnly? responseBirthDate,
+        int? responseAge,
+        string? responseGender,
+        bool hasExtendedColumns,
+        CustomerDemographicColumns demographicColumns,
+        string message)
+    {
+        return new
+        {
+            id = customer.Id,
+            firstName = customer.ContactPerson ?? string.Empty,
+            lastName = customer.Name,
+            email = customer.Email,
+            phoneNumber = customer.PhoneNumber,
+            companyName = customer.Name,
+            address = customer.Address,
+            city = customer.City,
+            state = customer.State,
+            country = customer.Country,
+            postalCode = customer.PostalCode,
+            zipCode = customer.PostalCode,
+            birthDate = responseBirthDate,
+            age = responseAge,
+            gender = responseGender,
+            maritalStatus = demographicColumns.HasMaritalStatus ? customer.MaritalStatus : null,
+            tin = hasExtendedColumns ? customer.TIN : null,
+            sss = hasExtendedColumns ? customer.SSS : null,
+            bankAccount = hasExtendedColumns ? customer.BankAccount : null,
+            bankName = hasExtendedColumns ? customer.BankName : null,
+            bankVerificationStatus = hasExtendedColumns ? customer.BankVerificationStatus.ToString() : BankVerificationStatus.NotVerified.ToString(),
+            bankVerifiedAtUtc = hasExtendedColumns ? customer.BankVerifiedAtUtc : null,
+            message = message
+        };
+    }
+
+    private static string GetProfileAvailabilityMessage(
+        bool hasExtendedColumns,
+        CustomerDemographicColumns demographicColumns,
+        string action)
+    {
+        if (hasExtendedColumns)
+            return $"Profile {action} successfully";
+
+        if (HasAnyDemographicColumn(demographicColumns))
+            return $"Profile {action}. TIN/SSS/Bank fields will be available after database migration.";
+
+        return $"Profile {action}. Demographic and extended profile fields will be available after database migration.";
+    }
+
+    private static bool HasAnyDemographicColumn(CustomerDemographicColumns demographicColumns)
+    {
+        return demographicColumns.HasBirthDate
+            || demographicColumns.HasAge
+            || demographicColumns.HasGender
+            || demographicColumns.HasMaritalStatus;
+    }
+
+    private void RemoveUnavailableProfileFieldsFromModelState(
+        bool hasExtendedColumns,
+        CustomerDemographicColumns demographicColumns)
+    {
+        if (!hasExtendedColumns)
+        {
+            ModelState.Remove(nameof(UpdateCustomerProfileRequest.TIN));
+            ModelState.Remove(nameof(UpdateCustomerProfileRequest.SSS));
+            ModelState.Remove(nameof(UpdateCustomerProfileRequest.BankAccount));
+            ModelState.Remove(nameof(UpdateCustomerProfileRequest.BankName));
+        }
+
+        if (!demographicColumns.HasBirthDate)
+            ModelState.Remove(nameof(UpdateCustomerProfileRequest.BirthDate));
+        if (!demographicColumns.HasAge)
+            ModelState.Remove(nameof(UpdateCustomerProfileRequest.Age));
+        if (!demographicColumns.HasGender)
+            ModelState.Remove(nameof(UpdateCustomerProfileRequest.Gender));
+        if (!demographicColumns.HasMaritalStatus)
+            ModelState.Remove(nameof(UpdateCustomerProfileRequest.MaritalStatus));
+    }
+
+    private static void ApplyCoreProfileUpdates(Customer customer, UpdateCustomerProfileRequest request)
+    {
+        if (!string.IsNullOrWhiteSpace(request.FirstName))
+            customer.ContactPerson = request.FirstName;
+        if (!string.IsNullOrWhiteSpace(request.LastName))
+            customer.Name = request.LastName;
+        if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
+            customer.PhoneNumber = request.PhoneNumber;
+        if (!string.IsNullOrWhiteSpace(request.Address))
+            customer.Address = request.Address;
+        if (!string.IsNullOrWhiteSpace(request.City))
+            customer.City = request.City;
+        if (!string.IsNullOrWhiteSpace(request.State))
+            customer.State = request.State;
+        if (!string.IsNullOrWhiteSpace(request.Country))
+            customer.Country = request.Country;
+
+        var postalCode = string.IsNullOrWhiteSpace(request.PostalCode) ? request.ZipCode : request.PostalCode;
+        if (!string.IsNullOrWhiteSpace(postalCode))
+            customer.PostalCode = postalCode;
+    }
+
+    private static void ApplyDemographicProfileUpdates(
+        Customer customer,
+        UpdateCustomerProfileRequest request,
+        CustomerDemographicColumns demographicColumns)
+    {
+        if (demographicColumns.HasBirthDate && request.BirthDate.HasValue)
+            customer.BirthDate = request.BirthDate.Value;
+        if (demographicColumns.HasAge && request.Age.HasValue)
+            customer.Age = request.Age.Value;
+        if (demographicColumns.HasGender && !string.IsNullOrWhiteSpace(request.Gender))
+            customer.Gender = request.Gender;
+        if (demographicColumns.HasMaritalStatus && !string.IsNullOrWhiteSpace(request.MaritalStatus))
+            customer.MaritalStatus = request.MaritalStatus;
+    }
+
+    private async Task ApplyLegacyDemographicFallbackAsync(
+        ApplicationUser? user,
+        UpdateCustomerProfileRequest request,
+        CustomerDemographicColumns demographicColumns)
+    {
+        if (user is null || (demographicColumns.HasBirthDate && demographicColumns.HasGender))
+            return;
+
+        if (!demographicColumns.HasBirthDate && request.BirthDate.HasValue)
+            user.Birthdate = request.BirthDate.Value;
+        if (!demographicColumns.HasGender && !string.IsNullOrWhiteSpace(request.Gender))
+            user.Gender = request.Gender;
+
+        await _userManager.UpdateAsync(user);
+    }
+
+    private static void ApplyExtendedProfileUpdates(
+        Customer customer,
+        UpdateCustomerProfileRequest request,
+        bool hasExtendedColumns)
+    {
+        if (!hasExtendedColumns)
+            return;
+
+        if (request.TIN is not null)
+            customer.TIN = string.IsNullOrWhiteSpace(request.TIN) ? null : request.TIN;
+        if (request.SSS is not null)
+            customer.SSS = string.IsNullOrWhiteSpace(request.SSS) ? null : request.SSS;
+        if (request.BankAccount is not null)
+            customer.BankAccount = string.IsNullOrWhiteSpace(request.BankAccount) ? null : request.BankAccount;
+        if (request.BankName is not null)
+            customer.BankName = string.IsNullOrWhiteSpace(request.BankName) ? null : request.BankName;
+    }
+
     [HttpGet("dashboard")]
     public async Task<IActionResult> GetDashboard()
     {
@@ -631,42 +807,21 @@ SELECT
         var user = await _userManager.GetUserAsync(User);
 
         var responseBirthDate = demographicColumns.HasBirthDate ? customer.BirthDate : user?.Birthdate;
-        var responseGender = demographicColumns.HasGender
-            ? customer.Gender
-            : (string.IsNullOrWhiteSpace(user?.Gender) ? null : user!.Gender);
+        var responseGender = GetDemographicStringValue(demographicColumns.HasGender, customer.Gender, user?.Gender);
         var responseAge = demographicColumns.HasAge
             ? customer.Age
-            : responseBirthDate.HasValue
-                ? Math.Max(0, DateTime.UtcNow.Year - responseBirthDate.Value.Year
-                    - ((DateTime.UtcNow.Month < responseBirthDate.Value.Month
-                        || (DateTime.UtcNow.Month == responseBirthDate.Value.Month && DateTime.UtcNow.Day < responseBirthDate.Value.Day)) ? 1 : 0))
-                : null;
+            : CalculateAge(responseBirthDate);
 
-        return Ok(new
-        {
-            id = customer.Id,
-            firstName = customer.ContactPerson ?? string.Empty,
-            lastName = customer.Name,
-            email = customer.Email,
-            phoneNumber = customer.PhoneNumber,
-            companyName = customer.Name,
-            address = customer.Address,
-            city = customer.City,
-            state = customer.State,
-            country = customer.Country,
-            postalCode = customer.PostalCode,
-            zipCode = customer.PostalCode,
-            birthDate = responseBirthDate,
-            age = responseAge,
-            gender = responseGender,
-            maritalStatus = demographicColumns.HasMaritalStatus ? customer.MaritalStatus : null,
-            tin = hasExtendedColumns ? customer.TIN : null,
-            sss = hasExtendedColumns ? customer.SSS : null,
-            bankAccount = hasExtendedColumns ? customer.BankAccount : null,
-            bankName = hasExtendedColumns ? customer.BankName : null,
-            bankVerificationStatus = hasExtendedColumns ? customer.BankVerificationStatus.ToString() : BankVerificationStatus.NotVerified.ToString(),
-            bankVerifiedAtUtc = hasExtendedColumns ? customer.BankVerifiedAtUtc : null
-        });
+        var message = GetProfileAvailabilityMessage(hasExtendedColumns, demographicColumns, "retrieved");
+
+        return Ok(BuildProfileResponse(
+            customer,
+            responseBirthDate,
+            responseAge,
+            responseGender,
+            hasExtendedColumns,
+            demographicColumns,
+            message));
     }
 
     [HttpPut("profile")]
@@ -676,27 +831,7 @@ SELECT
         var demographicColumns = await GetDemographicCustomerProfileColumnsAsync();
         var user = await _userManager.GetUserAsync(User);
 
-        // On legacy schemas, extended columns do not exist yet.
-        // Ignore extended field validation so profile updates do not fail with 400.
-        if (!hasExtendedColumns)
-        {
-            ModelState.Remove(nameof(UpdateCustomerProfileRequest.TIN));
-            ModelState.Remove(nameof(UpdateCustomerProfileRequest.SSS));
-            ModelState.Remove(nameof(UpdateCustomerProfileRequest.BankAccount));
-            ModelState.Remove(nameof(UpdateCustomerProfileRequest.BankName));
-        }
-
-        if (!demographicColumns.HasBirthDate)
-            ModelState.Remove(nameof(UpdateCustomerProfileRequest.BirthDate));
-
-        if (!demographicColumns.HasAge)
-            ModelState.Remove(nameof(UpdateCustomerProfileRequest.Age));
-
-        if (!demographicColumns.HasGender)
-            ModelState.Remove(nameof(UpdateCustomerProfileRequest.Gender));
-
-        if (!demographicColumns.HasMaritalStatus)
-            ModelState.Remove(nameof(UpdateCustomerProfileRequest.MaritalStatus));
+        RemoveUnavailableProfileFieldsFromModelState(hasExtendedColumns, demographicColumns);
 
         if (!ModelState.IsValid)
             return ValidationProblem(ModelState);
@@ -707,121 +842,30 @@ SELECT
             return NotFound(new { message = MissingCustomerMessage });
         }
 
-        if (!string.IsNullOrWhiteSpace(request.FirstName))
-            customer.ContactPerson = request.FirstName;
-
-        if (!string.IsNullOrWhiteSpace(request.LastName))
-            customer.Name = request.LastName;
-
-        if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
-            customer.PhoneNumber = request.PhoneNumber;
-
-        if (!string.IsNullOrWhiteSpace(request.Address))
-            customer.Address = request.Address;
-
-        if (!string.IsNullOrWhiteSpace(request.City))
-            customer.City = request.City;
-
-        if (!string.IsNullOrWhiteSpace(request.State))
-            customer.State = request.State;
-
-        if (!string.IsNullOrWhiteSpace(request.Country))
-            customer.Country = request.Country;
-
-        var postalCode = string.IsNullOrWhiteSpace(request.PostalCode) ? request.ZipCode : request.PostalCode;
-        if (!string.IsNullOrWhiteSpace(postalCode))
-            customer.PostalCode = postalCode;
-
-        if (demographicColumns.HasBirthDate)
-            if (request.BirthDate.HasValue)
-                customer.BirthDate = request.BirthDate.Value;
-
-        if (demographicColumns.HasAge)
-            if (request.Age.HasValue)
-                customer.Age = request.Age.Value;
-
-        if (demographicColumns.HasGender)
-            if (!string.IsNullOrWhiteSpace(request.Gender))
-                customer.Gender = request.Gender;
-
-        if (demographicColumns.HasMaritalStatus)
-            if (!string.IsNullOrWhiteSpace(request.MaritalStatus))
-                customer.MaritalStatus = request.MaritalStatus;
-
-        if ((!demographicColumns.HasBirthDate || !demographicColumns.HasGender) && user is not null)
-        {
-            // Legacy fallback: preserve demographic info in AspNetUsers when Customers columns are unavailable.
-            if (!demographicColumns.HasBirthDate && request.BirthDate.HasValue)
-                user.Birthdate = request.BirthDate.Value;
-
-            if (!demographicColumns.HasGender && !string.IsNullOrWhiteSpace(request.Gender))
-                user.Gender = request.Gender;
-
-            await _userManager.UpdateAsync(user);
-        }
-
-        if (hasExtendedColumns)
-        {
-            if (request.TIN is not null)
-                customer.TIN = string.IsNullOrWhiteSpace(request.TIN) ? null : request.TIN;
-
-            if (request.SSS is not null)
-                customer.SSS = string.IsNullOrWhiteSpace(request.SSS) ? null : request.SSS;
-
-            if (request.BankAccount is not null)
-                customer.BankAccount = string.IsNullOrWhiteSpace(request.BankAccount) ? null : request.BankAccount;
-
-            if (request.BankName is not null)
-                customer.BankName = string.IsNullOrWhiteSpace(request.BankName) ? null : request.BankName;
-
-        }
+        ApplyCoreProfileUpdates(customer, request);
+        ApplyDemographicProfileUpdates(customer, request, demographicColumns);
+        await ApplyLegacyDemographicFallbackAsync(user, request, demographicColumns);
+        ApplyExtendedProfileUpdates(customer, request, hasExtendedColumns);
 
         customer.LastUpdatedUtc = DateTime.UtcNow;
-
         await _dbContext.SaveChangesAsync();
 
         var responseBirthDate = demographicColumns.HasBirthDate ? customer.BirthDate : user?.Birthdate;
-        var responseGender = demographicColumns.HasGender
-            ? customer.Gender
-            : (string.IsNullOrWhiteSpace(user?.Gender) ? null : user!.Gender);
+        var responseGender = GetDemographicStringValue(demographicColumns.HasGender, customer.Gender, user?.Gender);
         var responseAge = demographicColumns.HasAge
             ? customer.Age
-            : responseBirthDate.HasValue
-                ? Math.Max(0, DateTime.UtcNow.Year - responseBirthDate.Value.Year
-                    - ((DateTime.UtcNow.Month < responseBirthDate.Value.Month
-                        || (DateTime.UtcNow.Month == responseBirthDate.Value.Month && DateTime.UtcNow.Day < responseBirthDate.Value.Day)) ? 1 : 0))
-                : null;
+            : CalculateAge(responseBirthDate);
 
-        return Ok(new
-        {
-            id = customer.Id,
-            firstName = customer.ContactPerson ?? string.Empty,
-            lastName = customer.Name,
-            email = customer.Email,
-            phoneNumber = customer.PhoneNumber,
-            companyName = customer.Name,
-            address = customer.Address,
-            city = customer.City,
-            state = customer.State,
-            country = customer.Country,
-            postalCode = customer.PostalCode,
-            zipCode = customer.PostalCode,
-            birthDate = responseBirthDate,
-            age = responseAge,
-            gender = responseGender,
-            maritalStatus = demographicColumns.HasMaritalStatus ? customer.MaritalStatus : null,
-            tin = hasExtendedColumns ? customer.TIN : null,
-            sss = hasExtendedColumns ? customer.SSS : null,
-            bankAccount = hasExtendedColumns ? customer.BankAccount : null,
-            bankName = hasExtendedColumns ? customer.BankName : null,
-            bankVerificationStatus = hasExtendedColumns ? customer.BankVerificationStatus.ToString() : BankVerificationStatus.NotVerified.ToString(),
-            bankVerifiedAtUtc = hasExtendedColumns ? customer.BankVerifiedAtUtc : null,
-            message = hasExtendedColumns
-                ? "Profile updated successfully"
-                : demographicColumns.HasBirthDate || demographicColumns.HasAge || demographicColumns.HasGender || demographicColumns.HasMaritalStatus
-                    ? "Profile updated. TIN/SSS/Bank fields will be available after database migration."
-                    : "Profile updated. Demographic and extended profile fields will be available after database migration."
-        });
+        var message = GetProfileAvailabilityMessage(hasExtendedColumns, demographicColumns, "updated");
+
+        return Ok(BuildProfileResponse(
+            customer,
+            responseBirthDate,
+            responseAge,
+            responseGender,
+            hasExtendedColumns,
+            demographicColumns,
+            message));
     }
 
     [HttpGet("banks")]
@@ -879,17 +923,27 @@ SELECT
         var isBankVerified = hasExtendedColumns && customer.BankVerificationStatus == BankVerificationStatus.Verified;
         var canAccessLoans = completionPercentage >= 80 && isBankVerified;
 
+        var message = GetLoanAccessMessage(canAccessLoans, completionPercentage);
+
         return Ok(new LoanAccessCheckResponse
         {
             CanAccessLoans = canAccessLoans,
             ProfileCompletionPercentage = completionPercentage,
             IsBankVerified = isBankVerified,
-            Message = canAccessLoans
-                ? "Your profile is complete and bank is verified. Loan access is enabled."
-                : completionPercentage < 80
-                    ? $"Complete {100 - completionPercentage}% more of your profile to unlock loan access."
-                    : "Bank verification is required to access loans. Please verify your bank account."
+            Message = message
         });
+    }
+
+    /// <summary>Determines the appropriate loan access message.</summary>
+    private static string GetLoanAccessMessage(bool canAccessLoans, int completionPercentage)
+    {
+        if (canAccessLoans)
+            return "Your profile is complete and bank is verified. Loan access is enabled.";
+
+        if (completionPercentage < 80)
+            return $"Complete {100 - completionPercentage}% more of your profile to unlock loan access.";
+
+        return "Bank verification is required to access loans. Please verify your bank account.";
     }
 
     [HttpGet("profile-schema-health")]
@@ -898,13 +952,12 @@ SELECT
         var hasExtendedColumns = await HasExtendedCustomerProfileColumnsAsync();
         var hasDemographicColumns = await HasDemographicCustomerProfileColumnsAsync();
 
+        var schema = DetermineSchemaType(hasExtendedColumns, hasDemographicColumns);
+        var guidance = GetSchemaGuidance(hasExtendedColumns, hasDemographicColumns);
+
         return Ok(new
         {
-            schema = hasExtendedColumns && hasDemographicColumns
-                ? "extended"
-                : hasDemographicColumns
-                    ? "demographic-only"
-                    : "legacy",
+            schema = schema,
             hasExtendedProfileColumns = hasExtendedColumns,
             hasDemographicProfileColumns = hasDemographicColumns,
             requiredExtendedColumns = new[]
@@ -922,13 +975,29 @@ SELECT
                 "Gender",
                 "MaritalStatus"
             },
-            guidance = hasExtendedColumns && hasDemographicColumns
-                ? "Profile and loan-gating schema is in sync."
-                : hasDemographicColumns
-                    ? "Demographic fields are enabled. Apply migration 20260518_AddProfileCompletionAndLoanAccess to enable TIN/SSS/Bank fields and full loan gating."
-                    : "DB is running legacy Customers schema. Apply migrations for demographic and extended profile columns.",
+            guidance = guidance,
             checkedAtUtc = DateTime.UtcNow
         });
+    }
+
+    /// <summary>Determines the schema type based on available columns.</summary>
+    private static string DetermineSchemaType(bool hasExtendedColumns, bool hasDemographicColumns)
+    {
+        if (hasExtendedColumns && hasDemographicColumns)
+            return "extended";
+        if (hasDemographicColumns)
+            return "demographic-only";
+        return "legacy";
+    }
+
+    /// <summary>Provides guidance based on schema state.</summary>
+    private static string GetSchemaGuidance(bool hasExtendedColumns, bool hasDemographicColumns)
+    {
+        if (hasExtendedColumns && hasDemographicColumns)
+            return "Profile and loan-gating schema is in sync.";
+        if (hasDemographicColumns)
+            return "Demographic fields are enabled. Apply migration 20260518_AddProfileCompletionAndLoanAccess to enable TIN/SSS/Bank fields and full loan gating.";
+        return "DB is running legacy Customers schema. Apply migrations for demographic and extended profile columns.";
     }
 
     [HttpPost("change-password")]

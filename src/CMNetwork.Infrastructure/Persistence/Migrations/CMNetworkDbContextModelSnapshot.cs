@@ -770,6 +770,28 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("nvarchar(512)");
 
+                    b.Property<int?>("Age")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BankAccount")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("BankName")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<int>("BankVerificationStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("BankVerifiedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly?>("BirthDate")
+                        .HasColumnType("date");
+
                     b.Property<string>("City")
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
@@ -798,13 +820,33 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
+                    b.Property<string>("FirstName")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Gender")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(true);
 
+                    b.Property<string>("LastName")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<DateTime?>("LastUpdatedUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("MaritalStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("MiddleName")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -832,9 +874,17 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     b.Property<bool>("RegistrationOtpVerified")
                         .HasColumnType("bit");
 
+                    b.Property<string>("SSS")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("State")
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("TIN")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("TaxId")
                         .HasMaxLength(64)
@@ -846,6 +896,241 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Customers");
+                });
+
+            modelBuilder.Entity("CMNetwork.Domain.Entities.CustomerBudgetAdjustmentRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ApprovedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ApprovedByName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("ApprovedByUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("BudgetId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BudgetName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DecisionNotes")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.Property<string>("RequestNumber")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<decimal>("RequestedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("RequestedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestNumber")
+                        .IsUnique();
+
+                    b.HasIndex("RequestedAtUtc");
+
+                    b.HasIndex("CustomerId", "Status");
+
+                    b.ToTable("CustomerBudgetAdjustmentRequests");
+                });
+
+            modelBuilder.Entity("CMNetwork.Domain.Entities.CustomerLoan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DisbursedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DisbursedByUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("FullyPaidAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("InterestRate")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("LoanApplicationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("OutstandingPrincipal")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("OverdueSinceUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("PrincipalAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StatusNotes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("TermMonths")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("TotalInterestAccrued")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("LoanApplicationId");
+
+                    b.ToTable("CustomerLoans");
+                });
+
+            modelBuilder.Entity("CMNetwork.Domain.Entities.CustomerLoanApplication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AccountantReviewNotes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ApprovedOrRejectedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ApprovedOrRejectedByUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CfoNotes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("InterestRate")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("RequestedAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReviewedByUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("SubmittedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TermMonths")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.ToTable("CustomerLoanApplications");
+                });
+
+            modelBuilder.Entity("CMNetwork.Domain.Entities.CustomerLoanPayment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DueAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ExternalReference")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("InterestAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("LoanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PayMongoCheckoutSessionId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("PrincipalAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ProcessedByUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LoanId");
+
+                    b.ToTable("CustomerLoanPayments");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.CustomerPayment", b =>
@@ -1154,6 +1439,52 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     b.HasIndex("EmployeeId");
 
                     b.ToTable("ExpenseClaims");
+                });
+
+            modelBuilder.Entity("CMNetwork.Domain.Entities.FAQ", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Answer")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Question")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("Category", "DisplayOrder");
+
+                    b.ToTable("FAQs");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.FiscalPeriod", b =>
@@ -1699,6 +2030,72 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                             Name = "Session Timeout",
                             Value = "30 minutes inactivity timeout"
                         });
+                });
+
+            modelBuilder.Entity("CMNetwork.Domain.Entities.SupportTicket", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AssignedToName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("AssignedToUserId")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTime?>("ClosedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
+
+                    b.Property<DateTime?>("LastUpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ResolutionNotes")
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
+
+                    b.Property<DateTime?>("ResolvedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("TicketNumber")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("TicketNumber")
+                        .IsUnique();
+
+                    b.HasIndex("CustomerId", "Status");
+
+                    b.ToTable("SupportTickets");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.TaxTable", b =>
@@ -2299,6 +2696,58 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
+            modelBuilder.Entity("CMNetwork.Domain.Entities.CustomerBudgetAdjustmentRequest", b =>
+                {
+                    b.HasOne("CMNetwork.Domain.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("CMNetwork.Domain.Entities.CustomerLoan", b =>
+                {
+                    b.HasOne("CMNetwork.Domain.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CMNetwork.Domain.Entities.CustomerLoanApplication", "LoanApplication")
+                        .WithMany()
+                        .HasForeignKey("LoanApplicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("LoanApplication");
+                });
+
+            modelBuilder.Entity("CMNetwork.Domain.Entities.CustomerLoanApplication", b =>
+                {
+                    b.HasOne("CMNetwork.Domain.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("CMNetwork.Domain.Entities.CustomerLoanPayment", b =>
+                {
+                    b.HasOne("CMNetwork.Domain.Entities.CustomerLoan", "Loan")
+                        .WithMany("Payments")
+                        .HasForeignKey("LoanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Loan");
+                });
+
             modelBuilder.Entity("CMNetwork.Domain.Entities.CustomerPayment", b =>
                 {
                     b.HasOne("CMNetwork.Domain.Entities.Customer", "Customer")
@@ -2375,6 +2824,17 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("PayrollRun");
+                });
+
+            modelBuilder.Entity("CMNetwork.Domain.Entities.SupportTicket", b =>
+                {
+                    b.HasOne("CMNetwork.Domain.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
                 });
 
             modelBuilder.Entity("CMNetwork.Infrastructure.Identity.ApplicationUser", b =>
@@ -2462,6 +2922,11 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     b.Navigation("Reconciliation");
 
                     b.Navigation("Transactions");
+                });
+
+            modelBuilder.Entity("CMNetwork.Domain.Entities.CustomerLoan", b =>
+                {
+                    b.Navigation("Payments");
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.JournalEntry", b =>
