@@ -171,16 +171,32 @@ const DocumentTitle = () => {
 }
 
 const ReportsRoute = () => {
+  const location = useLocation()
   const selectedRole = useAuthStore((state) => state.selectedRole)
   const user = useAuthStore((state) => state.user)
   const activeRole = selectedRole ?? user?.role
 
   if (activeRole === 'customer') {
-    return <FinancialReportsPage />
+    if (location.pathname === '/module/reports/statements') {
+      return <FinancialReportsPage />
+    }
+
+    return <Navigate to="/module/reports/statements" replace />
   }
 
-  // Non-customer roles should use the role-scoped reports modules.
-  return <ModulePlaceholderPage />
+  if (activeRole === 'super-admin') {
+    return <Navigate to="/module/financial-reports" replace />
+  }
+
+  if (activeRole === 'accountant' || activeRole === 'cfo' || activeRole === 'auditor') {
+    return <Navigate to="/module/financial-reports" replace />
+  }
+
+  if (activeRole === 'authorized-viewer') {
+    return <Navigate to="/module/av-reports" replace />
+  }
+
+  return <Navigate to="/" replace />
 }
 
 const RouterFallback = () => (

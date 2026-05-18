@@ -16,7 +16,7 @@ namespace CMNetwork.Controllers;
 
 [ApiController]
 [Route("api/reports")]
-[Authorize(Roles = "accountant,cfo,super-admin,authorized-viewer,auditor,faculty-admin")]
+[Authorize(Roles = "accountant,cfo,super-admin,authorized-viewer,auditor")]
 public class ReportsController : ControllerBase
 {
     private readonly CMNetworkDbContext _db;
@@ -100,6 +100,20 @@ public class ReportsController : ControllerBase
         var totalExpenses = expenses.Sum(x => x.Amount);
         var netIncome = totalRevenue - totalExpenses;
 
+        if (User.IsInRole("authorized-viewer"))
+        {
+            return Ok(new
+            {
+                from = fromDate,
+                to = toDate,
+                totalRevenue = decimal.Round(totalRevenue, 2),
+                totalExpenses = decimal.Round(totalExpenses, 2),
+                netIncome = decimal.Round(netIncome, 2),
+                revenue = Array.Empty<object>(),
+                expenses = Array.Empty<object>()
+            });
+        }
+
         return Ok(new
         {
             from = fromDate,
@@ -146,6 +160,22 @@ public class ReportsController : ControllerBase
         var totalLiabilities = liabilities.Sum(x => x.Amount);
         var totalEquity = equity.Sum(x => x.Amount) + retainedEarnings;
 
+        if (User.IsInRole("authorized-viewer"))
+        {
+            return Ok(new
+            {
+                asOf = asOfDate,
+                totalAssets = decimal.Round(totalAssets, 2),
+                totalLiabilities = decimal.Round(totalLiabilities, 2),
+                totalEquity = decimal.Round(totalEquity + retainedEarnings, 2),
+                isBalanced = Math.Abs(totalAssets - (totalLiabilities + totalEquity)) < 0.01m,
+                assets = Array.Empty<object>(),
+                liabilities = Array.Empty<object>(),
+                equity = Array.Empty<object>(),
+                retainedEarnings = decimal.Round(retainedEarnings, 2)
+            });
+        }
+
         return Ok(new
         {
             asOf = asOfDate,
@@ -169,6 +199,9 @@ public class ReportsController : ControllerBase
         [FromQuery(Name = "startDate")] DateOnly? startDate = null,
         [FromQuery(Name = "endDate")] DateOnly? endDate = null)
     {
+        if (User.IsInRole("authorized-viewer"))
+            return Forbid();
+
         var fromDate = from ?? startDate ?? new DateOnly(DateTime.UtcNow.Year, 1, 1);
         var toDate = to ?? endDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -218,6 +251,9 @@ public class ReportsController : ControllerBase
         [FromQuery] DateOnly? asOf = null,
         [FromQuery(Name = "asOfDate")] DateOnly? asOfDateFromClient = null)
     {
+        if (User.IsInRole("authorized-viewer"))
+            return Forbid();
+
         var today = asOf ?? asOfDateFromClient ?? DateOnly.FromDateTime(DateTime.UtcNow);
 
         var invoices = await _db.APInvoices
@@ -262,6 +298,9 @@ public class ReportsController : ControllerBase
         [FromQuery] DateOnly? asOf = null,
         [FromQuery(Name = "asOfDate")] DateOnly? asOfDateFromClient = null)
     {
+        if (User.IsInRole("authorized-viewer"))
+            return Forbid();
+
         var today = asOf ?? asOfDateFromClient ?? DateOnly.FromDateTime(DateTime.UtcNow);
 
         var invoices = await _db.ARInvoices
@@ -304,6 +343,9 @@ public class ReportsController : ControllerBase
     [HttpGet("department-budget")]
     public async Task<IActionResult> GetDepartmentBudget([FromQuery] Guid? periodId = null)
     {
+        if (User.IsInRole("authorized-viewer"))
+            return Forbid();
+
         try
         {
             var departments = await _db.Departments.ToListAsync();
@@ -352,6 +394,15 @@ public class ReportsController : ControllerBase
     {
         var normalizedFormat = (query.Format ?? "excel").Trim().ToLowerInvariant();
         var normalizedType = type.Trim().ToLowerInvariant();
+
+        if (User.IsInRole("authorized-viewer"))
+        {
+            if (normalizedFormat != "pdf")
+                return Forbid();
+
+            if (normalizedType is not ("income-statement" or "balance-sheet"))
+                return Forbid();
+        }
 
         if (normalizedFormat is not ("excel" or "pdf"))
             return BadRequest(new { message = "Invalid file format. Choose Excel or PDF." });
@@ -434,6 +485,7 @@ public class ReportsController : ControllerBase
     // ── Report Templates ─────────────────────────────────────────────────────
 
     [HttpGet("report-templates")]
+    [Authorize(Roles = "accountant,cfo,super-admin")]
     public async Task<IActionResult> GetReportTemplates()
     {
         var userIdentity = GetCurrentUserIdentity();
@@ -462,6 +514,7 @@ public class ReportsController : ControllerBase
     }
 
     [HttpPost("report-templates")]
+    [Authorize(Roles = "accountant,cfo,super-admin")]
     public async Task<IActionResult> CreateReportTemplate([FromBody] CreateReportTemplateRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
@@ -499,6 +552,7 @@ public class ReportsController : ControllerBase
     }
 
     [HttpDelete("report-templates/{id}")]
+    [Authorize(Roles = "accountant,cfo,super-admin")]
     public async Task<IActionResult> DeleteReportTemplate(string id)
     {
         var row = await _db.IntegrationSettings
@@ -527,6 +581,7 @@ public class ReportsController : ControllerBase
     // ── Report Schedules ─────────────────────────────────────────────────────
 
     [HttpGet("report-schedules")]
+    [Authorize(Roles = "accountant,cfo,super-admin")]
     public async Task<IActionResult> GetReportSchedules()
     {
         var rows = await _db.IntegrationSettings
@@ -545,6 +600,7 @@ public class ReportsController : ControllerBase
     }
 
     [HttpPost("report-schedules")]
+    [Authorize(Roles = "accountant,cfo,super-admin")]
     public async Task<IActionResult> CreateReportSchedule([FromBody] CreateOrUpdateReportScheduleRequest request)
     {
         var validationError = ValidateScheduleRequest(request);
@@ -579,6 +635,7 @@ public class ReportsController : ControllerBase
     }
 
     [HttpPut("report-schedules/{id}")]
+    [Authorize(Roles = "accountant,cfo,super-admin")]
     public async Task<IActionResult> UpdateReportSchedule(string id, [FromBody] CreateOrUpdateReportScheduleRequest request)
     {
         var validationError = ValidateScheduleRequest(request);
@@ -611,6 +668,7 @@ public class ReportsController : ControllerBase
     }
 
     [HttpPost("report-schedules/{id}/run-now")]
+    [Authorize(Roles = "accountant,cfo,super-admin")]
     public async Task<IActionResult> RunScheduleNow(string id)
     {
         var row = await _db.IntegrationSettings

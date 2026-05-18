@@ -192,7 +192,10 @@ const ResultTable = ({ columns, rows }: { columns: string[]; rows: Array<Record<
 export const FinancialReportsModule = () => {
   useDisplayCurrency()
   const user = useAuthStore((state) => state.user)
+  const selectedRole = useAuthStore((state) => state.selectedRole)
   const push = useNotificationStore((state) => state.push)
+  const activeRole = selectedRole ?? user?.role ?? null
+  const canManageReportConfigs = activeRole === 'accountant' || activeRole === 'cfo' || activeRole === 'super-admin'
 
   // Modal visibility
   const [showRunReport, setShowRunReport] = useState(false)
@@ -619,15 +622,21 @@ export const FinancialReportsModule = () => {
   const loadLiveSummary = useCallback(async () => {
     setLiveSummaryLoading(true)
     try {
-      const [templatesRes, schedulesRes, incomeRes] = await Promise.all([
-        reportsService.listTemplates(),
-        reportsService.listSchedules(),
-        reportsService.getIncomeStatement({ startDate: firstOfMonth, endDate: today }),
-      ])
+      const incomeRes = await reportsService.getIncomeStatement({ startDate: firstOfMonth, endDate: today })
+      let templatesCount = 0
+      let activeSchedules = 0
 
-      const templatesCount = templatesRes.data.items?.length ?? 0
-      const schedules = schedulesRes.data.items ?? []
-      const activeSchedules = schedules.filter((item) => item.active).length
+      if (canManageReportConfigs) {
+        const [templatesRes, schedulesRes] = await Promise.all([
+          reportsService.listTemplates(),
+          reportsService.listSchedules(),
+        ])
+
+        templatesCount = templatesRes.data.items?.length ?? 0
+        const schedules = schedulesRes.data.items ?? []
+        activeSchedules = schedules.filter((item) => item.active).length
+      }
+
       const incomeData = incomeRes.data as { netIncome?: number }
 
       setLiveSummary({
@@ -641,7 +650,7 @@ export const FinancialReportsModule = () => {
     } finally {
       setLiveSummaryLoading(false)
     }
-  }, [push])
+  }, [canManageReportConfigs, push])
 
   useEffect(() => {
     void loadLiveSummary()
@@ -709,15 +718,17 @@ export const FinancialReportsModule = () => {
             description="Inspect detailed report slices."
             onClick={() => { setDdRows([]); setDdSummary([]); setShowDrilldown(true) }}
           />
-          <ActionCard
-            icon={<IconTemplates />}
-            title="Manage Templates"
-            description="Create and edit report structures."
-            onClick={() => {
-              setShowTemplateManager(true)
-              void loadTemplates()
-            }}
-          />
+          {canManageReportConfigs && (
+            <ActionCard
+              icon={<IconTemplates />}
+              title="Manage Templates"
+              description="Create and edit report structures."
+              onClick={() => {
+                setShowTemplateManager(true)
+                void loadTemplates()
+              }}
+            />
+          )}
           <ActionCard
             icon={<IconAuditLog />}
             title="Audit Log"
@@ -727,15 +738,17 @@ export const FinancialReportsModule = () => {
               void handleLoadAuditLog()
             }}
           />
-          <ActionCard
-            icon={<IconScheduler />}
-            title="Report Scheduler"
-            description="Automate report generation."
-            onClick={() => {
-              setShowScheduler(true)
-              void loadSchedules()
-            }}
-          />
+          {canManageReportConfigs && (
+            <ActionCard
+              icon={<IconScheduler />}
+              title="Report Scheduler"
+              description="Automate report generation."
+              onClick={() => {
+                setShowScheduler(true)
+                void loadSchedules()
+              }}
+            />
+          )}
         </div>
       </div>
       </div>

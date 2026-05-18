@@ -54,6 +54,13 @@ interface AvStatementResponse {
   revenue: AvStatementLine[]
   expenses: AvStatementLine[]
 }
+
+interface AvBalanceSheetSummary {
+  asOf: string
+  totalAssets: number
+  totalLiabilities: number
+  totalEquity: number
+}
 const avToIso = (d: Date) => d.toISOString().slice(0, 10)
 const avMonthYear = (v: string) => {
   const d = new Date(`${v}T00:00:00`)
@@ -458,6 +465,7 @@ const ExecutiveSummaryView = () => {
 const AvReportsView = () => {
   useDisplayCurrency()
   const [statement, setStatement] = useState<AvStatementResponse | null>(null)
+  const [balanceSheet, setBalanceSheet] = useState<AvBalanceSheetSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [dataSource, setDataSource] = useState<'live' | 'unavailable'>('unavailable')
   const [exporting, setExporting] = useState(false)
@@ -470,32 +478,30 @@ const AvReportsView = () => {
 
   useEffect(() => {
     let active = true
-    reportsService
-      .getIncomeStatement(periodRange)
-      .then((res) => {
+    Promise.all([
+      reportsService.getIncomeStatement(periodRange),
+      reportsService.getBalanceSheet({ asOfDate: periodRange.endDate }),
+    ])
+      .then(([incomeRes, balanceRes]) => {
         if (!active) return
-        setStatement(res.data as AvStatementResponse)
+        setStatement(incomeRes.data as AvStatementResponse)
+        setBalanceSheet(balanceRes.data as AvBalanceSheetSummary)
         setDataSource('live')
       })
       .catch(() => {
         if (!active) return
         setStatement(null)
+        setBalanceSheet(null)
         setDataSource('unavailable')
       })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [periodRange])
 
-  const revenueLines = useMemo(() =>
-    (statement?.revenue ?? []).map((l) => ({ account: l.accountName || l.accountCode, amount: Number(l.amount) || 0 }))
-  , [statement])
-
-  const expenseLines = useMemo(() =>
-    (statement?.expenses ?? []).map((l) => ({ account: l.accountName || l.accountCode, amount: Number(l.amount) || 0 }))
-  , [statement])
-
-  const totalRevenue = statement?.totalRevenue ?? revenueLines.reduce((s, l) => s + l.amount, 0)
-  const totalExpense = statement?.totalExpenses ?? expenseLines.reduce((s, l) => s + l.amount, 0)
+  const totalRevenue = statement?.totalRevenue ?? 0
+  const totalExpense = statement?.totalExpenses ?? 0
+  const revenueLines = useMemo(() => [{ account: 'Aggregated revenue', amount: totalRevenue }], [totalRevenue])
+  const expenseLines = useMemo(() => [{ account: 'Aggregated expenses', amount: totalExpense }], [totalExpense])
   const netIncome = totalRevenue - totalExpense
   const netMargin = totalRevenue > 0 ? ((netIncome / totalRevenue) * 100).toFixed(1) : '0.0'
   const periodLabel = avPeriodLabel(statement?.from ?? periodRange.startDate, statement?.to ?? periodRange.endDate)
@@ -507,6 +513,9 @@ const AvReportsView = () => {
   const revenueDisplay = loading ? '—' : phpFmt(totalRevenue)
   const expenseDisplay = loading ? '—' : phpFmt(totalExpense)
   const marginDisplay = loading ? '—' : `${netMargin}%`
+  const assetsDisplay = loading ? '—' : phpFmt(balanceSheet?.totalAssets ?? 0)
+  const liabilitiesDisplay = loading ? '—' : phpFmt(balanceSheet?.totalLiabilities ?? 0)
+  const equityDisplay = loading ? '—' : phpFmt(balanceSheet?.totalEquity ?? 0)
 
   const handleExport = async () => {
     setExporting(true)
@@ -597,6 +606,21 @@ const AvReportsView = () => {
             {marginDisplay}
           </div>
           <div className="pl-summary-sub">Net income as % of revenue</div>
+        </div>
+        <div className="pl-summary-card">
+          <div className="pl-summary-label">Total Assets</div>
+          <div className="pl-summary-value pl-revenue">{assetsDisplay}</div>
+          <div className="pl-summary-sub">Balance sheet summary</div>
+        </div>
+        <div className="pl-summary-card">
+          <div className="pl-summary-label">Total Liabilities</div>
+          <div className="pl-summary-value pl-expense">{liabilitiesDisplay}</div>
+          <div className="pl-summary-sub">Balance sheet summary</div>
+        </div>
+        <div className="pl-summary-card">
+          <div className="pl-summary-label">Total Equity</div>
+          <div className="pl-summary-value">{equityDisplay}</div>
+          <div className="pl-summary-sub">Balance sheet summary</div>
         </div>
       </div>
 

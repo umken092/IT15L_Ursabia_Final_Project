@@ -92,8 +92,8 @@ export const moduleRoleMap: Record<string, Role[]> = {
   'evidence-archive': ['auditor'],
   'approvals-inbox': ['cfo'],
   'budget-control': ['cfo'],
-  reports: ['accountant', 'auditor', 'cfo'],
-  'financial-reports': ['accountant', 'auditor', 'cfo'],
+  reports: ['accountant', 'auditor', 'cfo', 'super-admin'],
+  'financial-reports': ['accountant', 'auditor', 'cfo', 'super-admin'],
 
   // Loan modules
   'loan-review': ['accountant'],

@@ -45,6 +45,7 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
       label: 'Reports',
       path: '/module/system-settings#reports',
       children: [
+        { label: 'Financial Reports', path: '/module/financial-reports' },
         { label: 'System Reports', path: '/module/admin-reports' },
       ],
     },
@@ -65,7 +66,7 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
       ],
     },
     { label: 'Customers', path: '/module/customers' },
-    { label: 'Reports', path: '/module/reports' },
+    { label: 'Reports', path: '/module/financial-reports' },
   ],
   'faculty-admin': [
     { label: 'Dashboard', path: dashboardPath('faculty-admin') },
@@ -81,10 +82,6 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
     {
       label: 'Approvals Inbox',
       path: '/module/fa-approvals',
-    },
-    {
-      label: 'Reports',
-      path: '/module/fa-reports',
     },
   ],
   employee: [
@@ -151,7 +148,7 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
       ],
     },
     { label: 'Customers', path: '/module/customers' },
-    { label: 'Reports', path: '/module/reports' },
+    { label: 'Reports', path: '/module/financial-reports' },
   ],
   customer: [
     { label: 'Dashboard', path: '/dashboard/customer' },
@@ -161,7 +158,7 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
     { label: 'Budgets', path: '/module/budgets' },
     { label: 'Expense Claims', path: '/module/expense-claims' },
     { label: 'Approvals', path: '/module/approvals' },
-    { label: 'Reports', path: '/module/reports' },
+    { label: 'Statements', path: '/module/reports/statements' },
     { label: 'Support', path: '/module/support' },
   ],
 }
