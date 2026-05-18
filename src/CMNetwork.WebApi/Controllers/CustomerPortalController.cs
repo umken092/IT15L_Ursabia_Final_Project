@@ -617,8 +617,8 @@ SELECT
         var total = request.Amount > 0 ? request.Amount : invoices.Sum(x => x.TotalAmount);
         var description = $"CMNetwork payment for {invoices.Count} invoice(s): {string.Join(", ", invoices.Select(x => x.InvoiceNumber))}";
         var appBaseUrl = _configuration["AppBaseUrl"] ?? $"{Request.Scheme}://{Request.Host}";
-        var successUrl = $"{appBaseUrl}/module/customer-portal?payment=success&refId={{CHECKOUT_SESSION_ID}}";
-        var cancelUrl = $"{appBaseUrl}/module/customer-portal?payment=cancel";
+        var successUrl = $"{appBaseUrl}/payment/result?refId={{CHECKOUT_SESSION_ID}}&outcome=success";
+        var cancelUrl = $"{appBaseUrl}/payment/result?outcome=cancel";
 
         var checkout = await _payMongoService.CreateCheckoutSessionAsync(total, description, successUrl, cancelUrl);
 

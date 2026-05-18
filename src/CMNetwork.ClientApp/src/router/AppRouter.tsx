@@ -57,6 +57,9 @@ const CfoLoanApprovalPage = lazy(() =>
 const LoanTierManagementPage = lazy(() =>
   import('../pages/Loans/LoanTierManagementPage').then((m) => ({ default: m.default })),
 )
+const PaymentResultPage = lazy(() =>
+  import('../pages/modules/PaymentResultPage').then((m) => ({ default: m.PaymentResultPage })),
+)
 
 const APP_TITLE = 'CMNetwork ERP'
 
@@ -144,6 +147,10 @@ const getPageTitle = (pathname: string) => {
 
   if (pathname === '/mfa/setup' || pathname === '/settings/mfa') {
     return `MFA Setup | ${APP_TITLE}`
+  }
+
+  if (pathname === '/payment/result') {
+    return `Payment Result | ${APP_TITLE}`
   }
 
   const [, section, key] = pathname.split('/')
@@ -285,6 +292,9 @@ export const AppRouter = () => {
 
             {/* Loan Tier Management (CFO / Super-Admin) */}
             <Route path="/module/loan-tiers" element={<LoanTierManagementPage />} />
+
+            {/* Payment result page — PayMongo redirect target */}
+            <Route path="/payment/result" element={<PaymentResultPage />} />
           </Route>
         </Route>
 
