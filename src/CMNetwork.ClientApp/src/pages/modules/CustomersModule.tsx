@@ -8,6 +8,7 @@ import { DataTable } from '../../components/ui/data-table'
 import { customerService, type Customer } from '../../services/vendorCustomerService'
 import { useAuthStore } from '../../store/authStore'
 import { useNotificationStore } from '../../store/notificationStore'
+import { extractApiError } from '../../utils/errorUtils'
 import {
   createCustomerSchema,
   updateCustomerSchema,
@@ -97,6 +98,18 @@ export function CustomersModule() {
     : customers
 
   const canManageCustomers = !!user && ['accountant', 'cfo', 'super-admin'].includes(user.role)
+
+  const customerKpis = useMemo(() => {
+    const verified = customers.filter((c) => c.bankVerificationStatus === 'Verified').length
+    const pending = customers.filter((c) => c.bankVerificationStatus === 'Pending').length
+    const active = customers.filter((c) => c.isActive).length
+    return {
+      total: customers.length,
+      verified,
+      pending,
+      active,
+    }
+  }, [customers])
 
   const customerColumns = useMemo<ColumnDef<Customer>[]>(
     () => [
@@ -233,7 +246,7 @@ export function CustomersModule() {
   }
 
   const handleBankVerificationAction = async (customer: Customer, status: BankVerificationStatus) => {
-    if (!customer.bankName || !customer.bankAccount) {
+    if (status !== 'NotVerified' && (!customer.bankName || !customer.bankAccount)) {
       push('warning', 'Customer must have bank name and bank account before verification.')
       return
     }
@@ -243,8 +256,8 @@ export function CustomersModule() {
       await customerService.setBankVerificationStatus(customer.id, status)
       push('success', `Bank verification status set to ${status} for ${customer.name}.`)
       await loadCustomers()
-    } catch {
-      push('error', 'Failed to update bank verification status.')
+    } catch (error) {
+      push('error', extractApiError(error, 'Failed to update bank verification status.'))
     } finally {
       setBankActionCustomerId(null)
     }
@@ -368,12 +381,37 @@ export function CustomersModule() {
   }
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-4 p-4" style={{ background: 'linear-gradient(180deg, #f8fbff 0%, #f7f7f7 100%)', borderRadius: 18 }}>
       <DashboardCard
         title="Customer Management"
         subtitle="Create, update, and manage customer master data for accounts receivable"
       >
         <div className="space-y-4">
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+              gap: 10,
+            }}
+          >
+            <div style={{ background: '#ffffff', border: '1px solid #dbeafe', borderRadius: 12, padding: '10px 12px' }}>
+              <div style={{ fontSize: 11, color: '#64748b', letterSpacing: 0.3 }}>Total Customers</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{customerKpis.total}</div>
+            </div>
+            <div style={{ background: '#ecfdf5', border: '1px solid #bbf7d0', borderRadius: 12, padding: '10px 12px' }}>
+              <div style={{ fontSize: 11, color: '#047857', letterSpacing: 0.3 }}>Verified Banks</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#065f46' }}>{customerKpis.verified}</div>
+            </div>
+            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '10px 12px' }}>
+              <div style={{ fontSize: 11, color: '#b45309', letterSpacing: 0.3 }}>Pending Verification</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#92400e' }}>{customerKpis.pending}</div>
+            </div>
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '10px 12px' }}>
+              <div style={{ fontSize: 11, color: '#475569', letterSpacing: 0.3 }}>Active Accounts</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{customerKpis.active}</div>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between gap-4">
             <Input
               placeholder="Search by code or name..."

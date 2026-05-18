@@ -4,6 +4,7 @@ using CMNetwork.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
 
 namespace CMNetwork.Controllers;
 
@@ -217,11 +218,15 @@ public class CustomersController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
+        if (!Enum.IsDefined(request.Status))
+            return BadRequest(new { message = "Invalid bank verification status." });
+
         var customer = await _dbContext.Customers.FirstOrDefaultAsync(x => x.Id == id);
         if (customer == null)
             return NotFound(new { message = "Customer not found." });
 
-        if (string.IsNullOrWhiteSpace(customer.BankName) || string.IsNullOrWhiteSpace(customer.BankAccount))
+        var requiresBankDetails = request.Status is BankVerificationStatus.Verified or BankVerificationStatus.Pending;
+        if (requiresBankDetails && (string.IsNullOrWhiteSpace(customer.BankName) || string.IsNullOrWhiteSpace(customer.BankAccount)))
             return BadRequest(new { message = "Customer must have bank name and account number before verification." });
 
         if (request.Status == BankVerificationStatus.Verified)
@@ -255,5 +260,6 @@ public class CustomersController : ControllerBase
 
 public class SetBankVerificationStatusRequest
 {
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public BankVerificationStatus Status { get; set; }
 }

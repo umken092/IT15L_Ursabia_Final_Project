@@ -389,20 +389,38 @@ export const PayrollOperationsModule = () => {
     })
   }, [activePage, helpQuery, roleForHelp])
 
+  const ui = {
+    pageBg: 'linear-gradient(160deg, #f6fbff 0%, #f3f6fb 42%, #eefcf7 100%)',
+    cardBorder: '#dbeafe',
+    accent: '#0f766e',
+    accentSoft: '#ccfbf1',
+    title: '#0f172a',
+    muted: '#64748b',
+  } as const
+
   return (
-    <section className="page-fade-in" style={{ padding: '1.5rem 1.5rem 2rem' }}>
+    <section
+      className="page-fade-in"
+      style={{
+        padding: '1.5rem 1.5rem 2rem',
+        borderRadius: 18,
+        border: `1px solid ${ui.cardBorder}`,
+        background: ui.pageBg,
+        boxShadow: '0 20px 48px rgba(2, 6, 23, 0.06)',
+      }}
+    >
       {/* Page header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem', gap: '1rem' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem', gap: '1rem', background: '#ffffffcc', border: `1px solid ${ui.cardBorder}`, borderRadius: 14, padding: '14px 16px' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 700, color: '#111827', lineHeight: 1.25 }}>Payroll Operations</h1>
-          <p style={{ margin: '0.35rem 0 0', color: '#6b7280', fontSize: '0.9375rem' }}>Manage pay periods, process runs, and approve payroll from a single workspace.</p>
+          <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 700, color: ui.title, lineHeight: 1.25 }}>Payroll Operations</h1>
+          <p style={{ margin: '0.35rem 0 0', color: ui.muted, fontSize: '0.9375rem' }}>Manage pay periods, process runs, and approve payroll from a single workspace.</p>
         </div>
         <button
           onClick={() => setHelpOpen((current) => !current)}
           style={{
             padding: '0.5rem 1rem',
-            background: helpOpen ? '#0f766e' : '#fff',
-            border: `1.5px solid ${helpOpen ? '#0f766e' : '#d1d5db'}`,
+            background: helpOpen ? ui.accent : '#fff',
+            border: `1.5px solid ${helpOpen ? ui.accent : ui.cardBorder}`,
             borderRadius: '0.4rem',
             color: helpOpen ? '#fff' : '#374151',
             fontWeight: 500,
@@ -430,14 +448,15 @@ export const PayrollOperationsModule = () => {
             onClick={() => setActivePage(button.key)}
             style={{
               padding: '0.5rem 1.25rem',
-              background: activePage === button.key ? '#0f766e' : '#fff',
-              border: `1.5px solid ${activePage === button.key ? '#0f766e' : '#d1d5db'}`,
+              background: activePage === button.key ? ui.accent : '#fff',
+              border: `1.5px solid ${activePage === button.key ? ui.accent : ui.cardBorder}`,
               borderRadius: '0.4rem',
               color: activePage === button.key ? '#fff' : '#374151',
               fontWeight: activePage === button.key ? 600 : 400,
               cursor: 'pointer',
               fontSize: '0.875rem',
               transition: 'all 0.15s',
+              boxShadow: activePage === button.key ? '0 8px 16px rgba(15, 118, 110, 0.28)' : 'none',
             }}
           >
             {button.label}
