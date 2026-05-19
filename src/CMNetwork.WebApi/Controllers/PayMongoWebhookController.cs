@@ -1,10 +1,10 @@
+using System.Data;
 using System.Text.Json;
 using CMNetwork.Domain.Entities;
 using CMNetwork.Infrastructure.Persistence;
 using CMNetwork.Infrastructure.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Data;
 
 namespace CMNetwork.Controllers;
 
@@ -83,6 +83,7 @@ public class PayMongoWebhookController : ControllerBase
         }
 
         await CompletePaymentAsync(checkoutSessionId);
+        await CompleteLoanInstallmentPaymentAsync(checkoutSessionId);
 
         return Ok(new { message = "Webhook processed." });
     }
@@ -139,5 +140,66 @@ public class PayMongoWebhookController : ControllerBase
 
         await _dbContext.SaveChangesAsync();
         await tx.CommitAsync();
+    }
+
+    private async Task CompleteLoanInstallmentPaymentAsync(string checkoutSessionId)
+    {
+        await using var tx = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+        var loanPayment = await _dbContext.CustomerLoanPayments
+            .FromSqlInterpolated($"SELECT * FROM [CustomerLoanPayments] WITH (UPDLOCK, ROWLOCK) WHERE [PayMongoCheckoutSessionId] = {checkoutSessionId}")
+            .FirstOrDefaultAsync();
+
+        if (loanPayment is not null)
+        {
+            await _dbContext.Entry(loanPayment).Reference(x => x.Loan).LoadAsync();
+        }
+
+        if (loanPayment is null)
+        {
+            await tx.CommitAsync();
+            return;
+        }
+
+        if (loanPayment.Status == LoanPaymentStatus.Completed)
+        {
+            await tx.CommitAsync();
+            return;
+        }
+
+        if (loanPayment.Status != LoanPaymentStatus.Scheduled)
+        {
+            await tx.CommitAsync();
+            return;
+        }
+
+        if (loanPayment.Loan is null)
+        {
+            await tx.CommitAsync();
+            return;
+        }
+
+        loanPayment.Status = LoanPaymentStatus.Completed;
+        loanPayment.CompletedAtUtc = DateTime.UtcNow;
+        loanPayment.PaymentMethod = "PayMongo";
+        loanPayment.ExternalReference = checkoutSessionId;
+        loanPayment.UpdatedAtUtc = DateTime.UtcNow;
+
+        loanPayment.Loan.OutstandingPrincipal = Math.Max(0m, loanPayment.Loan.OutstandingPrincipal - loanPayment.PrincipalAmount);
+        loanPayment.Loan.TotalInterestAccrued += loanPayment.InterestAmount;
+        loanPayment.Loan.UpdatedAtUtc = DateTime.UtcNow;
+
+        if (loanPayment.Loan.OutstandingPrincipal <= 0.01m)
+        {
+            loanPayment.Loan.Status = LoanStatus.FullyPaid;
+            loanPayment.Loan.FullyPaidAtUtc = DateTime.UtcNow;
+        }
+
+        await _dbContext.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        _logger.LogInformation(
+            "Webhook: loan installment payment {PaymentId} completed via PayMongo session {SessionId}",
+            loanPayment.Id, checkoutSessionId);
     }
 }
