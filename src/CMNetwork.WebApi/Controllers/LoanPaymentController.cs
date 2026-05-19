@@ -375,8 +375,22 @@ public class LoanPaymentController : ControllerBase
         }
 
         var providerStatus = await _payMongoService.GetCheckoutSessionStatusAsync(normalizedRefId);
-        if (!string.Equals(providerStatus, "paid", StringComparison.OrdinalIgnoreCase))
+        
+        // Handle various PayMongo status values
+        var isPaid = string.Equals(providerStatus, "paid", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(providerStatus, "completed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(providerStatus, "success", StringComparison.OrdinalIgnoreCase);
+
+        _logger.LogInformation(
+            "ConfirmInstallmentPayment: PayMongo session {SessionId} status={Status}, isPaid={IsPaid} for payment {PaymentId}",
+            normalizedRefId, providerStatus, isPaid, payment.Id);
+
+        if (!isPaid)
         {
+            _logger.LogWarning(
+                "ConfirmInstallmentPayment: Payment {PaymentId} not yet paid. PayMongo status={Status}",
+                payment.Id, providerStatus);
+            
             return Ok(new
             {
                 message = $"Installment payment is not completed yet (status: {providerStatus}).",
@@ -500,11 +514,20 @@ public class LoanPaymentController : ControllerBase
             {
                 providerStatus = await _payMongoService.GetCheckoutSessionStatusAsync(payment.PayMongoCheckoutSessionId);
                 _logger.LogInformation(
-                    "GetInstallmentPaymentStatus: PayMongo session {SessionId} reports providerStatus={ProviderStatus}",
-                    payment.PayMongoCheckoutSessionId, providerStatus);
+                    "GetInstallmentPaymentStatus: PayMongo session {SessionId} reports providerStatus={ProviderStatus} for payment {PaymentId}",
+                    payment.PayMongoCheckoutSessionId, providerStatus, payment.Id);
 
-                if (string.Equals(providerStatus, "paid", StringComparison.OrdinalIgnoreCase))
+                // Check for various PayMongo status values that indicate completion
+                var isPaid = string.Equals(providerStatus, "paid", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(providerStatus, "completed", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(providerStatus, "success", StringComparison.OrdinalIgnoreCase);
+
+                if (isPaid)
                 {
+                    _logger.LogInformation(
+                        "GetInstallmentPaymentStatus: PayMongo reported paid status, applying completion for payment {PaymentId}",
+                        payment.Id);
+                    
                     await ApplyCompletedInstallmentPaymentAsync(payment.Id);
 
                     var refreshed = await _dbContext.CustomerLoanPayments
@@ -513,6 +536,9 @@ public class LoanPaymentController : ControllerBase
                     if (refreshed is not null)
                     {
                         payment = refreshed;
+                        _logger.LogInformation(
+                            "GetInstallmentPaymentStatus: Payment {PaymentId} refreshed after completion. Status={Status}",
+                            payment.Id, payment.Status);
                     }
                 }
             }
@@ -521,8 +547,8 @@ public class LoanPaymentController : ControllerBase
                 // Don't fail the polling call — just report the local state and
                 // let the next poll try again.
                 _logger.LogWarning(ex,
-                    "GetInstallmentPaymentStatus: PayMongo lookup failed for session {SessionId}",
-                    payment.PayMongoCheckoutSessionId);
+                    "GetInstallmentPaymentStatus: PayMongo lookup failed for session {SessionId}, payment {PaymentId}",
+                    payment.PayMongoCheckoutSessionId, payment.Id);
             }
         }
 

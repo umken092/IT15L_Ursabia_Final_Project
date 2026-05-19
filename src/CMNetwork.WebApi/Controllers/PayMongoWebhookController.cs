@@ -41,11 +41,13 @@ public class PayMongoWebhookController : ControllerBase
             Request.Body.Position = 0;
         }
 
+        _logger.LogInformation("PayMongo webhook received. Signature header present: {HasSignature}", !string.IsNullOrWhiteSpace(signatureHeader));
+
         if (!string.IsNullOrWhiteSpace(signatureHeader) &&
             !_payMongoService.VerifyWebhookSignature(rawBody, signatureHeader))
         {
-            _logger.LogWarning("PayMongo webhook signature validation failed.");
-            return Unauthorized();
+            _logger.LogWarning("PayMongo webhook signature validation failed. Rejecting webhook.");
+            return Unauthorized(new { message = "Invalid webhook signature" });
         }
 
         using var document = JsonDocument.Parse(rawBody);
@@ -55,19 +57,31 @@ public class PayMongoWebhookController : ControllerBase
             !data.TryGetProperty("attributes", out var attributes) ||
             !attributes.TryGetProperty("type", out var typeElement))
         {
+            _logger.LogWarning("PayMongo webhook missing required fields. Ignoring payload.");
             return Ok(new { message = "Ignored payload." });
         }
 
         var eventType = typeElement.GetString() ?? string.Empty;
-        if (!string.Equals(eventType, "checkout_session.paid", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(eventType, "checkout_session.payment.paid", StringComparison.OrdinalIgnoreCase))
+        _logger.LogInformation("PayMongo webhook event type: {EventType}", eventType);
+
+        // PayMongo sends various event types for checkout completion:
+        // - checkout_session.paid
+        // - checkout_session.payment.paid
+        // - Also handle hyphenated variants
+        var isPaidEvent = string.Equals(eventType, "checkout_session.paid", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(eventType, "checkout_session.payment.paid", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(eventType, "payment_link.paid", StringComparison.OrdinalIgnoreCase);
+
+        if (!isPaidEvent)
         {
+            _logger.LogInformation("PayMongo webhook event ignored. Type: {EventType}", eventType);
             return Ok(new { message = "Event ignored.", eventType });
         }
 
-        // Try common shapes from PayMongo webhook payloads.
+        // Try to extract checkout session ID from various PayMongo response shapes
         string? checkoutSessionId = null;
         if (attributes.TryGetProperty("data", out var nestedData)
+            && nestedData.ValueKind == JsonValueKind.Object
             && nestedData.TryGetProperty("id", out var nestedId))
         {
             checkoutSessionId = nestedId.GetString();
@@ -79,8 +93,11 @@ public class PayMongoWebhookController : ControllerBase
 
         if (string.IsNullOrWhiteSpace(checkoutSessionId))
         {
+            _logger.LogWarning("PayMongo webhook: no checkout session ID found in event payload. Data shape: {@Data}", attributes);
             return Ok(new { message = "No checkout session id found in event payload." });
         }
+
+        _logger.LogInformation("PayMongo webhook processing checkout session: {SessionId}", checkoutSessionId);
 
         await CompletePaymentAsync(checkoutSessionId);
         await CompleteLoanInstallmentPaymentAsync(checkoutSessionId);

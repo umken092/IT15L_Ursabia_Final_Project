@@ -8,6 +8,8 @@ namespace CMNetwork.Infrastructure.Services;
 
 public sealed class PayMongoService : IPayMongoService
 {
+    private const string UnknownStatus = "unknown";
+    
     private readonly HttpClient _httpClient;
     private readonly IIntegrationCredentialService _credentialService;
     private readonly ILogger<PayMongoService> _logger;
@@ -157,6 +159,7 @@ public sealed class PayMongoService : IPayMongoService
             _logger.LogError("PayMongo get checkout session failed: {StatusCode} {Body}", response.StatusCode, body);
             if (runtimeCredentials.AllowMockOnFailure && checkoutSessionId.StartsWith("mock_cs_", StringComparison.OrdinalIgnoreCase))
             {
+                _logger.LogWarning("Returning mock 'paid' status for mock checkout session {SessionId}", checkoutSessionId);
                 return "paid";
             }
 
@@ -169,42 +172,61 @@ public sealed class PayMongoService : IPayMongoService
             !dataEl.TryGetProperty("attributes", out var attrsEl))
         {
             _logger.LogWarning("PayMongo checkout session response missing data/attributes. Body={Body}", body);
-            return "unknown";
+            return UnknownStatus;
         }
 
-        // PayMongo checkout sessions expose status via `payment_status` (paid/unpaid).
-        // Some response shapes use `status` instead. Probe both.
+        // PayMongo checkout sessions can report status in multiple ways:
+        // 1. payment_status field (most common): "paid", "unpaid", "expired", etc.
+        // 2. status field (sometimes used): "open", "completed", etc.
+        // 3. payments array with individual payment statuses
+        
         if (attrsEl.TryGetProperty("payment_status", out var paymentStatusEl) &&
             paymentStatusEl.ValueKind == JsonValueKind.String)
         {
-            return paymentStatusEl.GetString() ?? "unknown";
+            return paymentStatusEl.GetString() ?? UnknownStatus;
         }
 
         if (attrsEl.TryGetProperty("status", out var statusEl) &&
             statusEl.ValueKind == JsonValueKind.String)
         {
-            return statusEl.GetString() ?? "unknown";
+            var status = statusEl.GetString() ?? UnknownStatus;
+            
+            // Map status field values to payment status if needed
+            if (status.Equals("completed", StringComparison.OrdinalIgnoreCase))
+                return "paid";
+            
+            return status;
         }
 
-        // Fall back: if there is a successful payment intent / payments array, treat as paid.
+        // Fall back: if there is a successful payment in the payments array, treat as paid
         if (attrsEl.TryGetProperty("payments", out var paymentsEl) &&
-            paymentsEl.ValueKind == JsonValueKind.Array &&
-            paymentsEl.GetArrayLength() > 0)
+            paymentsEl.ValueKind == JsonValueKind.Array)
         {
+            var paymentCount = paymentsEl.GetArrayLength();
+            _logger.LogInformation("PayMongo checkout session {SessionId} has {PaymentCount} payments", checkoutSessionId, paymentCount);
+            
             foreach (var p in paymentsEl.EnumerateArray())
             {
                 if (p.TryGetProperty("attributes", out var pAttrs) &&
                     pAttrs.TryGetProperty("status", out var pStatus) &&
-                    pStatus.ValueKind == JsonValueKind.String &&
-                    string.Equals(pStatus.GetString(), "paid", StringComparison.OrdinalIgnoreCase))
+                    pStatus.ValueKind == JsonValueKind.String)
                 {
-                    return "paid";
+                    var paymentStatus = pStatus.GetString() ?? string.Empty;
+                    _logger.LogInformation("Payment status in checkout session {SessionId}: {PaymentStatus}", checkoutSessionId, paymentStatus);
+                    
+                    if (string.Equals(paymentStatus, "paid", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(paymentStatus, "completed", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return "paid";
+                    }
                 }
             }
         }
 
-        _logger.LogWarning("PayMongo checkout session response had no recognizable status field. Body={Body}", body);
-        return "unknown";
+        _logger.LogWarning(
+            "PayMongo checkout session {SessionId} had no recognizable status field. Full attributes: {@Attributes}",
+            checkoutSessionId, attrsEl);
+        return UnknownStatus;
     }
 
     public bool VerifyWebhookSignature(string rawPayload, string signatureHeader)
@@ -230,16 +252,25 @@ public sealed class PayMongoService : IPayMongoService
         string? timestamp = null;
         string? signature = null;
 
+        // PayMongo webhook signature format: t=timestamp,v1=signature_value
         foreach (var part in signatureHeader.Split(','))
         {
-            var kv = part.Split('=', 2);
+            var trimmedPart = part.Trim();
+            var kv = trimmedPart.Split('=', 2);
             if (kv.Length != 2) continue;
-            if (kv[0] == "t") timestamp = kv[1];
-            if (kv[0] is "te" or "li") signature = kv[1];
+            
+            var key = kv[0].Trim();
+            var value = kv[1].Trim();
+            
+            if (key == "t") 
+                timestamp = value;
+            if (key == "v1")  // PayMongo v1 signature
+                signature = value;
         }
 
         if (string.IsNullOrWhiteSpace(timestamp) || string.IsNullOrWhiteSpace(signature))
         {
+            _logger.LogWarning("Missing timestamp or signature in PayMongo webhook header. Header={Header}", signatureHeader);
             return false;
         }
 
@@ -248,7 +279,18 @@ public sealed class PayMongoService : IPayMongoService
 
         using var hmac = new HMACSHA256(secretBytes);
         var computed = Convert.ToHexString(hmac.ComputeHash(payloadBytes)).ToLowerInvariant();
-        return computed == signature.ToLowerInvariant();
+        var incomingSignature = signature.ToLowerInvariant();
+        
+        var isValid = computed == incomingSignature;
+        
+        if (!isValid)
+        {
+            _logger.LogWarning(
+                "PayMongo webhook signature mismatch. Computed={Computed}, Incoming={Incoming}",
+                computed, incomingSignature);
+        }
+
+        return isValid;
     }
 
     private static HttpRequestMessage CreateRequest(
