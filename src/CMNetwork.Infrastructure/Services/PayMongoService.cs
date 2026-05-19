@@ -37,65 +37,97 @@ public sealed class PayMongoService : IPayMongoService
 
         var amountCentavos = (long)(amount * 100);
 
-        var payload = new
+        var paymentMethodCandidates = new[]
         {
-            data = new
-            {
-                attributes = new
-                {
-                    send_email_receipt = false,
-                    show_description = true,
-                    show_line_items = true,
-                    line_items = new[]
-                    {
-                        new
-                        {
-                            currency = "PHP",
-                            amount = amountCentavos,
-                            description,
-                            name = "CMNetwork Invoice Payment",
-                            quantity = 1
-                        }
-                    },
-                    payment_method_types = new[] { "card", "gcash", "paymaya" },
-                    success_url = successUrl,
-                    cancel_url = cancelUrl,
-                    description
-                }
-            }
+            new[] { "card", "gcash", "paymaya" },
+            new[] { "card", "gcash", "maya" },
+            new[] { "card", "gcash" },
         };
 
-        using var request = CreateRequest(
-            HttpMethod.Post,
-            runtimeCredentials,
-            "v1/checkout_sessions",
-            new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"));
+        string? lastBody = null;
+        System.Net.HttpStatusCode lastStatusCode = System.Net.HttpStatusCode.BadRequest;
 
-        var response = await _httpClient.SendAsync(request, cancellationToken);
-
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        foreach (var paymentMethodTypes in paymentMethodCandidates)
         {
-            _logger.LogError("PayMongo create checkout session failed: {StatusCode} {Body}", response.StatusCode, body);
-            if (runtimeCredentials.AllowMockOnFailure)
+            var payload = new
             {
-                _logger.LogWarning("Falling back to mock PayMongo checkout session in non-production mode.");
-                var mockSessionId = $"mock_cs_{Guid.NewGuid():N}";
-                var mockCheckoutUrl = successUrl;
-                return new CreateCheckoutSessionResult(mockSessionId, mockCheckoutUrl);
+                data = new
+                {
+                    attributes = new
+                    {
+                        send_email_receipt = false,
+                        show_description = true,
+                        show_line_items = true,
+                        line_items = new[]
+                        {
+                            new
+                            {
+                                currency = "PHP",
+                                amount = amountCentavos,
+                                description,
+                                name = "CMNetwork Payment",
+                                quantity = 1
+                            }
+                        },
+                        payment_method_types = paymentMethodTypes,
+                        success_url = successUrl,
+                        cancel_url = cancelUrl,
+                        description
+                    }
+                }
+            };
+
+            using var request = CreateRequest(
+                HttpMethod.Post,
+                runtimeCredentials,
+                "v1/checkout_sessions",
+                new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"));
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                using var doc = JsonDocument.Parse(body);
+                var data = doc.RootElement.GetProperty("data");
+                var checkoutSessionId = data.GetProperty("id").GetString()
+                    ?? throw new InvalidOperationException("Missing PayMongo session id.");
+                var checkoutUrl = data.GetProperty("attributes").GetProperty("checkout_url").GetString()
+                    ?? throw new InvalidOperationException("Missing PayMongo checkout url.");
+
+                return new CreateCheckoutSessionResult(checkoutSessionId, checkoutUrl);
             }
 
-            throw new InvalidOperationException("Unable to create PayMongo checkout session.");
+            lastBody = body;
+            lastStatusCode = response.StatusCode;
+
+            _logger.LogWarning(
+                "PayMongo create checkout session failed for methods [{Methods}]: {StatusCode} {Body}",
+                string.Join(',', paymentMethodTypes),
+                response.StatusCode,
+                body);
+
+            var lowerBody = body.ToLowerInvariant();
+            var hasMethodCompatibilityError = lowerBody.Contains("payment_method_types")
+                || lowerBody.Contains("paymaya")
+                || lowerBody.Contains("maya");
+
+            if (!hasMethodCompatibilityError)
+            {
+                break;
+            }
         }
 
-        using var doc = JsonDocument.Parse(body);
-        var data = doc.RootElement.GetProperty("data");
-        var checkoutSessionId = data.GetProperty("id").GetString()
-            ?? throw new InvalidOperationException("Missing PayMongo session id.");
-        var checkoutUrl = data.GetProperty("attributes").GetProperty("checkout_url").GetString()
-            ?? throw new InvalidOperationException("Missing PayMongo checkout url.");
+        _logger.LogError("PayMongo create checkout session failed: {StatusCode} {Body}", lastStatusCode, lastBody);
+        if (runtimeCredentials.AllowMockOnFailure)
+        {
+            _logger.LogWarning("Falling back to mock PayMongo checkout session in non-production mode.");
+            var mockSessionId = $"mock_cs_{Guid.NewGuid():N}";
+            var mockCheckoutUrl = successUrl;
+            return new CreateCheckoutSessionResult(mockSessionId, mockCheckoutUrl);
+        }
 
-        return new CreateCheckoutSessionResult(checkoutSessionId, checkoutUrl);
+        throw new InvalidOperationException("Unable to create PayMongo checkout session.");
     }
 
     public async Task<string> GetCheckoutSessionStatusAsync(

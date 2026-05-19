@@ -194,7 +194,7 @@ export const LoanInstallmentCheckoutPage = () => {
               opacity: !canProceed || processing ? 0.7 : 1,
             }}
           >
-            {processing ? 'Opening Checkout...' : 'Proceed to PayMongo Hosted Checkout'}
+            {processing ? 'Opening Checkout...' : 'Proceed to PayMongo Checkout'}
           </button>
         </div>
 
