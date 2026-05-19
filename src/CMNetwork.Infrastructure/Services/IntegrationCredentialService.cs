@@ -113,9 +113,10 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
         CancellationToken cancellationToken = default)
     {
         var normalizedMode = NormalizeMode(mode);
+        var normalizedPublicKey = publicKey?.Trim() ?? string.Empty;
 
         var credential = await _dbContext.Set<IntegrationCredential>()
-            .FirstOrDefaultAsync(x => x.Provider == PayMongoProvider && x.IsActive, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Provider == PayMongoProvider, cancellationToken);
 
         if (credential is null)
         {
@@ -129,8 +130,9 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
             _dbContext.Set<IntegrationCredential>().Add(credential);
         }
 
+        credential.IsActive = true;
         credential.Mode = normalizedMode;
-        credential.PublicKey = publicKey.Trim();
+        credential.PublicKey = normalizedPublicKey;
         credential.BaseUrl = string.IsNullOrWhiteSpace(baseUrl) ? null : baseUrl.Trim();
         credential.UpdatedByUserId = string.IsNullOrWhiteSpace(updatedByUserId) ? "system" : updatedByUserId;
         credential.UpdatedAtUtc = DateTime.UtcNow;
@@ -270,9 +272,10 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
         CancellationToken cancellationToken = default)
     {
         var normalizedMinScore = Math.Clamp(minScore, 0.1d, 1.0d);
+        var normalizedSiteKey = siteKey?.Trim() ?? string.Empty;
 
         var credential = await _dbContext.Set<IntegrationCredential>()
-            .FirstOrDefaultAsync(x => x.Provider == RecaptchaProvider && x.IsActive, cancellationToken);
+            .FirstOrDefaultAsync(x => x.Provider == RecaptchaProvider, cancellationToken);
 
         if (credential is null)
         {
@@ -286,7 +289,8 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
             _dbContext.Set<IntegrationCredential>().Add(credential);
         }
 
-        credential.PublicKey = siteKey.Trim();
+        credential.IsActive = true;
+        credential.PublicKey = normalizedSiteKey;
         credential.Mode = normalizedMinScore.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
         credential.BaseUrl = "https://www.google.com/recaptcha/api/siteverify";
         credential.UpdatedByUserId = string.IsNullOrWhiteSpace(updatedByUserId) ? "system" : updatedByUserId;
