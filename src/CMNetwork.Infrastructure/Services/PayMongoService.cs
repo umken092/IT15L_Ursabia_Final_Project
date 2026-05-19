@@ -182,26 +182,35 @@ public sealed class PayMongoService : IPayMongoService
         }
 
         // PayMongo checkout sessions can report status in multiple ways:
-        // 1. payment_status field (most common): "paid", "unpaid", "expired", etc.
-        // 2. status field (sometimes used): "open", "completed", etc.
-        // 3. payments array with individual payment statuses
-        
+        // 1. payment_status field
+        // 2. status field
+        // 3. payments array entries
+        // 4. attached payment_intent status (important for Checkout Session v2)
+        string? sessionStatus = null;
+
         if (attrsEl.TryGetProperty("payment_status", out var paymentStatusEl) &&
             paymentStatusEl.ValueKind == JsonValueKind.String)
         {
-            return paymentStatusEl.GetString() ?? UnknownStatus;
+            sessionStatus = paymentStatusEl.GetString() ?? UnknownStatus;
+            if (IsPaidLike(sessionStatus))
+            {
+                return "paid";
+            }
         }
 
         if (attrsEl.TryGetProperty("status", out var statusEl) &&
             statusEl.ValueKind == JsonValueKind.String)
         {
             var status = statusEl.GetString() ?? UnknownStatus;
-            
-            // Map status field values to payment status if needed
-            if (status.Equals("completed", StringComparison.OrdinalIgnoreCase))
+            if (IsPaidLike(status))
+            {
                 return "paid";
-            
-            return status;
+            }
+
+            if (string.IsNullOrWhiteSpace(sessionStatus) || string.Equals(sessionStatus, UnknownStatus, StringComparison.OrdinalIgnoreCase))
+            {
+                sessionStatus = status;
+            }
         }
 
         // Fall back: if there is a successful payment in the payments array, treat as paid
@@ -229,10 +238,103 @@ public sealed class PayMongoService : IPayMongoService
             }
         }
 
+        // Checkout Session v2 often links a payment_intent where the actual collected
+        // state is represented. If session status remains active/unpaid, consult it.
+        var paymentIntentStatus = await TryGetPaymentIntentStatusAsync(runtimeCredentials, attrsEl, cancellationToken);
+        if (IsPaidLike(paymentIntentStatus))
+        {
+            return "paid";
+        }
+
+        if (!string.IsNullOrWhiteSpace(paymentIntentStatus) &&
+            !string.Equals(paymentIntentStatus, UnknownStatus, StringComparison.OrdinalIgnoreCase))
+        {
+            return paymentIntentStatus;
+        }
+
+        if (!string.IsNullOrWhiteSpace(sessionStatus))
+        {
+            return sessionStatus;
+        }
+
         _logger.LogWarning(
             "PayMongo checkout session {SessionId} had no recognizable status field. Full attributes: {@Attributes}",
             checkoutSessionId, attrsEl);
         return UnknownStatus;
+    }
+
+    private async Task<string> TryGetPaymentIntentStatusAsync(
+        PayMongoRuntimeCredentials runtimeCredentials,
+        JsonElement checkoutAttributes,
+        CancellationToken cancellationToken)
+    {
+        if (!checkoutAttributes.TryGetProperty("payment_intent", out var paymentIntentEl))
+        {
+            return UnknownStatus;
+        }
+
+        string? paymentIntentId = null;
+        if (paymentIntentEl.ValueKind == JsonValueKind.Object &&
+            paymentIntentEl.TryGetProperty("id", out var idEl) &&
+            idEl.ValueKind == JsonValueKind.String)
+        {
+            paymentIntentId = idEl.GetString();
+        }
+        else if (paymentIntentEl.ValueKind == JsonValueKind.String)
+        {
+            paymentIntentId = paymentIntentEl.GetString();
+        }
+
+        if (string.IsNullOrWhiteSpace(paymentIntentId))
+        {
+            return UnknownStatus;
+        }
+
+        try
+        {
+            using var request = CreateRequest(
+                HttpMethod.Get,
+                runtimeCredentials,
+                $"v1/payment_intents/{paymentIntentId}");
+
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "PayMongo get payment intent failed: paymentIntentId={PaymentIntentId}, status={StatusCode}, body={Body}",
+                    paymentIntentId, response.StatusCode, body);
+                return UnknownStatus;
+            }
+
+            using var doc = JsonDocument.Parse(body);
+            if (!doc.RootElement.TryGetProperty("data", out var dataEl) ||
+                !dataEl.TryGetProperty("attributes", out var attrsEl) ||
+                !attrsEl.TryGetProperty("status", out var statusEl) ||
+                statusEl.ValueKind != JsonValueKind.String)
+            {
+                return UnknownStatus;
+            }
+
+            var paymentIntentStatus = statusEl.GetString() ?? UnknownStatus;
+            return IsPaidLike(paymentIntentStatus) ? "paid" : paymentIntentStatus;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Unable to resolve PayMongo payment intent status for paymentIntentId={PaymentIntentId}",
+                paymentIntentId);
+            return UnknownStatus;
+        }
+    }
+
+    private static bool IsPaidLike(string? status)
+    {
+        return string.Equals(status, "paid", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(status, "completed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(status, "success", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(status, "succeeded", StringComparison.OrdinalIgnoreCase);
     }
 
     public bool VerifyWebhookSignature(string rawPayload, string signatureHeader)
