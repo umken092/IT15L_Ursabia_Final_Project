@@ -44,11 +44,35 @@ public class LoanPaymentController : ControllerBase
 
     private async Task<Customer?> GetCurrentCustomerAsync()
     {
+        var userId = GetCurrentUserId();
+        if (Guid.TryParse(userId, out var parsedUserId))
+        {
+            var linkedCustomerId = await _dbContext.Users
+                .AsNoTracking()
+                .Where(x => x.Id == parsedUserId)
+                .Select(x => x.CustomerId)
+                .FirstOrDefaultAsync();
+
+            if (linkedCustomerId.HasValue)
+            {
+                var linkedCustomer = await _dbContext.Customers
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == linkedCustomerId.Value);
+
+                if (linkedCustomer is not null)
+                {
+                    return linkedCustomer;
+                }
+            }
+        }
+
         var customerId = _currentCustomerService.CustomerId;
         if (!customerId.HasValue)
             return null;
 
-        return await _dbContext.Customers.FirstOrDefaultAsync(x => x.Id == customerId.Value);
+        return await _dbContext.Customers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == customerId.Value);
     }
 
     private static bool IsPlaceholderRefId(string? refId)
