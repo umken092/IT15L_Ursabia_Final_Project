@@ -82,16 +82,16 @@ export const LoanInstallmentResultPage = () => {
   }, [details?.loanId, loanIdFromQuery, navigate])
 
   const confirmPayment = useCallback(async () => {
-    const hasLookupContext = Boolean(loanIdFromQuery && paymentIdFromQuery)
-    if (!effectiveRefId && !hasLookupContext) {
+    // Always use loanId/paymentId context; they come from the callback URL and are stable
+    if (!loanIdFromQuery || !paymentIdFromQuery) {
       setResultState('failed')
       return
     }
 
     try {
       const response = await customerPortalService.confirmLoanInstallmentPayment(effectiveRefId, {
-        loanId: loanIdFromQuery || undefined,
-        paymentId: paymentIdFromQuery || undefined,
+        loanId: loanIdFromQuery,
+        paymentId: paymentIdFromQuery,
       })
       setDetails(response)
 
@@ -109,15 +109,15 @@ export const LoanInstallmentResultPage = () => {
   }, [effectiveRefId, loanIdFromQuery, paymentIdFromQuery, pushToast])
 
   const pollStatus = useCallback(async () => {
-    const hasLookupContext = Boolean(loanIdFromQuery && paymentIdFromQuery)
-    if ((!effectiveRefId && !hasLookupContext) || resolvedRef.current) {
+    // Always use loanId/paymentId context; these are stable and prevent GUID parsing issues
+    if (!loanIdFromQuery || !paymentIdFromQuery || resolvedRef.current) {
       return
     }
 
     try {
       const status = await customerPortalService.getLoanInstallmentPaymentStatus(effectiveRefId, {
-        loanId: loanIdFromQuery || undefined,
-        paymentId: paymentIdFromQuery || undefined,
+        loanId: loanIdFromQuery,
+        paymentId: paymentIdFromQuery,
       })
       if (status.status === 'Completed') {
         await confirmPayment()
