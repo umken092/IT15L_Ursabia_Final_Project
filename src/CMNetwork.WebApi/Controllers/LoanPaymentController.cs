@@ -280,6 +280,8 @@ public class LoanPaymentController : ControllerBase
                 message = "Failed to confirm installment payment.",
                 error = ex.Message,
                 errorType = ex.GetType().Name,
+                stack = ex.StackTrace?.Split('\n').Take(8).ToArray(),
+                inner = ex.InnerException?.Message,
             });
         }
     }

@@ -164,11 +164,47 @@ public sealed class PayMongoService : IPayMongoService
         }
 
         using var doc = JsonDocument.Parse(body);
-        return doc.RootElement
-            .GetProperty("data")
-            .GetProperty("attributes")
-            .GetProperty("payment_status")
-            .GetString() ?? "unknown";
+
+        if (!doc.RootElement.TryGetProperty("data", out var dataEl) ||
+            !dataEl.TryGetProperty("attributes", out var attrsEl))
+        {
+            _logger.LogWarning("PayMongo checkout session response missing data/attributes. Body={Body}", body);
+            return "unknown";
+        }
+
+        // PayMongo checkout sessions expose status via `payment_status` (paid/unpaid).
+        // Some response shapes use `status` instead. Probe both.
+        if (attrsEl.TryGetProperty("payment_status", out var paymentStatusEl) &&
+            paymentStatusEl.ValueKind == JsonValueKind.String)
+        {
+            return paymentStatusEl.GetString() ?? "unknown";
+        }
+
+        if (attrsEl.TryGetProperty("status", out var statusEl) &&
+            statusEl.ValueKind == JsonValueKind.String)
+        {
+            return statusEl.GetString() ?? "unknown";
+        }
+
+        // Fall back: if there is a successful payment intent / payments array, treat as paid.
+        if (attrsEl.TryGetProperty("payments", out var paymentsEl) &&
+            paymentsEl.ValueKind == JsonValueKind.Array &&
+            paymentsEl.GetArrayLength() > 0)
+        {
+            foreach (var p in paymentsEl.EnumerateArray())
+            {
+                if (p.TryGetProperty("attributes", out var pAttrs) &&
+                    pAttrs.TryGetProperty("status", out var pStatus) &&
+                    pStatus.ValueKind == JsonValueKind.String &&
+                    string.Equals(pStatus.GetString(), "paid", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "paid";
+                }
+            }
+        }
+
+        _logger.LogWarning("PayMongo checkout session response had no recognizable status field. Body={Body}", body);
+        return "unknown";
     }
 
     public bool VerifyWebhookSignature(string rawPayload, string signatureHeader)
