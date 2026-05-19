@@ -167,17 +167,19 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 
 var configuredKeysPath = builder.Configuration["DataProtection:KeysPath"];
+var dataProtectionBuilder = builder.Services
+    .AddDataProtection()
+    .SetApplicationName("CMNetwork");
+
 if (!builder.Environment.IsDevelopment())
 {
-    var keyRingPath = !string.IsNullOrWhiteSpace(configuredKeysPath)
-        ? configuredKeysPath
-        : Path.Combine(AppContext.BaseDirectory, "data-protection-keys");
-
-    Directory.CreateDirectory(keyRingPath);
-    builder.Services
-        .AddDataProtection()
-        .SetApplicationName("CMNetwork")
-        .PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
+    // Persist key ring in SQL so protected integration secrets remain decryptable after redeploys.
+    dataProtectionBuilder.PersistKeysToDbContext<CMNetworkDbContext>();
+}
+else if (!string.IsNullOrWhiteSpace(configuredKeysPath))
+{
+    Directory.CreateDirectory(configuredKeysPath);
+    dataProtectionBuilder.PersistKeysToFileSystem(new DirectoryInfo(configuredKeysPath));
 }
 
 // ── Build ──────────────────────────────────────────────────────────────────────

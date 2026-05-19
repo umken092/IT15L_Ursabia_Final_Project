@@ -1,6 +1,7 @@
 using Audit.EntityFramework;
 using CMNetwork.Domain.Entities;
 using CMNetwork.Infrastructure.Identity;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +10,7 @@ namespace CMNetwork.Infrastructure.Persistence;
 
 [AuditDbContext(Mode = AuditOptionMode.OptOut)]
 public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
+    , IDataProtectionKeyContext
 {
     public CMNetworkDbContext(DbContextOptions<CMNetworkDbContext> options) : base(options)
     {
@@ -53,6 +55,7 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
     public DbSet<CustomerLoan> CustomerLoans => Set<CustomerLoan>();
     public DbSet<CustomerLoanPayment> CustomerLoanPayments => Set<CustomerLoanPayment>();
     public DbSet<LoanInterestTier> LoanInterestTiers => Set<LoanInterestTier>();
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
