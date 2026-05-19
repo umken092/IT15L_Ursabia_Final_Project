@@ -42,6 +42,22 @@ export interface DisbursementApplication {
   approvedAt: string | null
 }
 
+export interface CfoDecisionHistory {
+  id: string
+  customerId: string
+  customerName: string
+  requestedAmount: number
+  approvedAmount: number | null
+  requestedTermMonths: number
+  approvedTermMonths: number | null
+  annualInterestRate: number | null
+  purpose: string
+  status: 'Approved' | 'Rejected'
+  cfoNotes: string | null
+  decidedAt: string
+  decidedByUserId: string | null
+}
+
 export interface ActiveLoanSummary {
   id: string
   customerId: string
@@ -124,6 +140,11 @@ const getPendingCfoApproval = async (): Promise<LoanApplicationSummary[]> => {
   return res.data
 }
 
+const getCfoDecisionHistory = async (): Promise<CfoDecisionHistory[]> => {
+  const res = await apiClient.get<CfoDecisionHistory[]>('/loan-review/cfo-decision-history')
+  return res.data
+}
+
 const approveLoan = async (id: string, payload: ApproveApplicationRequest): Promise<void> => {
   await apiClient.post(`/loan-review/applications/${id}/approve`, payload)
 }
@@ -163,6 +184,7 @@ export const loanReviewService = {
   disburseLoan,
   getActiveLoans,
   getPendingCfoApproval,
+  getCfoDecisionHistory,
   approveLoan,
   rejectLoan,
   getLoanTiers,

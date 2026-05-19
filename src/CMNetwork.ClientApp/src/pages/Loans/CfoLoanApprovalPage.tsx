@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { loanReviewService, type LoanApplicationSummary, type LoanApplicationDetail } from '../../services/loanReviewService'
+import { loanReviewService, type LoanApplicationSummary, type LoanApplicationDetail, type CfoDecisionHistory } from '../../services/loanReviewService'
 import { useNotificationStore } from '../../store/notificationStore'
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -338,6 +338,46 @@ const PendingCard = ({ app, onOpen }: { app: LoanApplicationSummary; onOpen: () 
   </div>
 )
 
+// ─── Decision History Card ────────────────────────────────────────────────────
+const HistoryCard = ({ decision }: { decision: CfoDecisionHistory }) => {
+  const borderColor = decision.status === 'Approved' ? C.success : C.danger
+  const statusColor = decision.status === 'Approved' ? '#f0fdf4' : '#fef2f2'
+  const statusTextColor = decision.status === 'Approved' ? '#166534' : '#991b1b'
+  
+  return (
+    <div style={{
+      background: C.cardBg, border: `1px solid ${C.border}`, borderLeft: `4px solid ${borderColor}`,
+      borderRadius: 10, padding: '16px 20px', boxShadow: C.shadow, marginBottom: 10,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+        <div style={{ flex: 1 }}>
+          <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 700, color: C.text }}>{decision.customerName}</p>
+          <p style={{ margin: 0, fontSize: 12, color: C.muted }}>
+            Amount: {fmt(decision.approvedAmount ?? decision.requestedAmount)} · {decision.approvedTermMonths ?? decision.requestedTermMonths} months
+          </p>
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: C.muted }}>
+            Rate: {(decision.annualInterestRate ?? 0)}% p.a. · Decided: {fmtDate(decision.decidedAt)}
+          </p>
+        </div>
+        <div style={{
+          background: statusColor, color: statusTextColor, padding: '6px 12px',
+          borderRadius: 6, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap'
+        }}>
+          {decision.status}
+        </div>
+      </div>
+      {decision.cfoNotes && (
+        <div style={{
+          background: '#f3f4f6', border: `1px solid ${C.border}`, borderRadius: 8,
+          padding: '8px 12px', fontSize: 12, color: C.text, marginTop: 8
+        }}>
+          <strong>Notes:</strong> {decision.cfoNotes}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 type Tab = 'pending' | 'history'
 
@@ -345,6 +385,7 @@ const CfoLoanApprovalPage: React.FC = () => {
   const pushToast = useNotificationStore((s) => s.push)
   const [tab, setTab] = useState<Tab>('pending')
   const [pending, setPending] = useState<LoanApplicationSummary[]>([])
+  const [history, setHistory] = useState<CfoDecisionHistory[]>([])
   const [tiers, setTiers] = useState<{ termMonths: number; annualInterestRate: number }[]>([])
   const [loading, setLoading] = useState(true)
   const [decidingId, setDecidingId] = useState<string | null>(null)
@@ -352,11 +393,13 @@ const CfoLoanApprovalPage: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [pendingRes, tiersRes] = await Promise.all([
+      const [pendingRes, historyRes, tiersRes] = await Promise.all([
         loanReviewService.getPendingCfoApproval(),
+        loanReviewService.getCfoDecisionHistory(),
         loanReviewService.getLoanTiers(),
       ])
       setPending(pendingRes)
+      setHistory(historyRes)
       setTiers(tiersRes.map((t) => ({ termMonths: t.termMonths, annualInterestRate: t.annualInterestRate })))
     } catch {
       pushToast('error', 'Failed to load CFO approval queue.')
@@ -369,7 +412,7 @@ const CfoLoanApprovalPage: React.FC = () => {
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'pending', label: 'Pending Approval', count: pending.length },
-    { id: 'history', label: 'Decision History' },
+    { id: 'history', label: 'Decision History', count: history.length },
   ]
 
   const pendingRecommended = pending.reduce((sum, app) => sum + (app.approvedAmount ?? app.requestedAmount), 0)
@@ -440,9 +483,15 @@ const CfoLoanApprovalPage: React.FC = () => {
           )}
 
           {tab === 'history' && (
-            <div className="loan-module-state">
-              Decision history is available in the Audit Logs module.
-            </div>
+            <>
+              {history.length === 0 ? (
+                <div className="loan-module-state">No CFO decisions yet.</div>
+              ) : (
+                history.map((decision) => (
+                  <HistoryCard key={decision.id} decision={decision} />
+                ))
+              )}
+            </>
           )}
           </>
         )}

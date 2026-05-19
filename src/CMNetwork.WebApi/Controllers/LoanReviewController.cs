@@ -204,6 +204,36 @@ public class LoanReviewController : ControllerBase
     }
 
     [Authorize(Roles = "cfo")]
+    [HttpGet("cfo-decision-history")]
+    public async Task<IActionResult> GetCfoDecisionHistory()
+    {
+        var decisions = await _dbContext.CustomerLoanApplications
+            .Where(x => (x.Status == LoanApplicationStatus.Approved || x.Status == LoanApplicationStatus.Rejected) 
+                     && x.ApprovedOrRejectedAtUtc != null)
+            .Include(x => x.Customer)
+            .OrderByDescending(x => x.ApprovedOrRejectedAtUtc)
+            .Select(x => new
+            {
+                id = x.Id,
+                customerId = x.CustomerId,
+                customerName = x.Customer!.Name,
+                requestedAmount = x.RequestedAmount,
+                approvedAmount = x.ApprovedAmount,
+                requestedTermMonths = x.TermMonths,
+                approvedTermMonths = x.ApprovedTermMonths,
+                annualInterestRate = x.InterestRate,
+                purpose = x.Purpose,
+                status = x.Status.ToString(),
+                cfoNotes = x.CfoNotes,
+                decidedAt = x.ApprovedOrRejectedAtUtc,
+                decidedByUserId = x.ApprovedOrRejectedByUserId
+            })
+            .ToListAsync();
+
+        return Ok(decisions);
+    }
+
+    [Authorize(Roles = "cfo")]
     [HttpPost("applications/{applicationId:guid}/approve")]
     public async Task<IActionResult> ApproveLoanApplication(
         Guid applicationId,
