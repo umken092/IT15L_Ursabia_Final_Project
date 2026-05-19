@@ -9,6 +9,15 @@ namespace CMNetwork.Infrastructure.Services;
 public sealed class PayMongoService : IPayMongoService
 {
     private const string UnknownStatus = "unknown";
+    private const string MethodCard = "card";
+    private const string MethodGcash = "gcash";
+    private const string MethodMaya = "maya";
+    private const string MethodPaymaya = "paymaya";
+    private const string MethodGrabPay = "grab_pay";
+    private const string MethodBillease = "billease";
+    private const string MethodBpi = "bpi";
+    private const string MethodBdo = "bdo";
+    private const string MethodPaymongo = "paymongo";
     
     private readonly HttpClient _httpClient;
     private readonly IIntegrationCredentialService _credentialService;
@@ -38,19 +47,25 @@ public sealed class PayMongoService : IPayMongoService
         }
 
         var amountCentavos = (long)(amount * 100);
+        var enabledMethods = runtimeCredentials.EnabledPaymentMethods;
 
-        var isTestMode = string.Equals(runtimeCredentials.Mode, "test", StringComparison.OrdinalIgnoreCase);
-        var paymentMethodCandidates = isTestMode
-            ? new[]
-            {
-                new[] { "card" },
-            }
-            : new[]
-            {
-                new[] { "card", "gcash", "paymaya" },
-                new[] { "card", "gcash", "maya" },
-                new[] { "card", "gcash" },
-            };
+        var paymentMethodCandidates = new[]
+        {
+            // Preferred full PH payment mix.
+            FilterCandidate(enabledMethods, MethodCard, MethodGcash, MethodMaya, MethodGrabPay, MethodBillease, MethodBpi, MethodBdo, MethodPaymongo),
+            // Some PayMongo accounts still expose paymaya instead of maya.
+            FilterCandidate(enabledMethods, MethodCard, MethodGcash, MethodPaymaya, MethodGrabPay, MethodBillease, MethodBpi, MethodBdo, MethodPaymongo),
+            // Fallback sets for accounts without all methods enabled.
+            FilterCandidate(enabledMethods, MethodCard, MethodGcash, MethodMaya, MethodGrabPay, MethodBillease),
+            FilterCandidate(enabledMethods, MethodCard, MethodGcash, MethodMaya, MethodGrabPay),
+            FilterCandidate(enabledMethods, MethodCard, MethodGcash, MethodMaya),
+            FilterCandidate(enabledMethods, MethodCard, MethodGcash),
+            new[] { MethodCard },
+        }
+        .Where(x => x.Length > 0)
+        .Select(x => x.Distinct(StringComparer.OrdinalIgnoreCase).ToArray())
+        .Distinct(new StringArraySequenceComparer())
+        .ToArray();
 
         string? lastBody = null;
         System.Net.HttpStatusCode lastStatusCode = System.Net.HttpStatusCode.BadRequest;
@@ -335,6 +350,39 @@ public sealed class PayMongoService : IPayMongoService
             || string.Equals(status, "completed", StringComparison.OrdinalIgnoreCase)
             || string.Equals(status, "success", StringComparison.OrdinalIgnoreCase)
             || string.Equals(status, "succeeded", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string[] FilterCandidate(string[] enabledMethods, params string[] candidate)
+    {
+        var enabled = new HashSet<string>(enabledMethods, StringComparer.OrdinalIgnoreCase);
+        return candidate.Where(enabled.Contains).ToArray();
+    }
+
+    private sealed class StringArraySequenceComparer : IEqualityComparer<string[]>
+    {
+        public bool Equals(string[]? x, string[]? y)
+        {
+            if (ReferenceEquals(x, y)) return true;
+            if (x is null || y is null || x.Length != y.Length) return false;
+            for (var i = 0; i < x.Length; i++)
+            {
+                if (!string.Equals(x[i], y[i], StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        public int GetHashCode(string[] obj)
+        {
+            var hash = new HashCode();
+            foreach (var item in obj)
+            {
+                hash.Add(item, StringComparer.OrdinalIgnoreCase);
+            }
+            return hash.ToHashCode();
+        }
     }
 
     public bool VerifyWebhookSignature(string rawPayload, string signatureHeader)

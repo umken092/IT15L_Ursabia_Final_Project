@@ -9,6 +9,7 @@ public class IntegrationCredential
     public string SecretKeyEncrypted { get; set; } = string.Empty;
     public string? WebhookSecretEncrypted { get; set; }
     public string? BaseUrl { get; set; }
+    public string? EnabledPaymentMethodsCsv { get; set; }
     public bool IsActive { get; set; } = true;
     public int Version { get; set; } = 1;
     public string UpdatedByUserId { get; set; } = "system";

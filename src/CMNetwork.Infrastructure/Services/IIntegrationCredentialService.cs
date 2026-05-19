@@ -6,7 +6,8 @@ public sealed record PayMongoRuntimeCredentials(
     string WebhookSecret,
     string BaseUrl,
     string Mode,
-    bool AllowMockOnFailure);
+    bool AllowMockOnFailure,
+    string[] EnabledPaymentMethods);
 
 public sealed record PayMongoAdminSettings(
     string PublicKey,
@@ -14,11 +15,16 @@ public sealed record PayMongoAdminSettings(
     bool SecretKeyConfigured,
     bool WebhookSecretConfigured,
     string? BaseUrl,
+    string[] EnabledPaymentMethods,
     int Version,
     DateTime? UpdatedAtUtc,
     string? UpdatedByUserId);
 
 public sealed record PayMongoConnectionTestResult(bool Success, string Message);
+
+public sealed record PayMongoCheckoutOptions(
+    string? BaseUrl,
+    string[]? EnabledPaymentMethods);
 
 public sealed record RecaptchaRuntimeSettings(
     string SiteKey,
@@ -45,7 +51,7 @@ public interface IIntegrationCredentialService
         string secretKey,
         string mode,
         string? webhookSecret,
-        string? baseUrl,
+        PayMongoCheckoutOptions checkoutOptions,
         string updatedByUserId,
         CancellationToken cancellationToken = default);
     Task<PayMongoConnectionTestResult> TestPayMongoConnectionAsync(

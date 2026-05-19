@@ -161,6 +161,7 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
             entity.Property(x => x.SecretKeyEncrypted).HasMaxLength(4096).IsRequired();
             entity.Property(x => x.WebhookSecretEncrypted).HasMaxLength(4096);
             entity.Property(x => x.BaseUrl).HasMaxLength(512);
+            entity.Property(x => x.EnabledPaymentMethodsCsv).HasMaxLength(2048);
             entity.Property(x => x.UpdatedByUserId).HasMaxLength(256).IsRequired();
             entity.Property(x => x.IsActive).HasDefaultValue(true);
             entity.Property(x => x.Version).HasDefaultValue(1);

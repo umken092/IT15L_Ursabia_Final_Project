@@ -252,6 +252,7 @@ public class PayMongoSettingsDto
     public bool SecretKeyConfigured { get; set; }
     public bool WebhookSecretConfigured { get; set; }
     public string? BaseUrl { get; set; }
+    public string[] EnabledPaymentMethods { get; set; } = [];
     public int Version { get; set; }
     public DateTime? UpdatedAtUtc { get; set; }
     public string? UpdatedByUserId { get; set; }

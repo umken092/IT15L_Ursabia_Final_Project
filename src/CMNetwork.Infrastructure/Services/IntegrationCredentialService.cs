@@ -14,6 +14,10 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
 {
     private const string PayMongoProvider = "paymongo";
     private const string RecaptchaProvider = "recaptcha";
+    private static readonly string[] DefaultPayMongoMethods =
+    [
+        "card", "gcash", "maya", "grab_pay", "billease", "bpi", "bdo", "paymongo"
+    ];
     private readonly CMNetworkDbContext _dbContext;
     private readonly IDataProtector _protector;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -70,7 +74,8 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
             WebhookSecret: webhookSecret,
             BaseUrl: baseUrl,
             Mode: NormalizeMode(credential.Mode),
-            AllowMockOnFailure: allowMockOnFailure);
+            AllowMockOnFailure: allowMockOnFailure,
+            EnabledPaymentMethods: ParseEnabledPayMongoMethods(credential.EnabledPaymentMethodsCsv));
     }
 
     public async Task<PayMongoAdminSettings> GetPayMongoAdminSettingsAsync(CancellationToken cancellationToken = default)
@@ -87,6 +92,7 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
                 SecretKeyConfigured: !string.IsNullOrWhiteSpace(_configuration["PayMongo:SecretKey"]),
                 WebhookSecretConfigured: !string.IsNullOrWhiteSpace(_configuration["PayMongo:WebhookSecret"]),
                 BaseUrl: _configuration["PayMongo:BaseUrl"] ?? "https://api.paymongo.com",
+                EnabledPaymentMethods: ParseEnabledPayMongoMethods(_configuration["PayMongo:EnabledPaymentMethods"]),
                 Version: 0,
                 UpdatedAtUtc: null,
                 UpdatedByUserId: null);
@@ -98,6 +104,7 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
             SecretKeyConfigured: !string.IsNullOrWhiteSpace(credential.SecretKeyEncrypted),
             WebhookSecretConfigured: !string.IsNullOrWhiteSpace(credential.WebhookSecretEncrypted),
             BaseUrl: credential.BaseUrl,
+            EnabledPaymentMethods: ParseEnabledPayMongoMethods(credential.EnabledPaymentMethodsCsv),
             Version: credential.Version,
             UpdatedAtUtc: credential.UpdatedAtUtc,
             UpdatedByUserId: credential.UpdatedByUserId);
@@ -108,7 +115,7 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
         string secretKey,
         string mode,
         string? webhookSecret,
-        string? baseUrl,
+        PayMongoCheckoutOptions checkoutOptions,
         string updatedByUserId,
         CancellationToken cancellationToken = default)
     {
@@ -133,7 +140,8 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
         credential.IsActive = true;
         credential.Mode = normalizedMode;
         credential.PublicKey = normalizedPublicKey;
-        credential.BaseUrl = string.IsNullOrWhiteSpace(baseUrl) ? null : baseUrl.Trim();
+        credential.BaseUrl = string.IsNullOrWhiteSpace(checkoutOptions.BaseUrl) ? null : checkoutOptions.BaseUrl.Trim();
+        credential.EnabledPaymentMethodsCsv = SerializeEnabledPayMongoMethods(checkoutOptions.EnabledPaymentMethods);
         credential.UpdatedByUserId = string.IsNullOrWhiteSpace(updatedByUserId) ? "system" : updatedByUserId;
         credential.UpdatedAtUtc = DateTime.UtcNow;
         credential.Version += 1;
@@ -323,7 +331,31 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
         var allowMockOnFailure = _configuration.GetValue<bool?>("PayMongo:AllowMockOnFailure")
             ?? _hostEnvironment.IsDevelopment();
 
-        return new PayMongoRuntimeCredentials(publicKey, secretKey, webhookSecret, baseUrl, mode, allowMockOnFailure);
+        var enabledMethods = ParseEnabledPayMongoMethods(_configuration["PayMongo:EnabledPaymentMethods"]);
+        return new PayMongoRuntimeCredentials(publicKey, secretKey, webhookSecret, baseUrl, mode, allowMockOnFailure, enabledMethods);
+    }
+
+    private static string[] ParseEnabledPayMongoMethods(string? csv)
+    {
+        var parsed = (csv ?? string.Empty)
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.ToLowerInvariant())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return parsed.Length > 0 ? parsed : DefaultPayMongoMethods;
+    }
+
+    private static string SerializeEnabledPayMongoMethods(string[]? methods)
+    {
+        var normalized = (methods ?? Array.Empty<string>())
+            .Select(x => x?.Trim().ToLowerInvariant())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        var finalMethods = normalized.Length > 0 ? normalized : DefaultPayMongoMethods;
+        return string.Join(',', finalMethods);
     }
 
     private string DecryptOrEmpty(string? cipherText)

@@ -573,6 +573,7 @@ public class AdminController : ControllerBase
             SecretKeyConfigured = settings.SecretKeyConfigured,
             WebhookSecretConfigured = settings.WebhookSecretConfigured,
             BaseUrl = settings.BaseUrl,
+            EnabledPaymentMethods = settings.EnabledPaymentMethods,
             Version = settings.Version,
             UpdatedAtUtc = settings.UpdatedAtUtc,
             UpdatedByUserId = settings.UpdatedByUserId,
@@ -607,7 +608,7 @@ public class AdminController : ControllerBase
             secretKey: request.SecretKey,
             mode: request.Mode,
             webhookSecret: request.WebhookSecret,
-            baseUrl: request.BaseUrl,
+            checkoutOptions: new PayMongoCheckoutOptions(request.BaseUrl, request.EnabledPaymentMethods),
             updatedByUserId: userId);
 
         await _audit.LogAsync(
@@ -626,6 +627,7 @@ public class AdminController : ControllerBase
             SecretKeyConfigured = updated.SecretKeyConfigured,
             WebhookSecretConfigured = updated.WebhookSecretConfigured,
             BaseUrl = updated.BaseUrl,
+            EnabledPaymentMethods = updated.EnabledPaymentMethods,
             Version = updated.Version,
             UpdatedAtUtc = updated.UpdatedAtUtc,
             UpdatedByUserId = updated.UpdatedByUserId,
