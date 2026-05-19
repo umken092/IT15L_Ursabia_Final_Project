@@ -147,8 +147,16 @@ public class LoanPaymentController : ControllerBase
         var successUrl = $"{appBaseUrl}/module/loans/installment-result?loanId={loanId}&paymentId={paymentId}&outcome=success";
         var cancelUrl = $"{appBaseUrl}/module/loans/installment-result?loanId={loanId}&paymentId={paymentId}&outcome=cancel";
 
+        _logger.LogInformation(
+            "Building callback URLs for payment {PaymentId}: successUrl={SuccessUrl}, cancelUrl={CancelUrl}",
+            paymentId, successUrl, cancelUrl);
+
         var description = $"CMNetwork loan installment due {payment.DueAtUtc:yyyy-MM-dd} ({loan.TermMonths} month loan)";
         var checkout = await _payMongoService.CreateCheckoutSessionAsync(payment.TotalAmount, description, successUrl, cancelUrl);
+
+        _logger.LogInformation(
+            "PayMongo session created: sessionId={CheckoutSessionId}, redirectUrl={RedirectUrl}, successUrl sent={SuccessUrl}",
+            checkout.CheckoutSessionId, checkout.CheckoutUrl, successUrl);
 
         payment.PayMongoCheckoutSessionId = checkout.CheckoutSessionId;
         payment.PaymentMethod = "PayMongo";

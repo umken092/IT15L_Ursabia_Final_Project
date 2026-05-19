@@ -57,6 +57,16 @@ export const LoanInstallmentResultPage = () => {
   const isPlaceholderRefId = refId.trim() === '{CHECKOUT_SESSION_ID}'
   const effectiveRefId = isPlaceholderRefId ? '' : refId
 
+  console.log('[LoanInstallmentResultPage] Callback received:', {
+    refId,
+    loanIdFromQuery,
+    paymentIdFromQuery,
+    outcome,
+    isPlaceholderRefId,
+    effectiveRefId,
+    fullUrl: window.location.href,
+  })
+
   const [resultState, setResultState] = useState<ResultState>('loading')
   const [details, setDetails] = useState<ConfirmLoanInstallmentPaymentResponse | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)

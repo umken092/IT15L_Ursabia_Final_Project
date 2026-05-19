@@ -459,9 +459,15 @@ export const customerPortalService = {
       query.set('paymentId', context.paymentId)
     }
 
-    const response = await apiClient.post<ConfirmLoanInstallmentPaymentResponse>(
-      `/loan-payments/installments/confirm?${query.toString()}`,
-    )
+    const url = `/loan-payments/installments/confirm?${query.toString()}`
+    console.log('[customerPortalService] confirmLoanInstallmentPayment:', {
+      refId,
+      context,
+      queryString: query.toString(),
+      fullUrl: url,
+    })
+
+    const response = await apiClient.post<ConfirmLoanInstallmentPaymentResponse>(url)
     return response.data
   },
 
@@ -477,9 +483,15 @@ export const customerPortalService = {
       query.set('paymentId', context.paymentId)
     }
 
-    const response = await apiClient.get<LoanInstallmentPaymentStatusResponse>(
-      `/loan-payments/installments/status?${query.toString()}`,
-    )
+    const url = `/loan-payments/installments/status?${query.toString()}`
+    console.log('[customerPortalService] getLoanInstallmentPaymentStatus:', {
+      refId,
+      context,
+      queryString: query.toString(),
+      fullUrl: url,
+    })
+
+    const response = await apiClient.get<LoanInstallmentPaymentStatusResponse>(url)
     return response.data
   },
 }
