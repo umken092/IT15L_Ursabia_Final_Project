@@ -79,6 +79,62 @@ public class LoanPaymentController : ControllerBase
         => string.Equals(refId?.Trim(), "{CHECKOUT_SESSION_ID}", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// [CUSTOMER] Diagnostic: returns customer + loan + recent payments state for debugging.
+    /// </summary>
+    [Authorize(Roles = "customer")]
+    [HttpGet("diagnostic")]
+    public async Task<IActionResult> Diagnostic([FromQuery] Guid? loanId, [FromQuery] Guid? paymentId)
+    {
+        var userId = GetCurrentUserId();
+        var customer = await GetCurrentCustomerAsync();
+
+        var customerLoanCount = 0;
+        Guid[] customerLoanIds = Array.Empty<Guid>();
+        if (customer is not null)
+        {
+            customerLoanIds = await _dbContext.CustomerLoans
+                .AsNoTracking()
+                .Where(x => x.CustomerId == customer.Id)
+                .Select(x => x.Id)
+                .ToArrayAsync();
+            customerLoanCount = customerLoanIds.Length;
+        }
+
+        object? loanInfo = null;
+        if (loanId.HasValue)
+        {
+            loanInfo = await _dbContext.CustomerLoans
+                .AsNoTracking()
+                .Where(x => x.Id == loanId.Value)
+                .Select(x => new { x.Id, x.CustomerId, x.Status, PaymentCount = x.Payments.Count })
+                .FirstOrDefaultAsync();
+        }
+
+        object? paymentInfo = null;
+        if (paymentId.HasValue)
+        {
+            paymentInfo = await _dbContext.CustomerLoanPayments
+                .AsNoTracking()
+                .Where(x => x.Id == paymentId.Value)
+                .Select(x => new { x.Id, x.LoanId, x.Status, x.PaymentMethod, x.PayMongoCheckoutSessionId, x.TotalAmount })
+                .FirstOrDefaultAsync();
+        }
+
+        return Ok(new
+        {
+            userId,
+            customerId = customer?.Id,
+            customerEmail = customer?.Email,
+            customerLoanCount,
+            customerLoanIds,
+            requestedLoanId = loanId,
+            requestedPaymentId = paymentId,
+            loanInfo,
+            paymentInfo,
+        });
+    }
+
+    /// <summary>
     /// [CUSTOMER] Get payment schedule for a specific loan.
     /// </summary>
     [Authorize(Roles = "customer")]
@@ -238,36 +294,31 @@ public class LoanPaymentController : ControllerBase
                 return BadRequest(new { message = "Missing checkout session reference." });
             }
 
-            // Diagnostic: check if payment exists at all (without customer filter)
-            var paymentExists = await _dbContext.CustomerLoanPayments
-                .AnyAsync(x => x.Id == paymentId.Value);
-            var loanMatchExists = await _dbContext.CustomerLoanPayments
-                .AnyAsync(x => x.Id == paymentId.Value && x.LoanId == loanId.Value);
+            // Use the same pattern as GetPaymentSchedule: load the loan owned by the customer, then find the payment.
+            var loan = await _dbContext.CustomerLoans
+                .Include(x => x.Payments)
+                .FirstOrDefaultAsync(x => x.Id == loanId.Value && x.CustomerId == customer.Id);
 
-            _logger.LogInformation(
-                "Diagnostic: paymentExists={PaymentExists}, loanMatchExists={LoanMatchExists} for paymentId={PaymentId}, loanId={LoanId}",
-                paymentExists, loanMatchExists, paymentId.Value, loanId.Value);
-
-            payment = await _dbContext.CustomerLoanPayments
-                .Include(x => x.Loan)
-                .Where(x => x.Id == paymentId.Value && x.LoanId == loanId.Value)
-                .Where(x => x.Loan!.CustomerId == customer.Id)
-                .FirstOrDefaultAsync();
-
-            if (payment is null && loanMatchExists)
+            if (loan is null)
             {
-                // Payment record exists but customer ID doesn't match - log the actual owner
-                var actualOwner = await _dbContext.CustomerLoanPayments
-                    .Include(x => x.Loan)
-                    .Where(x => x.Id == paymentId.Value && x.LoanId == loanId.Value)
-                    .Select(x => x.Loan != null ? x.Loan.CustomerId : (Guid?)null)
-                    .FirstOrDefaultAsync();
                 _logger.LogWarning(
-                    "Payment {PaymentId} exists but belongs to customer {ActualOwner}, not current customer {CurrentCustomer}",
-                    paymentId.Value, actualOwner, customer.Id);
+                    "Loan {LoanId} not found for customer {CustomerId} during confirm",
+                    loanId.Value, customer.Id);
+                return NotFound(new { message = "Loan not found for the current customer." });
             }
 
-            normalizedRefId = payment?.PayMongoCheckoutSessionId;
+            payment = loan.Payments.FirstOrDefault(x => x.Id == paymentId.Value);
+
+            if (payment is null)
+            {
+                _logger.LogWarning(
+                    "Payment {PaymentId} not found within loan {LoanId} (loan has {Count} payments)",
+                    paymentId.Value, loanId.Value, loan.Payments.Count);
+                return NotFound(new { message = "Installment payment record not found within the specified loan." });
+            }
+
+            payment.Loan = loan;
+            normalizedRefId = payment.PayMongoCheckoutSessionId;
         }
         else
         {
@@ -383,12 +434,21 @@ public class LoanPaymentController : ControllerBase
                 return BadRequest(new { message = "Missing checkout session reference." });
             }
 
-            payment = await _dbContext.CustomerLoanPayments
+            // Use the same pattern as GetPaymentSchedule
+            var loan = await _dbContext.CustomerLoans
                 .AsNoTracking()
-                .Include(x => x.Loan)
-                .Where(x => x.Id == paymentId.Value && x.LoanId == loanId.Value)
-                .Where(x => x.Loan!.CustomerId == customer.Id)
-                .FirstOrDefaultAsync();
+                .Include(x => x.Payments)
+                .FirstOrDefaultAsync(x => x.Id == loanId.Value && x.CustomerId == customer.Id);
+
+            if (loan is null)
+            {
+                _logger.LogWarning(
+                    "Loan {LoanId} not found for customer {CustomerId} during status check",
+                    loanId.Value, customer.Id);
+                return NotFound(new { message = "Loan not found for the current customer." });
+            }
+
+            payment = loan.Payments.FirstOrDefault(x => x.Id == paymentId.Value);
         }
         else
         {
