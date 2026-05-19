@@ -39,12 +39,18 @@ public sealed class PayMongoService : IPayMongoService
 
         var amountCentavos = (long)(amount * 100);
 
-        var paymentMethodCandidates = new[]
-        {
-            new[] { "card", "gcash", "paymaya" },
-            new[] { "card", "gcash", "maya" },
-            new[] { "card", "gcash" },
-        };
+        var isTestMode = string.Equals(runtimeCredentials.Mode, "test", StringComparison.OrdinalIgnoreCase);
+        var paymentMethodCandidates = isTestMode
+            ? new[]
+            {
+                new[] { "card" },
+            }
+            : new[]
+            {
+                new[] { "card", "gcash", "paymaya" },
+                new[] { "card", "gcash", "maya" },
+                new[] { "card", "gcash" },
+            };
 
         string? lastBody = null;
         System.Net.HttpStatusCode lastStatusCode = System.Net.HttpStatusCode.BadRequest;

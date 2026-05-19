@@ -374,7 +374,31 @@ public class LoanPaymentController : ControllerBase
             });
         }
 
-        var providerStatus = await _payMongoService.GetCheckoutSessionStatusAsync(normalizedRefId);
+        string providerStatus;
+        try
+        {
+            providerStatus = await _payMongoService.GetCheckoutSessionStatusAsync(normalizedRefId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "ConfirmInstallmentPayment: PayMongo lookup failed for session {SessionId}, payment {PaymentId}",
+                normalizedRefId, payment.Id);
+
+            return Ok(new
+            {
+                message = "Payment confirmation is still processing. We will update this installment once PayMongo confirms it.",
+                paymentId = payment.Id,
+                status = payment.Status.ToString(),
+                providerStatus = "active",
+                completed = false,
+                completedAt = payment.CompletedAtUtc,
+                referenceNo = payment.ExternalReference ?? payment.PayMongoCheckoutSessionId,
+                amount = payment.TotalAmount,
+                loanId = payment.LoanId,
+                paymentMethod = payment.PaymentMethod,
+            });
+        }
         
         // Handle various PayMongo status values
         var isPaid = string.Equals(providerStatus, "paid", StringComparison.OrdinalIgnoreCase)
