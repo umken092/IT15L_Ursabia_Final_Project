@@ -192,6 +192,10 @@ public class LoanPaymentController : ControllerBase
         if (customer is null)
             return Unauthorized();
 
+        _logger.LogInformation(
+            "ConfirmInstallmentPayment: found customer {CustomerId} for request loanId={LoanId}, paymentId={PaymentId}",
+            customer.Id, loanId, paymentId);
+
         var normalizedRefId = string.IsNullOrWhiteSpace(refId) ? null : refId.Trim();
         var useFallbackLookup = string.IsNullOrWhiteSpace(normalizedRefId) || IsPlaceholderRefId(normalizedRefId);
 
@@ -210,9 +214,32 @@ public class LoanPaymentController : ControllerBase
                 return BadRequest(new { message = "Missing checkout session reference." });
             }
 
+            // Diagnostic: check if payment exists at all (without customer filter)
+            var paymentExists = await _dbContext.CustomerLoanPayments
+                .AnyAsync(x => x.Id == paymentId.Value);
+            var loanMatchExists = await _dbContext.CustomerLoanPayments
+                .AnyAsync(x => x.Id == paymentId.Value && x.LoanId == loanId.Value);
+
+            _logger.LogInformation(
+                "Diagnostic: paymentExists={PaymentExists}, loanMatchExists={LoanMatchExists} for paymentId={PaymentId}, loanId={LoanId}",
+                paymentExists, loanMatchExists, paymentId.Value, loanId.Value);
+
             payment = await _dbContext.CustomerLoanPayments
                 .Include(x => x.Loan)
                 .FirstOrDefaultAsync(x => x.Id == paymentId.Value && x.LoanId == loanId.Value && x.Loan != null && x.Loan.CustomerId == customer.Id);
+
+            if (payment is null && loanMatchExists)
+            {
+                // Payment record exists but customer ID doesn't match - log the actual owner
+                var actualOwner = await _dbContext.CustomerLoanPayments
+                    .Include(x => x.Loan)
+                    .Where(x => x.Id == paymentId.Value && x.LoanId == loanId.Value)
+                    .Select(x => x.Loan != null ? x.Loan.CustomerId : (Guid?)null)
+                    .FirstOrDefaultAsync();
+                _logger.LogWarning(
+                    "Payment {PaymentId} exists but belongs to customer {ActualOwner}, not current customer {CurrentCustomer}",
+                    paymentId.Value, actualOwner, customer.Id);
+            }
 
             normalizedRefId = payment?.PayMongoCheckoutSessionId;
         }
