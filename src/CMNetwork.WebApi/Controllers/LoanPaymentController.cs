@@ -51,6 +51,9 @@ public class LoanPaymentController : ControllerBase
         return await _dbContext.Customers.FirstOrDefaultAsync(x => x.Id == customerId.Value);
     }
 
+    private static bool IsPlaceholderRefId(string? refId)
+        => string.Equals(refId?.Trim(), "{CHECKOUT_SESSION_ID}", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// [CUSTOMER] Get payment schedule for a specific loan.
     /// </summary>
@@ -171,21 +174,39 @@ public class LoanPaymentController : ControllerBase
     /// </summary>
     [Authorize(Roles = "customer")]
     [HttpPost("installments/confirm")]
-    public async Task<IActionResult> ConfirmInstallmentPayment([FromQuery] string refId)
+    public async Task<IActionResult> ConfirmInstallmentPayment([FromQuery] string? refId, [FromQuery] Guid? loanId, [FromQuery] Guid? paymentId)
     {
-        if (string.IsNullOrWhiteSpace(refId))
-            return BadRequest(new { message = "Missing checkout session reference." });
-
         var customer = await GetCurrentCustomerAsync();
         if (customer is null)
             return Unauthorized();
 
-        var payment = await _dbContext.CustomerLoanPayments
-            .Include(x => x.Loan)
-            .FirstOrDefaultAsync(x => x.PayMongoCheckoutSessionId == refId && x.Loan != null && x.Loan.CustomerId == customer.Id);
+        var normalizedRefId = string.IsNullOrWhiteSpace(refId) ? null : refId.Trim();
+        var useFallbackLookup = string.IsNullOrWhiteSpace(normalizedRefId) || IsPlaceholderRefId(normalizedRefId);
+
+        CustomerLoanPayment? payment;
+        if (useFallbackLookup)
+        {
+            if (!loanId.HasValue || !paymentId.HasValue)
+                return BadRequest(new { message = "Missing checkout session reference." });
+
+            payment = await _dbContext.CustomerLoanPayments
+                .Include(x => x.Loan)
+                .FirstOrDefaultAsync(x => x.Id == paymentId.Value && x.LoanId == loanId.Value && x.Loan != null && x.Loan.CustomerId == customer.Id);
+
+            normalizedRefId = payment?.PayMongoCheckoutSessionId;
+        }
+        else
+        {
+            payment = await _dbContext.CustomerLoanPayments
+                .Include(x => x.Loan)
+                .FirstOrDefaultAsync(x => x.PayMongoCheckoutSessionId == normalizedRefId && x.Loan != null && x.Loan.CustomerId == customer.Id);
+        }
 
         if (payment is null)
             return NotFound(new { message = "Installment payment record not found." });
+
+        if (string.IsNullOrWhiteSpace(normalizedRefId))
+            return BadRequest(new { message = "Checkout session reference is not available yet for this installment." });
 
         if (payment.Status == LoanPaymentStatus.Completed)
         {
@@ -204,7 +225,7 @@ public class LoanPaymentController : ControllerBase
             });
         }
 
-        var providerStatus = await _payMongoService.GetCheckoutSessionStatusAsync(refId);
+        var providerStatus = await _payMongoService.GetCheckoutSessionStatusAsync(normalizedRefId);
         if (!string.Equals(providerStatus, "paid", StringComparison.OrdinalIgnoreCase))
         {
             return Ok(new
@@ -260,18 +281,31 @@ public class LoanPaymentController : ControllerBase
     /// </summary>
     [Authorize(Roles = "customer")]
     [HttpGet("installments/status")]
-    public async Task<IActionResult> GetInstallmentPaymentStatus([FromQuery] string refId)
+    public async Task<IActionResult> GetInstallmentPaymentStatus([FromQuery] string? refId, [FromQuery] Guid? loanId, [FromQuery] Guid? paymentId)
     {
-        if (string.IsNullOrWhiteSpace(refId))
-            return BadRequest(new { message = "Missing checkout session reference." });
-
         var customer = await GetCurrentCustomerAsync();
         if (customer is null)
             return Unauthorized();
 
-        var payment = await _dbContext.CustomerLoanPayments
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.PayMongoCheckoutSessionId == refId && x.Loan != null && x.Loan.CustomerId == customer.Id);
+        var normalizedRefId = string.IsNullOrWhiteSpace(refId) ? null : refId.Trim();
+        var useFallbackLookup = string.IsNullOrWhiteSpace(normalizedRefId) || IsPlaceholderRefId(normalizedRefId);
+
+        CustomerLoanPayment? payment;
+        if (useFallbackLookup)
+        {
+            if (!loanId.HasValue || !paymentId.HasValue)
+                return BadRequest(new { message = "Missing checkout session reference." });
+
+            payment = await _dbContext.CustomerLoanPayments
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == paymentId.Value && x.LoanId == loanId.Value && x.Loan != null && x.Loan.CustomerId == customer.Id);
+        }
+        else
+        {
+            payment = await _dbContext.CustomerLoanPayments
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.PayMongoCheckoutSessionId == normalizedRefId && x.Loan != null && x.Loan.CustomerId == customer.Id);
+        }
 
         if (payment is null)
             return NotFound(new { message = "Installment payment record not found." });

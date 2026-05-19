@@ -110,6 +110,11 @@ export interface LoanInstallmentPaymentStatusResponse {
   paymentMethod?: string
 }
 
+export interface LoanInstallmentCallbackContext {
+  loanId?: string
+  paymentId?: string
+}
+
 export interface CustomerProfile {
   id: string
   firstName: string
@@ -442,16 +447,38 @@ export const customerPortalService = {
     return response.data
   },
 
-  async confirmLoanInstallmentPayment(refId: string): Promise<ConfirmLoanInstallmentPaymentResponse> {
+  async confirmLoanInstallmentPayment(refId: string, context?: LoanInstallmentCallbackContext): Promise<ConfirmLoanInstallmentPaymentResponse> {
+    const query = new URLSearchParams()
+    if (refId) {
+      query.set('refId', refId)
+    }
+    if (context?.loanId) {
+      query.set('loanId', context.loanId)
+    }
+    if (context?.paymentId) {
+      query.set('paymentId', context.paymentId)
+    }
+
     const response = await apiClient.post<ConfirmLoanInstallmentPaymentResponse>(
-      `/loan-payments/installments/confirm?refId=${encodeURIComponent(refId)}`,
+      `/loan-payments/installments/confirm?${query.toString()}`,
     )
     return response.data
   },
 
-  async getLoanInstallmentPaymentStatus(refId: string): Promise<LoanInstallmentPaymentStatusResponse> {
+  async getLoanInstallmentPaymentStatus(refId: string, context?: LoanInstallmentCallbackContext): Promise<LoanInstallmentPaymentStatusResponse> {
+    const query = new URLSearchParams()
+    if (refId) {
+      query.set('refId', refId)
+    }
+    if (context?.loanId) {
+      query.set('loanId', context.loanId)
+    }
+    if (context?.paymentId) {
+      query.set('paymentId', context.paymentId)
+    }
+
     const response = await apiClient.get<LoanInstallmentPaymentStatusResponse>(
-      `/loan-payments/installments/status?refId=${encodeURIComponent(refId)}`,
+      `/loan-payments/installments/status?${query.toString()}`,
     )
     return response.data
   },

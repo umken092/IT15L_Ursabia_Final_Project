@@ -52,7 +52,10 @@ export const LoanInstallmentResultPage = () => {
 
   const refId = searchParams.get('refId') ?? ''
   const loanIdFromQuery = searchParams.get('loanId') ?? ''
+  const paymentIdFromQuery = searchParams.get('paymentId') ?? ''
   const outcome = searchParams.get('outcome') ?? ''
+  const isPlaceholderRefId = refId.trim() === '{CHECKOUT_SESSION_ID}'
+  const effectiveRefId = isPlaceholderRefId ? '' : refId
 
   const [resultState, setResultState] = useState<ResultState>('loading')
   const [details, setDetails] = useState<ConfirmLoanInstallmentPaymentResponse | null>(null)
@@ -79,13 +82,17 @@ export const LoanInstallmentResultPage = () => {
   }, [details?.loanId, loanIdFromQuery, navigate])
 
   const confirmPayment = useCallback(async () => {
-    if (!refId) {
+    const hasLookupContext = Boolean(loanIdFromQuery && paymentIdFromQuery)
+    if (!effectiveRefId && !hasLookupContext) {
       setResultState('failed')
       return
     }
 
     try {
-      const response = await customerPortalService.confirmLoanInstallmentPayment(refId)
+      const response = await customerPortalService.confirmLoanInstallmentPayment(effectiveRefId, {
+        loanId: loanIdFromQuery || undefined,
+        paymentId: paymentIdFromQuery || undefined,
+      })
       setDetails(response)
 
       if (response.completed) {
@@ -99,15 +106,19 @@ export const LoanInstallmentResultPage = () => {
     } catch {
       setResultState('failed')
     }
-  }, [pushToast, refId])
+  }, [effectiveRefId, loanIdFromQuery, paymentIdFromQuery, pushToast])
 
   const pollStatus = useCallback(async () => {
-    if (!refId || resolvedRef.current) {
+    const hasLookupContext = Boolean(loanIdFromQuery && paymentIdFromQuery)
+    if ((!effectiveRefId && !hasLookupContext) || resolvedRef.current) {
       return
     }
 
     try {
-      const status = await customerPortalService.getLoanInstallmentPaymentStatus(refId)
+      const status = await customerPortalService.getLoanInstallmentPaymentStatus(effectiveRefId, {
+        loanId: loanIdFromQuery || undefined,
+        paymentId: paymentIdFromQuery || undefined,
+      })
       if (status.status === 'Completed') {
         await confirmPayment()
         return
@@ -132,7 +143,7 @@ export const LoanInstallmentResultPage = () => {
     pollTimerRef.current = setTimeout(() => {
       void pollStatus()
     }, POLL_INTERVAL_MS)
-  }, [confirmPayment, refId])
+  }, [confirmPayment, effectiveRefId, loanIdFromQuery, paymentIdFromQuery])
 
   useEffect(() => {
     if (outcome === 'cancel') {
@@ -140,7 +151,8 @@ export const LoanInstallmentResultPage = () => {
       return
     }
 
-    if (!refId) {
+    const hasLookupContext = Boolean(loanIdFromQuery && paymentIdFromQuery)
+    if (!effectiveRefId && !hasLookupContext) {
       setResultState('failed')
       return
     }
@@ -155,10 +167,11 @@ export const LoanInstallmentResultPage = () => {
     return () => {
       stopPolling()
     }
-  }, [confirmPayment, outcome, pollStatus, refId])
+  }, [confirmPayment, effectiveRefId, loanIdFromQuery, outcome, paymentIdFromQuery, pollStatus])
 
   const handleRefresh = useCallback(async () => {
-    if (!refId) {
+    const hasLookupContext = Boolean(loanIdFromQuery && paymentIdFromQuery)
+    if (!effectiveRefId && !hasLookupContext) {
       return
     }
 
@@ -171,7 +184,7 @@ export const LoanInstallmentResultPage = () => {
     } finally {
       setIsRefreshing(false)
     }
-  }, [confirmPayment, pollStatus, refId])
+  }, [confirmPayment, effectiveRefId, loanIdFromQuery, paymentIdFromQuery, pollStatus])
 
   if (resultState === 'loading') {
     return (
@@ -259,7 +272,7 @@ export const LoanInstallmentResultPage = () => {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, gap: 10 }}>
             <span style={{ color: C.muted, flexShrink: 0 }}>Reference Number</span>
-            <strong style={{ color: C.text, textAlign: 'right', wordBreak: 'break-all' }}>{details?.referenceNo || refId || '—'}</strong>
+            <strong style={{ color: C.text, textAlign: 'right', wordBreak: 'break-all' }}>{details?.referenceNo || effectiveRefId || '—'}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
             <span style={{ color: C.muted }}>Installment Payment ID</span>
