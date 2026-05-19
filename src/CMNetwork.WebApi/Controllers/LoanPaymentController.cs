@@ -487,11 +487,52 @@ public class LoanPaymentController : ControllerBase
         if (payment is null)
             return NotFound(new { message = "Installment payment record not found." });
 
+        // If the local record is still Scheduled but we have a PayMongo session id,
+        // re-poll PayMongo to see whether the payment has been settled. This makes
+        // the status endpoint self-healing — the frontend polls /status, and as
+        // soon as PayMongo reports "paid", we apply the payment and the next poll
+        // returns Completed.
+        string? providerStatus = null;
+        if (payment.Status == LoanPaymentStatus.Scheduled &&
+            !string.IsNullOrWhiteSpace(payment.PayMongoCheckoutSessionId))
+        {
+            try
+            {
+                providerStatus = await _payMongoService.GetCheckoutSessionStatusAsync(payment.PayMongoCheckoutSessionId);
+                _logger.LogInformation(
+                    "GetInstallmentPaymentStatus: PayMongo session {SessionId} reports providerStatus={ProviderStatus}",
+                    payment.PayMongoCheckoutSessionId, providerStatus);
+
+                if (string.Equals(providerStatus, "paid", StringComparison.OrdinalIgnoreCase))
+                {
+                    await ApplyCompletedInstallmentPaymentAsync(payment.Id);
+
+                    var refreshed = await _dbContext.CustomerLoanPayments
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(x => x.Id == payment.Id);
+                    if (refreshed is not null)
+                    {
+                        payment = refreshed;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Don't fail the polling call — just report the local state and
+                // let the next poll try again.
+                _logger.LogWarning(ex,
+                    "GetInstallmentPaymentStatus: PayMongo lookup failed for session {SessionId}",
+                    payment.PayMongoCheckoutSessionId);
+            }
+        }
+
         return Ok(new
         {
             paymentId = payment.Id,
             status = payment.Status.ToString(),
+            providerStatus,
             isTerminal = payment.Status is LoanPaymentStatus.Completed or LoanPaymentStatus.Waived,
+            completed = payment.Status == LoanPaymentStatus.Completed,
             completedAt = payment.CompletedAtUtc,
             amount = payment.TotalAmount,
             referenceNo = payment.ExternalReference ?? payment.PayMongoCheckoutSessionId,
