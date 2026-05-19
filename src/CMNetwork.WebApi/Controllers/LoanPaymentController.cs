@@ -226,7 +226,9 @@ public class LoanPaymentController : ControllerBase
 
             payment = await _dbContext.CustomerLoanPayments
                 .Include(x => x.Loan)
-                .FirstOrDefaultAsync(x => x.Id == paymentId.Value && x.LoanId == loanId.Value && x.Loan != null && x.Loan.CustomerId == customer.Id);
+                .Where(x => x.Id == paymentId.Value && x.LoanId == loanId.Value)
+                .Where(x => x.Loan!.CustomerId == customer.Id)
+                .FirstOrDefaultAsync();
 
             if (payment is null && loanMatchExists)
             {
@@ -359,13 +361,19 @@ public class LoanPaymentController : ControllerBase
 
             payment = await _dbContext.CustomerLoanPayments
                 .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Id == paymentId.Value && x.LoanId == loanId.Value && x.Loan != null && x.Loan.CustomerId == customer.Id);
+                .Include(x => x.Loan)
+                .Where(x => x.Id == paymentId.Value && x.LoanId == loanId.Value)
+                .Where(x => x.Loan!.CustomerId == customer.Id)
+                .FirstOrDefaultAsync();
         }
         else
         {
             payment = await _dbContext.CustomerLoanPayments
                 .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.PayMongoCheckoutSessionId == normalizedRefId && x.Loan != null && x.Loan.CustomerId == customer.Id);
+                .Include(x => x.Loan)
+                .Where(x => x.PayMongoCheckoutSessionId == normalizedRefId)
+                .Where(x => x.Loan!.CustomerId == customer.Id)
+                .FirstOrDefaultAsync();
         }
 
         if (payment is null)
