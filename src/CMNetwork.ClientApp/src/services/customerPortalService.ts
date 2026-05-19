@@ -467,8 +467,22 @@ export const customerPortalService = {
       fullUrl: url,
     })
 
-    const response = await apiClient.post<ConfirmLoanInstallmentPaymentResponse>(url)
-    return response.data
+    // Try POST first (canonical for state-changing op); on 404/405 fall back to GET
+    // (endpoint accepts both verbs — GET fallback works around proxy/middleware
+    // edge cases that occasionally drop POST routing in production).
+    try {
+      const response = await apiClient.post<ConfirmLoanInstallmentPaymentResponse>(url)
+      return response.data
+    } catch (err) {
+      const axiosErr = err as { response?: { status?: number } }
+      const status = axiosErr?.response?.status
+      if (status === 404 || status === 405) {
+        console.warn('[customerPortalService] confirmLoanInstallmentPayment POST failed, retrying as GET', { status })
+        const response = await apiClient.get<ConfirmLoanInstallmentPaymentResponse>(url)
+        return response.data
+      }
+      throw err
+    }
   },
 
   async getLoanInstallmentPaymentStatus(refId: string, context?: LoanInstallmentCallbackContext): Promise<LoanInstallmentPaymentStatusResponse> {

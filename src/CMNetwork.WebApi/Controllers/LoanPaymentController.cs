@@ -259,10 +259,32 @@ public class LoanPaymentController : ControllerBase
 
     /// <summary>
     /// [CUSTOMER] Confirm hosted installment checkout callback and apply payment if paid.
+    /// Accepts both POST (canonical) and GET (browser/back-button safe) verbs.
     /// </summary>
     [Authorize(Roles = "customer")]
     [HttpPost("installments/confirm")]
+    [HttpGet("installments/confirm")]
     public async Task<IActionResult> ConfirmInstallmentPayment([FromQuery] string? refId, [FromQuery] Guid? loanId, [FromQuery] Guid? paymentId)
+    {
+        try
+        {
+            return await ConfirmInstallmentPaymentCoreAsync(refId, loanId, paymentId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "ConfirmInstallmentPayment failed unexpectedly for refId={RefId}, loanId={LoanId}, paymentId={PaymentId}",
+                refId ?? "null", loanId?.ToString() ?? "null", paymentId?.ToString() ?? "null");
+            return StatusCode(StatusCodes.Status500InternalServerError, new
+            {
+                message = "Failed to confirm installment payment.",
+                error = ex.Message,
+                errorType = ex.GetType().Name,
+            });
+        }
+    }
+
+    private async Task<IActionResult> ConfirmInstallmentPaymentCoreAsync(string? refId, Guid? loanId, Guid? paymentId)
     {
         _logger.LogInformation(
             "ConfirmInstallmentPayment called with refId={RefId}, loanId={LoanId}, paymentId={PaymentId}",
