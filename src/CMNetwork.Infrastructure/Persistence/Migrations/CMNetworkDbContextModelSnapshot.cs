@@ -983,30 +983,35 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<decimal>("InterestRate")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<Guid>("LoanApplicationId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("OutstandingPrincipal")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("OverdueSinceUtc")
                         .HasColumnType("datetime2");
 
                     b.Property<decimal>("PrincipalAmount")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
                     b.Property<string>("StatusNotes")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
 
                     b.Property<int>("TermMonths")
                         .HasColumnType("int");
 
                     b.Property<decimal>("TotalInterestAccrued")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("UpdatedAtUtc")
@@ -1016,7 +1021,8 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("CustomerId");
 
-                    b.HasIndex("LoanApplicationId");
+                    b.HasIndex("LoanApplicationId")
+                        .IsUnique();
 
                     b.ToTable("CustomerLoans");
                 });
@@ -1028,7 +1034,12 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("AccountantReviewNotes")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
+
+                    b.Property<decimal?>("ApprovedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("ApprovedOrRejectedAtUtc")
                         .HasColumnType("datetime2");
@@ -1036,8 +1047,12 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     b.Property<string>("ApprovedOrRejectedByUserId")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("ApprovedTermMonths")
+                        .HasColumnType("int");
+
                     b.Property<string>("CfoNotes")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
@@ -1046,13 +1061,16 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("InterestRate")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<string>("Purpose")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
 
                     b.Property<decimal>("RequestedAmount")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("ReviewedAtUtc")
@@ -1075,7 +1093,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CustomerId");
+                    b.HasIndex("CustomerId", "Status", "SubmittedAtUtc");
 
                     b.ToTable("CustomerLoanApplications");
                 });
@@ -1096,22 +1114,27 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("ExternalReference")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<decimal>("InterestAmount")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<Guid>("LoanId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("PayMongoCheckoutSessionId")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<string>("PaymentMethod")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<decimal>("PrincipalAmount")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("ProcessedByUserId")
@@ -1121,6 +1144,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                         .HasColumnType("int");
 
                     b.Property<decimal>("TotalAmount")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("UpdatedAtUtc")
@@ -1128,7 +1152,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LoanId");
+                    b.HasIndex("LoanId", "Status", "DueAtUtc");
 
                     b.ToTable("CustomerLoanPayments");
                 });
@@ -1689,6 +1713,93 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     b.HasIndex("JournalEntryId");
 
                     b.ToTable("JournalEntryLines");
+                });
+
+            modelBuilder.Entity("CMNetwork.Domain.Entities.LoanInterestTier", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("AnnualInterestRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("TermMonths")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("TermMonths")
+                        .IsUnique();
+
+                    b.ToTable("LoanInterestTiers");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("80000000-0000-0000-0000-000000000001"),
+                            AnnualInterestRate = 5m,
+                            CreatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedBy = "system",
+                            IsActive = true,
+                            TermMonths = 3
+                        },
+                        new
+                        {
+                            Id = new Guid("80000000-0000-0000-0000-000000000002"),
+                            AnnualInterestRate = 7m,
+                            CreatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedBy = "system",
+                            IsActive = true,
+                            TermMonths = 6
+                        },
+                        new
+                        {
+                            Id = new Guid("80000000-0000-0000-0000-000000000003"),
+                            AnnualInterestRate = 10m,
+                            CreatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedBy = "system",
+                            IsActive = true,
+                            TermMonths = 12
+                        },
+                        new
+                        {
+                            Id = new Guid("80000000-0000-0000-0000-000000000004"),
+                            AnnualInterestRate = 14m,
+                            CreatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedBy = "system",
+                            IsActive = true,
+                            TermMonths = 24
+                        },
+                        new
+                        {
+                            Id = new Guid("80000000-0000-0000-0000-000000000005"),
+                            AnnualInterestRate = 18m,
+                            CreatedAtUtc = new DateTime(2026, 5, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedBy = "system",
+                            IsActive = true,
+                            TermMonths = 36
+                        });
                 });
 
             modelBuilder.Entity("CMNetwork.Domain.Entities.PayPeriod", b =>
@@ -2718,7 +2829,7 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     b.HasOne("CMNetwork.Domain.Entities.CustomerLoanApplication", "LoanApplication")
                         .WithMany()
                         .HasForeignKey("LoanApplicationId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Customer");
