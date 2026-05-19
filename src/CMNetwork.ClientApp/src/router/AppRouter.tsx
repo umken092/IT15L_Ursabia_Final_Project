@@ -48,6 +48,12 @@ const ContactSupportPage = lazy(() =>
 const ViewLoansPage = lazy(() =>
   import('../pages/Loans/ViewLoansPage').then((m) => ({ default: m.ViewLoansPage })),
 )
+const LoanInstallmentCheckoutPage = lazy(() =>
+  import('../pages/Loans/LoanInstallmentCheckoutPage').then((m) => ({ default: m.default })),
+)
+const LoanInstallmentResultPage = lazy(() =>
+  import('../pages/Loans/LoanInstallmentResultPage').then((m) => ({ default: m.default })),
+)
 const AccountantLoanReviewPage = lazy(() =>
   import('../pages/Loans/AccountantLoanReviewPage').then((m) => ({ default: m.default })),
 )
@@ -151,6 +157,14 @@ const getPageTitle = (pathname: string) => {
 
   if (pathname === '/payment/result') {
     return `Payment Result | ${APP_TITLE}`
+  }
+
+  if (pathname === '/module/loans/installment-checkout') {
+    return `Installment Checkout | ${APP_TITLE}`
+  }
+
+  if (pathname === '/module/loans/installment-result') {
+    return `Installment Receipt | ${APP_TITLE}`
   }
 
   const [, section, key] = pathname.split('/')
@@ -280,6 +294,8 @@ export const AppRouter = () => {
             <Route path="/module/loans/apply" element={<ViewLoansPage />} />
             <Route path="/module/loans/active" element={<ViewLoansPage />} />
             <Route path="/module/loans/applications" element={<ViewLoansPage />} />
+            <Route path="/module/loans/installment-checkout" element={<LoanInstallmentCheckoutPage />} />
+            <Route path="/module/loans/installment-result" element={<LoanInstallmentResultPage />} />
 
             {/* Accountant Loan Review */}
             <Route path="/module/loan-review" element={<AccountantLoanReviewPage />} />

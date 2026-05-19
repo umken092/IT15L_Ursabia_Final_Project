@@ -57,6 +57,8 @@ export interface LoanInstallment {
   status: 'Scheduled' | 'Completed' | 'Overdue' | 'Waived'
   completedAt?: string | null
   paymentMethod?: string | null
+  externalReference?: string | null
+  payMongoCheckoutSessionId?: string | null
 }
 
 export interface LoanPaymentScheduleResponse {
@@ -75,6 +77,37 @@ export interface LoanPaymentResult {
   amount: number
   outstandingPrincipal: number
   loanStatus: string
+}
+
+export interface CreateLoanInstallmentPaymentIntentResponse {
+  paymentId: string
+  checkoutSessionId: string
+  redirectUrl: string
+  amount: number
+}
+
+export interface ConfirmLoanInstallmentPaymentResponse {
+  message: string
+  paymentId: string
+  status: string
+  providerStatus: string
+  completed: boolean
+  completedAt?: string
+  referenceNo?: string
+  amount: number
+  loanId: string
+  paymentMethod?: string
+}
+
+export interface LoanInstallmentPaymentStatusResponse {
+  paymentId: string
+  status: string
+  isTerminal: boolean
+  completedAt?: string
+  amount: number
+  referenceNo?: string
+  loanId: string
+  paymentMethod?: string
 }
 
 export interface CustomerProfile {
@@ -389,6 +422,37 @@ export const customerPortalService = {
     const response = await apiClient.post<LoanPaymentResult>(`/loan-payments/loans/${loanId}/pay-manual`, {
       amount,
     })
+    return response.data
+  },
+
+  async createLoanInstallmentPaymentIntent(
+    loanId: string,
+    paymentId: string,
+    idempotencyKey?: string,
+  ): Promise<CreateLoanInstallmentPaymentIntentResponse> {
+    const response = await apiClient.post<CreateLoanInstallmentPaymentIntentResponse>(
+      `/loan-payments/loans/${loanId}/installments/${paymentId}/intent`,
+      {},
+      {
+        headers: idempotencyKey
+          ? { 'Idempotency-Key': idempotencyKey }
+          : undefined,
+      },
+    )
+    return response.data
+  },
+
+  async confirmLoanInstallmentPayment(refId: string): Promise<ConfirmLoanInstallmentPaymentResponse> {
+    const response = await apiClient.post<ConfirmLoanInstallmentPaymentResponse>(
+      `/loan-payments/installments/confirm?refId=${encodeURIComponent(refId)}`,
+    )
+    return response.data
+  },
+
+  async getLoanInstallmentPaymentStatus(refId: string): Promise<LoanInstallmentPaymentStatusResponse> {
+    const response = await apiClient.get<LoanInstallmentPaymentStatusResponse>(
+      `/loan-payments/installments/status?refId=${encodeURIComponent(refId)}`,
+    )
     return response.data
   },
 }

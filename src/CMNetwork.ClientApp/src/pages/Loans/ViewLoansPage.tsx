@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { customerPortalService, type LoanPaymentScheduleResponse } from '../../services/customerPortalService'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { customerPortalService, type LoanInstallment, type LoanPaymentScheduleResponse } from '../../services/customerPortalService'
 import { useNotificationStore } from '../../store/notificationStore'
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -58,6 +58,7 @@ const SectionHeader = ({ label }: { label: string }) => (
 
 export const ViewLoansPage = () => {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const pushToast = useNotificationStore((state) => state.push)
 
   const [loanAccess, setLoanAccess] = useState<{ canAccessLoans: boolean; profileCompletionPercentage: number; isBankVerified: boolean } | null>(null)
@@ -70,7 +71,7 @@ export const ViewLoansPage = () => {
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null)
   const [schedulesByLoanId, setSchedulesByLoanId] = useState<Record<string, LoanPaymentScheduleResponse>>({})
   const [loadingScheduleLoanId, setLoadingScheduleLoanId] = useState<string | null>(null)
-  const [payingLoanId, setPayingLoanId] = useState<string | null>(null)
+  const [selectedInstallmentDetail, setSelectedInstallmentDetail] = useState<LoanInstallment | null>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -119,6 +120,19 @@ export const ViewLoansPage = () => {
       setSelectedLoanId(activeLoanId)
     }
   }, [loansData, selectedLoanId])
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    const loanIdParam = searchParams.get('loanId')
+
+    if (tabParam === 'payments') {
+      setTab('payments')
+    }
+
+    if (loanIdParam) {
+      setSelectedLoanId(loanIdParam)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     const requestedAmount = parseFloat(formData.requestedAmount)
@@ -182,6 +196,22 @@ export const ViewLoansPage = () => {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount)
 
+  const formatDateTime = (iso?: string | null) => {
+    if (!iso) {
+      return '—'
+    }
+
+    const parsed = new Date(iso)
+    if (Number.isNaN(parsed.getTime())) {
+      return iso
+    }
+
+    return new Intl.DateTimeFormat('en-PH', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(parsed)
+  }
+
   const loadLoanSchedule = useCallback(async (loanId: string) => {
     setLoadingScheduleLoanId(loanId)
     try {
@@ -205,7 +235,7 @@ export const ViewLoansPage = () => {
     void loadLoanSchedule(selectedLoanId)
   }, [loadLoanSchedule, schedulesByLoanId, selectedLoanId, tab])
 
-  const handlePayNextInstallment = useCallback(async (loanId: string) => {
+  const handleStartInstallmentCheckout = useCallback((loanId: string) => {
     const schedule = schedulesByLoanId[loanId]
     const nextScheduled = schedule?.payments.find((payment) => payment.status === 'Scheduled')
 
@@ -214,20 +244,17 @@ export const ViewLoansPage = () => {
       return
     }
 
-    setPayingLoanId(loanId)
-    try {
-      const result = await customerPortalService.payLoanInstallmentManual(loanId, nextScheduled.totalAmount)
-      pushToast('success', result.message)
-      await Promise.all([
-        loadData(),
-        loadLoanSchedule(loanId),
-      ])
-    } catch (error: any) {
-      pushToast('error', error?.response?.data?.message || 'Failed to record loan payment.')
-    } finally {
-      setPayingLoanId(null)
-    }
-  }, [loadData, loadLoanSchedule, pushToast, schedulesByLoanId])
+    const params = new URLSearchParams({
+      loanId,
+      paymentId: nextScheduled.id,
+      totalAmount: String(nextScheduled.totalAmount),
+      principalAmount: String(nextScheduled.principalAmount),
+      interestAmount: String(nextScheduled.interestAmount),
+      dueAt: nextScheduled.dueAt,
+    })
+
+    navigate(`/module/loans/installment-checkout?${params.toString()}`)
+  }, [navigate, pushToast, schedulesByLoanId])
 
   if (loading) {
     return (
@@ -612,8 +639,7 @@ export const ViewLoansPage = () => {
                           {nextScheduled && (
                             <button
                               type="button"
-                              onClick={() => void handlePayNextInstallment(selectedLoanId)}
-                              disabled={payingLoanId === selectedLoanId}
+                              onClick={() => handleStartInstallmentCheckout(selectedLoanId)}
                               style={{
                                 marginTop: 10,
                                 padding: '9px 14px',
@@ -623,24 +649,26 @@ export const ViewLoansPage = () => {
                                 color: '#fff',
                                 fontSize: 12,
                                 fontWeight: 700,
-                                cursor: payingLoanId === selectedLoanId ? 'not-allowed' : 'pointer',
-                                opacity: payingLoanId === selectedLoanId ? 0.65 : 1,
+                                cursor: 'pointer',
                               }}
                             >
-                              {payingLoanId === selectedLoanId ? 'Recording Payment...' : 'Pay Next Installment'}
+                              Open Installment Payment Window
                             </button>
                           )}
                         </div>
 
                         <div style={{ overflowX: 'auto' }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 620 }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 920 }}>
                             <thead>
                               <tr style={{ borderBottom: `1px solid ${C.border}` }}>
                                 <th style={{ textAlign: 'left', fontSize: 11, color: C.muted, padding: '8px 6px' }}>Due Date</th>
                                 <th style={{ textAlign: 'right', fontSize: 11, color: C.muted, padding: '8px 6px' }}>Principal</th>
                                 <th style={{ textAlign: 'right', fontSize: 11, color: C.muted, padding: '8px 6px' }}>Interest</th>
                                 <th style={{ textAlign: 'right', fontSize: 11, color: C.muted, padding: '8px 6px' }}>Total</th>
+                                <th style={{ textAlign: 'left', fontSize: 11, color: C.muted, padding: '8px 6px' }}>Paid At</th>
+                                <th style={{ textAlign: 'left', fontSize: 11, color: C.muted, padding: '8px 6px' }}>Reference #</th>
                                 <th style={{ textAlign: 'left', fontSize: 11, color: C.muted, padding: '8px 6px' }}>Status</th>
+                                <th style={{ textAlign: 'left', fontSize: 11, color: C.muted, padding: '8px 6px' }}>Details</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -658,8 +686,32 @@ export const ViewLoansPage = () => {
                                   <td style={{ padding: '10px 6px', textAlign: 'right', fontSize: 12, fontWeight: 700, color: C.text }}>
                                     {formatCurrency(payment.totalAmount)}
                                   </td>
+                                  <td style={{ padding: '10px 6px', fontSize: 12, color: C.text }}>
+                                    {formatDateTime(payment.completedAt)}
+                                  </td>
+                                  <td style={{ padding: '10px 6px', fontSize: 12, color: C.text, maxWidth: 240, wordBreak: 'break-all' }}>
+                                    {payment.externalReference || payment.payMongoCheckoutSessionId || '—'}
+                                  </td>
                                   <td style={{ padding: '10px 6px' }}>
                                     <StatusBadge status={payment.status} />
+                                  </td>
+                                  <td style={{ padding: '10px 6px' }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedInstallmentDetail(payment)}
+                                      style={{
+                                        padding: '6px 10px',
+                                        borderRadius: 8,
+                                        border: `1px solid ${C.border}`,
+                                        background: '#fff',
+                                        color: C.text,
+                                        fontSize: 12,
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      View
+                                    </button>
                                   </td>
                                 </tr>
                               ))}
@@ -826,6 +878,117 @@ export const ViewLoansPage = () => {
                 {submitting ? 'Submitting...' : 'Submit Application'}
               </button>
             </form>
+          )}
+
+          {selectedInstallmentDetail && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(15, 23, 42, 0.48)',
+                display: 'grid',
+                placeItems: 'center',
+                zIndex: 30,
+                padding: 16,
+              }}
+            >
+              <div style={{
+                width: '100%',
+                maxWidth: 560,
+                background: C.cardBg,
+                border: `1px solid ${C.border}`,
+                borderRadius: 12,
+                boxShadow: C.shadow,
+                padding: 18,
+                display: 'grid',
+                gap: 10,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: 16, color: C.text }}>Installment Details</h3>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedInstallmentDetail(null)}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      color: C.muted,
+                      fontSize: 18,
+                      cursor: 'pointer',
+                      lineHeight: 1,
+                    }}
+                    aria-label="Close installment details"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, display: 'grid', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: C.muted }}>Installment ID</span>
+                    <strong style={{ color: C.text }}>{selectedInstallmentDetail.id}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: C.muted }}>Loan ID</span>
+                    <strong style={{ color: C.text }}>{selectedLoanId ?? '—'}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: C.muted }}>Due Date</span>
+                    <strong style={{ color: C.text }}>{formatDateTime(selectedInstallmentDetail.dueAt)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: C.muted }}>Paid Date</span>
+                    <strong style={{ color: C.text }}>{formatDateTime(selectedInstallmentDetail.completedAt)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: C.muted }}>Principal</span>
+                    <strong style={{ color: C.text }}>{formatCurrency(selectedInstallmentDetail.principalAmount)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: C.muted }}>Interest</span>
+                    <strong style={{ color: C.text }}>{formatCurrency(selectedInstallmentDetail.interestAmount)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: C.muted }}>Total</span>
+                    <strong style={{ color: C.text }}>{formatCurrency(selectedInstallmentDetail.totalAmount)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: C.muted }}>Status</span>
+                    <strong style={{ color: C.text }}>{selectedInstallmentDetail.status}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: C.muted }}>Payment Method</span>
+                    <strong style={{ color: C.text }}>{selectedInstallmentDetail.paymentMethod || '—'}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, gap: 10 }}>
+                    <span style={{ color: C.muted, flexShrink: 0 }}>Reference Number</span>
+                    <strong style={{ color: C.text, textAlign: 'right', wordBreak: 'break-all' }}>
+                      {selectedInstallmentDetail.externalReference || selectedInstallmentDetail.payMongoCheckoutSessionId || '—'}
+                    </strong>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedInstallmentDetail(null)}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: `1px solid ${C.border}`,
+                      background: '#fff',
+                      color: C.text,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </>
       )}
