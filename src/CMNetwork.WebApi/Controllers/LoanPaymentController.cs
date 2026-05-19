@@ -176,6 +176,10 @@ public class LoanPaymentController : ControllerBase
     [HttpPost("installments/confirm")]
     public async Task<IActionResult> ConfirmInstallmentPayment([FromQuery] string? refId, [FromQuery] Guid? loanId, [FromQuery] Guid? paymentId)
     {
+        _logger.LogInformation(
+            "ConfirmInstallmentPayment called with refId={RefId}, loanId={LoanId}, paymentId={PaymentId}",
+            refId ?? "null", loanId?.ToString() ?? "null", paymentId?.ToString() ?? "null");
+
         var customer = await GetCurrentCustomerAsync();
         if (customer is null)
             return Unauthorized();
@@ -183,11 +187,20 @@ public class LoanPaymentController : ControllerBase
         var normalizedRefId = string.IsNullOrWhiteSpace(refId) ? null : refId.Trim();
         var useFallbackLookup = string.IsNullOrWhiteSpace(normalizedRefId) || IsPlaceholderRefId(normalizedRefId);
 
+        _logger.LogInformation(
+            "Using fallback lookup: {UseFallbackLookup}, normalizedRefId={NormalizedRefId}",
+            useFallbackLookup, normalizedRefId ?? "null");
+
         CustomerLoanPayment? payment;
         if (useFallbackLookup)
         {
             if (!loanId.HasValue || !paymentId.HasValue)
+            {
+                _logger.LogWarning(
+                    "Fallback lookup requested but missing parameters: loanId={HasLoanId}, paymentId={HasPaymentId}",
+                    loanId.HasValue, paymentId.HasValue);
                 return BadRequest(new { message = "Missing checkout session reference." });
+            }
 
             payment = await _dbContext.CustomerLoanPayments
                 .Include(x => x.Loan)
@@ -283,6 +296,10 @@ public class LoanPaymentController : ControllerBase
     [HttpGet("installments/status")]
     public async Task<IActionResult> GetInstallmentPaymentStatus([FromQuery] string? refId, [FromQuery] Guid? loanId, [FromQuery] Guid? paymentId)
     {
+        _logger.LogInformation(
+            "GetInstallmentPaymentStatus called with refId={RefId}, loanId={LoanId}, paymentId={PaymentId}",
+            refId ?? "null", loanId?.ToString() ?? "null", paymentId?.ToString() ?? "null");
+
         var customer = await GetCurrentCustomerAsync();
         if (customer is null)
             return Unauthorized();
@@ -290,11 +307,20 @@ public class LoanPaymentController : ControllerBase
         var normalizedRefId = string.IsNullOrWhiteSpace(refId) ? null : refId.Trim();
         var useFallbackLookup = string.IsNullOrWhiteSpace(normalizedRefId) || IsPlaceholderRefId(normalizedRefId);
 
+        _logger.LogInformation(
+            "Using fallback lookup: {UseFallbackLookup}, normalizedRefId={NormalizedRefId}",
+            useFallbackLookup, normalizedRefId ?? "null");
+
         CustomerLoanPayment? payment;
         if (useFallbackLookup)
         {
             if (!loanId.HasValue || !paymentId.HasValue)
+            {
+                _logger.LogWarning(
+                    "Fallback lookup requested but missing parameters: loanId={HasLoanId}, paymentId={HasPaymentId}",
+                    loanId.HasValue, paymentId.HasValue);
                 return BadRequest(new { message = "Missing checkout session reference." });
+            }
 
             payment = await _dbContext.CustomerLoanPayments
                 .AsNoTracking()
