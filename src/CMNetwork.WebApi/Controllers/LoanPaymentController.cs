@@ -144,7 +144,7 @@ public class LoanPaymentController : ControllerBase
             return BadRequest(new { message = "Please pay the next due installment first." });
 
         var appBaseUrl = _configuration["AppBaseUrl"] ?? $"{Request.Scheme}://{Request.Host}";
-        var successUrl = $"{appBaseUrl}/module/loans/installment-result?refId={{CHECKOUT_SESSION_ID}}&loanId={loanId}&paymentId={paymentId}&outcome=success";
+        var successUrl = $"{appBaseUrl}/module/loans/installment-result?loanId={loanId}&paymentId={paymentId}&outcome=success";
         var cancelUrl = $"{appBaseUrl}/module/loans/installment-result?loanId={loanId}&paymentId={paymentId}&outcome=cancel";
 
         var description = $"CMNetwork loan installment due {payment.DueAtUtc:yyyy-MM-dd} ({loan.TermMonths} month loan)";
