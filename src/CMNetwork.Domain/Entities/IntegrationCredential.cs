@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace CMNetwork.Domain.Entities;
 
 public class IntegrationCredential
@@ -9,6 +11,7 @@ public class IntegrationCredential
     public string SecretKeyEncrypted { get; set; } = string.Empty;
     public string? WebhookSecretEncrypted { get; set; }
     public string? BaseUrl { get; set; }
+    [NotMapped]
     public string? EnabledPaymentMethodsCsv { get; set; }
     public bool IsActive { get; set; } = true;
     public int Version { get; set; } = 1;
