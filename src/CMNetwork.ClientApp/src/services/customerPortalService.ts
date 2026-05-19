@@ -508,5 +508,17 @@ export const customerPortalService = {
     const response = await apiClient.get<LoanInstallmentPaymentStatusResponse>(url)
     return response.data
   },
+
+  async forceCompleteLoanInstallmentPayment(
+    loanId: string,
+    paymentId: string,
+    reason?: string,
+  ): Promise<ConfirmLoanInstallmentPaymentResponse> {
+    const query = new URLSearchParams({ loanId })
+    if (reason) query.set('reason', reason)
+    const url = `/loan-payments/installments/${paymentId}/force-complete?${query.toString()}`
+    const response = await apiClient.post<ConfirmLoanInstallmentPaymentResponse>(url)
+    return response.data
+  },
 }
 

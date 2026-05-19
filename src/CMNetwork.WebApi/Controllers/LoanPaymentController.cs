@@ -541,6 +541,82 @@ public class LoanPaymentController : ControllerBase
         });
     }
 
+    /// <summary>
+    /// [CUSTOMER] Force-complete a scheduled installment payment that PayMongo
+    /// failed to confirm automatically (e.g., test-mode sessions, webhook misses,
+    /// or hosted checkout closed before callback). Customer can only override
+    /// payments on their own loans and only when the local status is Scheduled.
+    /// The reason is recorded in ExternalReference for audit purposes.
+    /// </summary>
+    [Authorize(Roles = "customer")]
+    [HttpPost("installments/{paymentId:guid}/force-complete")]
+    public async Task<IActionResult> ForceCompleteInstallmentPayment(
+        Guid paymentId,
+        [FromQuery] Guid loanId,
+        [FromQuery] string? reason)
+    {
+        var customer = await GetCurrentCustomerAsync();
+        if (customer is null)
+            return Unauthorized();
+
+        var loan = await _dbContext.CustomerLoans
+            .Include(x => x.Payments)
+            .FirstOrDefaultAsync(x => x.Id == loanId && x.CustomerId == customer.Id);
+
+        if (loan is null)
+            return NotFound(new { message = "Loan not found for the current customer." });
+
+        var payment = loan.Payments.FirstOrDefault(x => x.Id == paymentId);
+        if (payment is null)
+            return NotFound(new { message = "Installment payment not found within the specified loan." });
+
+        if (payment.Status == LoanPaymentStatus.Completed)
+        {
+            return Ok(new
+            {
+                message = "Installment payment is already completed.",
+                paymentId = payment.Id,
+                status = payment.Status.ToString(),
+                completed = true,
+                completedAt = payment.CompletedAtUtc,
+            });
+        }
+
+        if (payment.Status != LoanPaymentStatus.Scheduled)
+        {
+            return BadRequest(new { message = $"Cannot force-complete payment in status {payment.Status}." });
+        }
+
+        var noteSuffix = string.IsNullOrWhiteSpace(reason)
+            ? "Customer manual confirmation after PayMongo callback."
+            : reason.Trim();
+
+        payment.ExternalReference = $"{payment.PayMongoCheckoutSessionId ?? "manual"}|{noteSuffix}";
+
+        await ApplyCompletedInstallmentPaymentAsync(payment.Id);
+
+        var latest = await _dbContext.CustomerLoanPayments
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == payment.Id);
+
+        _logger.LogInformation(
+            "Customer {CustomerId} force-completed installment payment {PaymentId} on loan {LoanId}. Reason: {Reason}",
+            customer.Id, payment.Id, loanId, noteSuffix);
+
+        return Ok(new
+        {
+            message = "Installment payment marked as completed.",
+            paymentId = latest?.Id ?? payment.Id,
+            status = latest?.Status.ToString() ?? LoanPaymentStatus.Completed.ToString(),
+            completed = true,
+            completedAt = latest?.CompletedAtUtc ?? DateTime.UtcNow,
+            referenceNo = latest?.ExternalReference,
+            amount = latest?.TotalAmount ?? payment.TotalAmount,
+            loanId,
+            paymentMethod = latest?.PaymentMethod ?? "PayMongo",
+        });
+    }
+
     private async Task ApplyCompletedInstallmentPaymentAsync(Guid paymentId)
     {
         await using var tx = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);

@@ -196,6 +196,33 @@ export const LoanInstallmentResultPage = () => {
     }
   }, [confirmPayment, effectiveRefId, loanIdFromQuery, paymentIdFromQuery, pollStatus])
 
+  const [isForcing, setIsForcing] = useState(false)
+  const handleForceComplete = useCallback(async () => {
+    if (!loanIdFromQuery || !paymentIdFromQuery) return
+    const confirmed = globalThis.confirm(
+      'Mark this installment as PAID? Only do this if you completed the payment on PayMongo but the system did not detect it. This action is recorded for audit.',
+    )
+    if (!confirmed) return
+
+    setIsForcing(true)
+    try {
+      const response = await customerPortalService.forceCompleteLoanInstallmentPayment(
+        loanIdFromQuery,
+        paymentIdFromQuery,
+        'Customer manual confirmation from payment result page',
+      )
+      setDetails(response)
+      setResultState('success')
+      resolvedRef.current = true
+      pushToast('success', 'Installment marked as paid.')
+    } catch (err) {
+      const axiosErr = err as { response?: { data?: { message?: string } } }
+      pushToast('error', axiosErr?.response?.data?.message || 'Failed to mark installment as paid.')
+    } finally {
+      setIsForcing(false)
+    }
+  }, [loanIdFromQuery, paymentIdFromQuery, pushToast])
+
   if (resultState === 'loading') {
     return (
       <div style={{ minHeight: '60vh', display: 'grid', placeItems: 'center', color: C.muted }}>
@@ -294,7 +321,7 @@ export const LoanInstallmentResultPage = () => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 14 }}>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 14, flexWrap: 'wrap' }}>
           {isPending && (
             <button
               type="button"
@@ -313,6 +340,27 @@ export const LoanInstallmentResultPage = () => {
               }}
             >
               {isRefreshing ? 'Refreshing...' : 'Refresh Status'}
+            </button>
+          )}
+          {isPending && loanIdFromQuery && paymentIdFromQuery && (
+            <button
+              type="button"
+              onClick={() => void handleForceComplete()}
+              disabled={isForcing}
+              title="Use this only if you completed payment on PayMongo but the system did not detect it."
+              style={{
+                padding: '10px 14px',
+                borderRadius: 8,
+                border: `1px solid ${C.warning}`,
+                background: '#fff',
+                color: C.warning,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: isForcing ? 'not-allowed' : 'pointer',
+                opacity: isForcing ? 0.7 : 1,
+              }}
+            >
+              {isForcing ? 'Marking...' : 'Mark as Paid'}
             </button>
           )}
           <button
