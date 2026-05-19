@@ -157,43 +157,73 @@ public class PayMongoWebhookController : ControllerBase
 
         if (loanPayment is null)
         {
+            _logger.LogWarning("Loan installment payment not found for checkout session {SessionId}", checkoutSessionId);
             await tx.CommitAsync();
             return;
         }
 
         if (loanPayment.Status == LoanPaymentStatus.Completed)
         {
+            _logger.LogInformation("Loan installment payment {PaymentId} already completed", loanPayment.Id);
             await tx.CommitAsync();
             return;
         }
 
         if (loanPayment.Status != LoanPaymentStatus.Scheduled)
         {
+            _logger.LogWarning(
+                "Loan installment payment {PaymentId} cannot be completed from status {Status}",
+                loanPayment.Id, loanPayment.Status);
             await tx.CommitAsync();
             return;
         }
 
         if (loanPayment.Loan is null)
         {
+            _logger.LogError("Loan for payment {PaymentId} not found", loanPayment.Id);
             await tx.CommitAsync();
             return;
         }
 
+        // Mark payment as completed
         loanPayment.Status = LoanPaymentStatus.Completed;
         loanPayment.CompletedAtUtc = DateTime.UtcNow;
         loanPayment.PaymentMethod = "PayMongo";
-        loanPayment.ExternalReference = checkoutSessionId;
+        loanPayment.ExternalReference = loanPayment.PayMongoCheckoutSessionId ?? loanPayment.ExternalReference;
         loanPayment.UpdatedAtUtc = DateTime.UtcNow;
 
+        // Update loan totals
         loanPayment.Loan.OutstandingPrincipal = Math.Max(0m, loanPayment.Loan.OutstandingPrincipal - loanPayment.PrincipalAmount);
         loanPayment.Loan.TotalInterestAccrued += loanPayment.InterestAmount;
         loanPayment.Loan.UpdatedAtUtc = DateTime.UtcNow;
 
+        // Check if loan is now fully paid
         if (loanPayment.Loan.OutstandingPrincipal <= 0.01m)
         {
             loanPayment.Loan.Status = LoanStatus.FullyPaid;
             loanPayment.Loan.FullyPaidAtUtc = DateTime.UtcNow;
+            _logger.LogInformation("Loan {LoanId} marked as FullyPaid", loanPayment.LoanId);
         }
+        // Check if loan should transition from Overdue back to Active
+        else if (loanPayment.Loan.Status == LoanStatus.Overdue)
+        {
+            var hasRemainingOverdue = await _dbContext.CustomerLoanPayments
+                .AnyAsync(x => x.LoanId == loanPayment.LoanId && x.Status == LoanPaymentStatus.Overdue);
+
+            if (!hasRemainingOverdue)
+            {
+                loanPayment.Loan.Status = LoanStatus.Active;
+                loanPayment.Loan.OverdueSinceUtc = null;
+                _logger.LogInformation("Loan {LoanId} transitioned from Overdue to Active", loanPayment.LoanId);
+            }
+        }
+
+        // Post accounting journal entry
+        await _autoJournalService.PostCustomerCashReceiptAsync(
+            loanPayment.TotalAmount,
+            $"Loan installment payment for loan {loanPayment.LoanId}",
+            loanPayment.ExternalReference ?? loanPayment.Id.ToString(),
+            "system");
 
         await _dbContext.SaveChangesAsync();
         await tx.CommitAsync();
