@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { customerPortalService } from '../../services/customerPortalService'
+import { customerPortalService, type LoanPaymentScheduleResponse } from '../../services/customerPortalService'
 import { useNotificationStore } from '../../store/notificationStore'
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -21,6 +21,9 @@ const StatusBadge = ({ status }: { status: string }) => {
     Active: { bg: '#f0fdf4', text: '#166534' },
     FullyPaid: { bg: '#f0fdf4', text: '#166534' },
     Overdue: { bg: '#fef2f2', text: '#991b1b' },
+    Scheduled: { bg: '#eff6ff', text: '#1e40af' },
+    Completed: { bg: '#ecfdf5', text: '#065f46' },
+    Waived: { bg: '#f8fafc', text: '#334155' },
     Restructured: { bg: '#fef3c7', text: '#92400e' },
     WrittenOff: { bg: '#f3f4f6', text: '#6b7280' },
     Submitted: { bg: '#eff6ff', text: '#1e40af' },
@@ -61,9 +64,13 @@ export const ViewLoansPage = () => {
   const [loansData, setLoansData] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [tab, setTab] = useState<'overview' | 'apply' | 'active' | 'applications'>('overview')
+  const [tab, setTab] = useState<'overview' | 'apply' | 'active' | 'applications' | 'payments'>('overview')
   const [tiers, setTiers] = useState<Array<{ termMonths: number; annualInterestRate: number }>>([])
   const [estimate, setEstimate] = useState<{ annualInterestRate: number; monthlyPayment: number; totalRepayment: number; totalInterest: number; availableCredit: number } | null>(null)
+  const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null)
+  const [schedulesByLoanId, setSchedulesByLoanId] = useState<Record<string, LoanPaymentScheduleResponse>>({})
+  const [loadingScheduleLoanId, setLoadingScheduleLoanId] = useState<string | null>(null)
+  const [payingLoanId, setPayingLoanId] = useState<string | null>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -105,6 +112,13 @@ export const ViewLoansPage = () => {
   useEffect(() => {
     void loadData()
   }, [loadData])
+
+  useEffect(() => {
+    const activeLoanId = loansData?.activeLoans?.[0]?.id
+    if (!selectedLoanId && activeLoanId) {
+      setSelectedLoanId(activeLoanId)
+    }
+  }, [loansData, selectedLoanId])
 
   useEffect(() => {
     const requestedAmount = parseFloat(formData.requestedAmount)
@@ -167,6 +181,53 @@ export const ViewLoansPage = () => {
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount)
+
+  const loadLoanSchedule = useCallback(async (loanId: string) => {
+    setLoadingScheduleLoanId(loanId)
+    try {
+      const schedule = await customerPortalService.getLoanPaymentSchedule(loanId)
+      setSchedulesByLoanId((prev) => ({
+        ...prev,
+        [loanId]: schedule,
+      }))
+    } catch {
+      pushToast('error', 'Unable to load payment schedule for this loan.')
+    } finally {
+      setLoadingScheduleLoanId(null)
+    }
+  }, [pushToast])
+
+  useEffect(() => {
+    if (tab !== 'payments' || !selectedLoanId || schedulesByLoanId[selectedLoanId]) {
+      return
+    }
+
+    void loadLoanSchedule(selectedLoanId)
+  }, [loadLoanSchedule, schedulesByLoanId, selectedLoanId, tab])
+
+  const handlePayNextInstallment = useCallback(async (loanId: string) => {
+    const schedule = schedulesByLoanId[loanId]
+    const nextScheduled = schedule?.payments.find((payment) => payment.status === 'Scheduled')
+
+    if (!nextScheduled) {
+      pushToast('warning', 'No scheduled installment is available to pay right now.')
+      return
+    }
+
+    setPayingLoanId(loanId)
+    try {
+      const result = await customerPortalService.payLoanInstallmentManual(loanId, nextScheduled.totalAmount)
+      pushToast('success', result.message)
+      await Promise.all([
+        loadData(),
+        loadLoanSchedule(loanId),
+      ])
+    } catch (error: any) {
+      pushToast('error', error?.response?.data?.message || 'Failed to record loan payment.')
+    } finally {
+      setPayingLoanId(null)
+    }
+  }, [loadData, loadLoanSchedule, pushToast, schedulesByLoanId])
 
   if (loading) {
     return (
@@ -306,7 +367,7 @@ export const ViewLoansPage = () => {
             display: 'flex', gap: 8, borderBottom: `1px solid ${C.border}`,
             paddingBottom: 0, overflow: 'auto',
           }}>
-            {(['overview', 'active', 'applications', 'apply'] as const).map((t) => (
+            {(['overview', 'active', 'payments', 'applications', 'apply'] as const).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -396,9 +457,220 @@ export const ViewLoansPage = () => {
                     <p style={{ margin: 0, fontSize: 11, color: C.muted }}>
                       Disbursed: {new Date(loan.disbursedAt).toLocaleDateString()}
                     </p>
+                    <div style={{ marginTop: 10 }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTab('payments')
+                          setSelectedLoanId(loan.id)
+                          if (!schedulesByLoanId[loan.id]) {
+                            void loadLoanSchedule(loan.id)
+                          }
+                        }}
+                        style={{
+                          padding: '7px 12px', borderRadius: 8, border: `1px solid ${C.primary}`,
+                          background: '#fff', color: C.primary, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                        }}
+                      >
+                        Open Payment Workspace
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
+            </div>
+          )}
+
+          {/* ── Payments Tab ─────────────────────────────────────────────── */}
+          {tab === 'payments' && loansData && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+              <div style={{
+                background: C.cardBg,
+                border: `1px solid ${C.border}`,
+                borderRadius: 12,
+                boxShadow: C.shadow,
+                padding: 14,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                height: 'fit-content',
+              }}>
+                <SectionHeader label="Your Active Loans" />
+                {loansData.activeLoans?.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: 12, color: C.muted }}>No active loans available for payment.</p>
+                ) : (
+                  loansData.activeLoans.map((loan: any) => {
+                    const active = selectedLoanId === loan.id
+                    return (
+                      <button
+                        key={loan.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedLoanId(loan.id)
+                          if (!schedulesByLoanId[loan.id]) {
+                            void loadLoanSchedule(loan.id)
+                          }
+                        }}
+                        style={{
+                          textAlign: 'left',
+                          borderRadius: 10,
+                          border: `1px solid ${active ? C.primary : C.border}`,
+                          background: active ? 'color-mix(in srgb, var(--primary) 10%, white)' : '#fff',
+                          padding: 12,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <p style={{ margin: 0, fontSize: 12, color: C.text, fontWeight: 700 }}>
+                          {formatCurrency(loan.principalAmount)} • {loan.termMonths} mo
+                        </p>
+                        <p style={{ margin: '4px 0 0', fontSize: 11, color: C.muted }}>
+                          Outstanding: {formatCurrency(loan.outstandingPrincipal)}
+                        </p>
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+
+              <div style={{
+                background: C.cardBg,
+                border: `1px solid ${C.border}`,
+                borderRadius: 12,
+                boxShadow: C.shadow,
+                padding: 16,
+              }}>
+                <SectionHeader label="Installment Schedule" />
+
+                {!selectedLoanId ? (
+                  <p style={{ margin: 0, fontSize: 12, color: C.muted }}>Select a loan to view installments.</p>
+                ) : loadingScheduleLoanId === selectedLoanId ? (
+                  <p style={{ margin: 0, fontSize: 12, color: C.muted }}>Loading payment schedule...</p>
+                ) : !schedulesByLoanId[selectedLoanId] ? (
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <p style={{ margin: 0, fontSize: 12, color: C.muted }}>No schedule loaded yet.</p>
+                    <button
+                      type="button"
+                      onClick={() => void loadLoanSchedule(selectedLoanId)}
+                      style={{
+                        padding: '7px 12px', borderRadius: 8, border: `1px solid ${C.border}`,
+                        background: '#fff', color: C.text, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >
+                      Load Schedule
+                    </button>
+                  </div>
+                ) : (
+                  (() => {
+                    const schedule = schedulesByLoanId[selectedLoanId]
+                    const nextScheduled = schedule.payments.find((p) => p.status === 'Scheduled')
+                    const hasSelectedLoan = Boolean(selectedLoanId)
+                    const hasLoadedSchedule = Boolean(schedule)
+                    const hasNextInstallment = Boolean(nextScheduled)
+
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <div style={{
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 10,
+                          padding: 14,
+                          background: '#ffffff',
+                        }}>
+                          <p style={{ margin: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            Recommended Installment Flow
+                          </p>
+                          <ol style={{ margin: '8px 0 0', paddingLeft: 18, display: 'grid', gap: 6 }}>
+                            <li style={{ fontSize: 12, color: hasSelectedLoan ? C.success : C.muted }}>
+                              Select an active loan.
+                            </li>
+                            <li style={{ fontSize: 12, color: hasLoadedSchedule ? C.success : C.muted }}>
+                              Load and review the installment schedule.
+                            </li>
+                            <li style={{ fontSize: 12, color: hasNextInstallment ? C.success : C.muted }}>
+                              Pay the next due installment only.
+                            </li>
+                            <li style={{ fontSize: 12, color: C.text }}>
+                              Verify status updates to Completed and outstanding balance is reduced.
+                            </li>
+                          </ol>
+                        </div>
+
+                        <div style={{
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 10,
+                          padding: 14,
+                          background: 'linear-gradient(135deg, color-mix(in srgb, var(--primary) 8%, white), #ffffff)',
+                        }}>
+                          <p style={{ margin: 0, fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            Next Installment
+                          </p>
+                          <p style={{ margin: '6px 0', fontSize: 20, fontWeight: 800, color: C.text }}>
+                            {nextScheduled ? formatCurrency(nextScheduled.totalAmount) : 'No payment due'}
+                          </p>
+                          <p style={{ margin: 0, fontSize: 12, color: C.muted }}>
+                            {nextScheduled ? `Due ${new Date(nextScheduled.dueAt).toLocaleDateString()}` : 'All installments settled or waived.'}
+                          </p>
+                          {nextScheduled && (
+                            <button
+                              type="button"
+                              onClick={() => void handlePayNextInstallment(selectedLoanId)}
+                              disabled={payingLoanId === selectedLoanId}
+                              style={{
+                                marginTop: 10,
+                                padding: '9px 14px',
+                                borderRadius: 8,
+                                border: 'none',
+                                background: C.primary,
+                                color: '#fff',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                cursor: payingLoanId === selectedLoanId ? 'not-allowed' : 'pointer',
+                                opacity: payingLoanId === selectedLoanId ? 0.65 : 1,
+                              }}
+                            >
+                              {payingLoanId === selectedLoanId ? 'Recording Payment...' : 'Pay Next Installment'}
+                            </button>
+                          )}
+                        </div>
+
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 620 }}>
+                            <thead>
+                              <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                                <th style={{ textAlign: 'left', fontSize: 11, color: C.muted, padding: '8px 6px' }}>Due Date</th>
+                                <th style={{ textAlign: 'right', fontSize: 11, color: C.muted, padding: '8px 6px' }}>Principal</th>
+                                <th style={{ textAlign: 'right', fontSize: 11, color: C.muted, padding: '8px 6px' }}>Interest</th>
+                                <th style={{ textAlign: 'right', fontSize: 11, color: C.muted, padding: '8px 6px' }}>Total</th>
+                                <th style={{ textAlign: 'left', fontSize: 11, color: C.muted, padding: '8px 6px' }}>Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {schedule.payments.map((payment) => (
+                                <tr key={payment.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                                  <td style={{ padding: '10px 6px', fontSize: 12, color: C.text }}>
+                                    {new Date(payment.dueAt).toLocaleDateString()}
+                                  </td>
+                                  <td style={{ padding: '10px 6px', textAlign: 'right', fontSize: 12, color: C.text }}>
+                                    {formatCurrency(payment.principalAmount)}
+                                  </td>
+                                  <td style={{ padding: '10px 6px', textAlign: 'right', fontSize: 12, color: C.text }}>
+                                    {formatCurrency(payment.interestAmount)}
+                                  </td>
+                                  <td style={{ padding: '10px 6px', textAlign: 'right', fontSize: 12, fontWeight: 700, color: C.text }}>
+                                    {formatCurrency(payment.totalAmount)}
+                                  </td>
+                                  <td style={{ padding: '10px 6px' }}>
+                                    <StatusBadge status={payment.status} />
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )
+                  })()
+                )}
+              </div>
             </div>
           )}
 

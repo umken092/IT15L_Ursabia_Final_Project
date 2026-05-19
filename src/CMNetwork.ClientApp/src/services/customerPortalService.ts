@@ -48,6 +48,35 @@ export interface ConfirmPaymentResponse {
   completedAt?: string
 }
 
+export interface LoanInstallment {
+  id: string
+  dueAt: string
+  principalAmount: number
+  interestAmount: number
+  totalAmount: number
+  status: 'Scheduled' | 'Completed' | 'Overdue' | 'Waived'
+  completedAt?: string | null
+  paymentMethod?: string | null
+}
+
+export interface LoanPaymentScheduleResponse {
+  loanId: string
+  principalAmount: number
+  outstandingPrincipal: number
+  totalInterestAccrued: number
+  interestRate: number
+  status: string
+  payments: LoanInstallment[]
+}
+
+export interface LoanPaymentResult {
+  message: string
+  paymentId: string
+  amount: number
+  outstandingPrincipal: number
+  loanStatus: string
+}
+
 export interface CustomerProfile {
   id: string
   firstName: string
@@ -348,6 +377,18 @@ export const customerPortalService = {
   // Get loan application status
   async getApplicationDetail(applicationId: string): Promise<any> {
     const response = await apiClient.get(`/customer/loans/applications/${applicationId}`)
+    return response.data
+  },
+
+  async getLoanPaymentSchedule(loanId: string): Promise<LoanPaymentScheduleResponse> {
+    const response = await apiClient.get<LoanPaymentScheduleResponse>(`/loan-payments/loans/${loanId}/schedule`)
+    return response.data
+  },
+
+  async payLoanInstallmentManual(loanId: string, amount: number): Promise<LoanPaymentResult> {
+    const response = await apiClient.post<LoanPaymentResult>(`/loan-payments/loans/${loanId}/pay-manual`, {
+      amount,
+    })
     return response.data
   },
 }
