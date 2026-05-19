@@ -333,15 +333,30 @@ public sealed class IntegrationCredentialService : IIntegrationCredentialService
             return string.Empty;
         }
 
+        var value = cipherText.Trim();
+
         try
         {
-            return _protector.Unprotect(cipherText);
+            return _protector.Unprotect(value);
         }
-        catch
+        catch (Exception ex)
         {
+            // Backward compatibility: older rows may contain plaintext secrets.
+            // If the value does not look like an ASP.NET DataProtection payload,
+            // treat it as a legacy plaintext value instead of disabling integration.
+            if (!LooksLikeDataProtectionPayload(value))
+            {
+                _logger.LogWarning("Integration credential appears to be legacy plaintext. Using stored value as-is.");
+                return value;
+            }
+
+            _logger.LogWarning(ex, "Failed to decrypt integration credential payload.");
             return string.Empty;
         }
     }
+
+    private static bool LooksLikeDataProtectionPayload(string value)
+        => value.StartsWith("CfDJ8", StringComparison.Ordinal);
 
     private static string NormalizeMode(string mode)
         => string.Equals(mode, "live", StringComparison.OrdinalIgnoreCase) ? "live" : "test";

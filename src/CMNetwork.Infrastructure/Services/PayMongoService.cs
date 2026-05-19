@@ -127,7 +127,11 @@ public sealed class PayMongoService : IPayMongoService
             return new CreateCheckoutSessionResult(mockSessionId, mockCheckoutUrl);
         }
 
-        throw new InvalidOperationException("Unable to create PayMongo checkout session.");
+        var providerMessage = ExtractProviderErrorMessage(lastBody);
+        throw new InvalidOperationException(
+            string.IsNullOrWhiteSpace(providerMessage)
+                ? "Unable to create PayMongo checkout session."
+                : $"Unable to create PayMongo checkout session: {providerMessage}");
     }
 
     public async Task<string> GetCheckoutSessionStatusAsync(
@@ -226,5 +230,41 @@ public sealed class PayMongoService : IPayMongoService
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Content = content;
         return request;
+    }
+
+    private static string ExtractProviderErrorMessage(string? responseBody)
+    {
+        if (string.IsNullOrWhiteSpace(responseBody))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(responseBody);
+            if (doc.RootElement.TryGetProperty("errors", out var errors)
+                && errors.ValueKind == JsonValueKind.Array
+                && errors.GetArrayLength() > 0)
+            {
+                var first = errors[0];
+                if (first.TryGetProperty("detail", out var detail)
+                    && detail.ValueKind == JsonValueKind.String)
+                {
+                    return detail.GetString() ?? string.Empty;
+                }
+
+                if (first.TryGetProperty("code", out var code)
+                    && code.ValueKind == JsonValueKind.String)
+                {
+                    return code.GetString() ?? string.Empty;
+                }
+            }
+        }
+        catch
+        {
+            // Ignore parse errors and fall back to empty message.
+        }
+
+        return string.Empty;
     }
 }
