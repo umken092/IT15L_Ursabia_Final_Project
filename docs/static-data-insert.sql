@@ -63,7 +63,7 @@ USING (VALUES
 ) AS src (IdStr, AccountCode, Name, Type, ParentAccountId, IsActive)
 ON target.AccountCode = src.AccountCode
 WHEN NOT MATCHED THEN INSERT (Id, AccountCode, Name, Type, ParentAccountId, IsActive, CreatedUtc)
-  VALUES (CAST(src.IdStr AS UNIQUEIDENTIFIER), src.AccountCode, src.Name, src.Type, src.ParentAccountId, src.IsActive, @Now)
+  VALUES (CAST(HASHBYTES('MD5', src.IdStr) AS UNIQUEIDENTIFIER), src.AccountCode, src.Name, src.Type, src.ParentAccountId, src.IsActive, @Now)
 WHEN MATCHED THEN UPDATE SET Name = src.Name, Type = src.Type, IsActive = src.IsActive;
 
 -- ===========================================================================
@@ -77,7 +77,7 @@ USING (VALUES
 ) AS src (IdStr, Name, StartDate, EndDate, IsClosed)
 ON target.Name = src.Name
 WHEN NOT MATCHED THEN INSERT (Id, Name, StartDate, EndDate, IsClosed, CreatedUtc)
-  VALUES (CAST(src.IdStr AS UNIQUEIDENTIFIER), src.Name, src.StartDate, src.EndDate, src.IsClosed, @Now)
+  VALUES (CAST(HASHBYTES('MD5', src.IdStr) AS UNIQUEIDENTIFIER), src.Name, src.StartDate, src.EndDate, src.IsClosed, @Now)
 WHEN MATCHED THEN UPDATE SET StartDate = src.StartDate, EndDate = src.EndDate, IsClosed = src.IsClosed;
 
 -- ===========================================================================
@@ -109,7 +109,7 @@ USING (VALUES
 ON target.VendorCode = src.VendorCode
 WHEN NOT MATCHED THEN INSERT
   (Id, VendorCode, Name, ContactPerson, Email, PhoneNumber, Address, City, State, PostalCode, Country, TaxId, PaymentTerms, CreditLimit, IsActive, CreatedUtc)
-  VALUES (CAST(src.IdStr AS UNIQUEIDENTIFIER), src.VendorCode, src.Name, src.ContactPerson, src.Email, src.PhoneNumber,
+  VALUES (CAST(HASHBYTES('MD5', src.IdStr) AS UNIQUEIDENTIFIER), src.VendorCode, src.Name, src.ContactPerson, src.Email, src.PhoneNumber,
           src.Address, src.City, src.State, src.PostalCode, src.Country, src.TaxId, src.PaymentTerms, src.CreditLimit, 1, @Now)
 WHEN MATCHED THEN UPDATE SET Name = src.Name, Email = src.Email, IsActive = 1;
 
@@ -142,7 +142,7 @@ USING (VALUES
 ON target.CustomerCode = src.CustomerCode
 WHEN NOT MATCHED THEN INSERT
   (Id, CustomerCode, Name, ContactPerson, Email, PhoneNumber, Address, City, State, PostalCode, Country, TaxId, PaymentTerms, CreditLimit, IsActive, CreatedUtc, RegistrationOtpVerified)
-  VALUES (CAST(src.IdStr AS UNIQUEIDENTIFIER), src.CustomerCode, src.Name, src.ContactPerson, src.Email, src.PhoneNumber,
+  VALUES (CAST(HASHBYTES('MD5', src.IdStr) AS UNIQUEIDENTIFIER), src.CustomerCode, src.Name, src.ContactPerson, src.Email, src.PhoneNumber,
           src.Address, src.City, src.State, src.PostalCode, src.Country, src.TaxId, src.PaymentTerms, src.CreditLimit, 1, @Now, 0)
 WHEN MATCHED THEN UPDATE SET Name = src.Name, Email = src.Email, IsActive = 1;
 
@@ -152,22 +152,22 @@ WHEN MATCHED THEN UPDATE SET Name = src.Name, Email = src.Email, IsActive = 1;
 -- ===========================================================================
 MERGE dbo.ARInvoices AS target
 USING (VALUES
-  ('AR001-0000-0000-0000-000000000001', 'C0001-0000-0000-0000-000000000001',
+  ('AR001-0000-0000-0000-000000000001', 'CUS-001',
    'AR-2026-001', @MonthStart, @MonthEnd, 350000.00, 4),    -- Paid
-  ('AR002-0000-0000-0000-000000000002', 'C0002-0000-0000-0000-000000000002',
+  ('AR002-0000-0000-0000-000000000002', 'CUS-002',
    'AR-2026-002', @MonthStart, @MonthEnd, 520000.00, 3),    -- Approved
-  ('AR003-0000-0000-0000-000000000003', 'C0003-0000-0000-0000-000000000003',
+  ('AR003-0000-0000-0000-000000000003', 'CUS-003',
    'AR-2026-003', @MidMonth,  @MonthEnd, 180000.00, 2),    -- Sent
-  ('AR004-0000-0000-0000-000000000004', 'C0004-0000-0000-0000-000000000004',
+  ('AR004-0000-0000-0000-000000000004', 'CUS-004',
    'AR-2026-004', @MidMonth,  @MonthEnd, 275000.00, 4),    -- Paid
-  ('AR005-0000-0000-0000-000000000005', 'C0005-0000-0000-0000-000000000005',
+  ('AR005-0000-0000-0000-000000000005', 'CUS-005',
    'AR-2026-005', @MidMonth,  @MonthEnd, 410000.00, 3)     -- Approved
-) AS src (IdStr, CustomerIdStr, InvoiceNumber, InvoiceDate, DueDate, TotalAmount, Status)
+) AS src (IdStr, CustomerCode, InvoiceNumber, InvoiceDate, DueDate, TotalAmount, Status)
 ON target.InvoiceNumber = src.InvoiceNumber
 WHEN NOT MATCHED THEN INSERT
   (Id, CustomerId, InvoiceNumber, InvoiceDate, DueDate, TotalAmount, Status, CreatedByUserId, CreatedUtc, IsDeleted)
-  VALUES (CAST(src.IdStr AS UNIQUEIDENTIFIER),
-          CAST(src.CustomerIdStr AS UNIQUEIDENTIFIER),
+  VALUES (CAST(HASHBYTES('MD5', src.IdStr) AS UNIQUEIDENTIFIER),
+          (SELECT TOP (1) c.Id FROM dbo.Customers c WHERE c.CustomerCode = src.CustomerCode),
           src.InvoiceNumber,
           CAST(src.InvoiceDate AS DATETIME2),
           CAST(src.DueDate AS DATETIME2),
@@ -176,27 +176,40 @@ WHEN MATCHED THEN UPDATE SET TotalAmount = src.TotalAmount, Status = src.Status,
 
 -- AR Invoice Lines
 MERGE dbo.ARInvoiceLines AS target
-USING (VALUES
+USING (
+  SELECT
+    s.IdStr,
+    inv.Id AS ARInvoiceId,
+    coa.Id AS ChartOfAccountId,
+    s.Description,
+    s.Quantity,
+    s.UnitPrice,
+    s.Amount,
+    s.TaxAmount
+  FROM (VALUES
   -- AR-001 lines
-  ('AL001-0000-0000-0000-000000000001', 'AR001-0000-0000-0000-000000000001', 'A4000-0001', 'IT Consulting Services – Apr batch',   5.0,  50000.00, 250000.00, NULL),
-  ('AL001-0000-0000-0000-000000000002', 'AR001-0000-0000-0000-000000000001', 'A4000-0003', 'Process Improvement Workshop',          2.0,  50000.00, 100000.00, NULL),
+  ('AL001-0000-0000-0000-000000000001', 'AR-2026-001', '4010', 'IT Consulting Services – Apr batch',   5.0,  50000.00, 250000.00, NULL),
+  ('AL001-0000-0000-0000-000000000002', 'AR-2026-001', '4030', 'Process Improvement Workshop',          2.0,  50000.00, 100000.00, NULL),
   -- AR-002 lines
-  ('AL002-0000-0000-0000-000000000001', 'AR002-0000-0000-0000-000000000002', 'A4000-0001', 'System Integration Support',           10.0,  40000.00, 400000.00, NULL),
-  ('AL002-0000-0000-0000-000000000002', 'AR002-0000-0000-0000-000000000002', 'A4000-0002', 'Escrow Interest Income',                1.0,  120000.00, 120000.00, NULL),
+  ('AL002-0000-0000-0000-000000000001', 'AR-2026-002', '4010', 'System Integration Support',           10.0,  40000.00, 400000.00, NULL),
+  ('AL002-0000-0000-0000-000000000002', 'AR-2026-002', '4020', 'Escrow Interest Income',                1.0,  120000.00, 120000.00, NULL),
   -- AR-003 lines
-  ('AL003-0000-0000-0000-000000000001', 'AR003-0000-0000-0000-000000000003', 'A4000-0003', 'ERP Configuration Services',           3.0,  60000.00, 180000.00, NULL),
+  ('AL003-0000-0000-0000-000000000001', 'AR-2026-003', '4030', 'ERP Configuration Services',           3.0,  60000.00, 180000.00, NULL),
   -- AR-004 lines
-  ('AL004-0000-0000-0000-000000000001', 'AR004-0000-0000-0000-000000000004', 'A4000-0001', 'Managed IT Services – monthly retainer', 1.0, 275000.00, 275000.00, NULL),
+  ('AL004-0000-0000-0000-000000000001', 'AR-2026-004', '4010', 'Managed IT Services – monthly retainer', 1.0, 275000.00, 275000.00, NULL),
   -- AR-005 lines
-  ('AL005-0000-0000-0000-000000000001', 'AR005-0000-0000-0000-000000000005', 'A4000-0003', 'Business Process Outsourcing',          4.0,  80000.00, 320000.00, NULL),
-  ('AL005-0000-0000-0000-000000000002', 'AR005-0000-0000-0000-000000000005', 'A4000-0002', 'Investment Advisory Fee',               1.0,  90000.00,  90000.00, NULL)
-) AS src (IdStr, InvoiceIdStr, AccountIdStr, Description, Quantity, UnitPrice, Amount, TaxAmount)
-ON target.Id = CAST(src.IdStr AS UNIQUEIDENTIFIER)
+  ('AL005-0000-0000-0000-000000000001', 'AR-2026-005', '4030', 'Business Process Outsourcing',          4.0,  80000.00, 320000.00, NULL),
+  ('AL005-0000-0000-0000-000000000002', 'AR-2026-005', '4020', 'Investment Advisory Fee',               1.0,  90000.00,  90000.00, NULL)
+  ) AS s (IdStr, InvoiceNumber, AccountCode, Description, Quantity, UnitPrice, Amount, TaxAmount)
+  JOIN dbo.ARInvoices inv ON inv.InvoiceNumber = s.InvoiceNumber
+  JOIN dbo.ChartOfAccounts coa ON coa.AccountCode = s.AccountCode
+) AS src
+ON target.Id = CAST(HASHBYTES('MD5', src.IdStr) AS UNIQUEIDENTIFIER)
 WHEN NOT MATCHED THEN INSERT
   (Id, ARInvoiceId, ChartOfAccountId, Description, Quantity, UnitPrice, Amount, TaxAmount, CreatedUtc)
-  VALUES (CAST(src.IdStr AS UNIQUEIDENTIFIER),
-          CAST(src.InvoiceIdStr AS UNIQUEIDENTIFIER),
-          CAST(src.AccountIdStr AS UNIQUEIDENTIFIER),
+  VALUES (CAST(HASHBYTES('MD5', src.IdStr) AS UNIQUEIDENTIFIER),
+          src.ARInvoiceId,
+          src.ChartOfAccountId,
           src.Description, src.Quantity, src.UnitPrice, src.Amount, src.TaxAmount, @Now)
 WHEN MATCHED THEN UPDATE SET Amount = src.Amount;
 
@@ -205,22 +218,22 @@ WHEN MATCHED THEN UPDATE SET Amount = src.Amount;
 -- ===========================================================================
 MERGE dbo.APInvoices AS target
 USING (VALUES
-  ('AP001-0000-0000-0000-000000000001', 'V0001-0000-0000-0000-000000000001',
+  ('AP001-0000-0000-0000-000000000001', 'VND-001',
    'AP-MEQ-2026-001', @MonthStart, @MonthEnd,  85000.00, 3),   -- Electricity
-  ('AP002-0000-0000-0000-000000000002', 'V0002-0000-0000-0000-000000000002',
+  ('AP002-0000-0000-0000-000000000002', 'VND-002',
    'AP-PLT-2026-001', @MonthStart, @MonthEnd,  12000.00, 3),   -- Internet/fiber
-  ('AP003-0000-0000-0000-000000000003', 'V0003-0000-0000-0000-000000000003',
+  ('AP003-0000-0000-0000-000000000003', 'VND-003',
    'AP-GLB-2026-001', @MonthStart, @MonthEnd,   8500.00, 3),   -- Mobile lines
-  ('AP004-0000-0000-0000-000000000004', 'V0004-0000-0000-0000-000000000004',
+  ('AP004-0000-0000-0000-000000000004', 'VND-004',
    'AP-SMP-2026-001', @MonthStart, @MonthEnd, 150000.00, 3),   -- Office rent
-  ('AP005-0000-0000-0000-000000000005', 'V0005-0000-0000-0000-000000000005',
+  ('AP005-0000-0000-0000-000000000005', 'VND-005',
    'AP-NBS-2026-001', @MonthStart, @MonthEnd,   6500.00, 2)    -- Supplies (Submitted)
-) AS src (IdStr, VendorIdStr, InvoiceNumber, InvoiceDate, DueDate, TotalAmount, Status)
+) AS src (IdStr, VendorCode, InvoiceNumber, InvoiceDate, DueDate, TotalAmount, Status)
 ON target.InvoiceNumber = src.InvoiceNumber
 WHEN NOT MATCHED THEN INSERT
   (Id, VendorId, InvoiceNumber, InvoiceDate, DueDate, TotalAmount, Status, CreatedByUserId, CreatedUtc, IsDeleted)
-  VALUES (CAST(src.IdStr AS UNIQUEIDENTIFIER),
-          CAST(src.VendorIdStr AS UNIQUEIDENTIFIER),
+  VALUES (CAST(HASHBYTES('MD5', src.IdStr) AS UNIQUEIDENTIFIER),
+          (SELECT TOP (1) v.Id FROM dbo.Vendors v WHERE v.VendorCode = src.VendorCode),
           src.InvoiceNumber,
           CAST(src.InvoiceDate AS DATETIME2),
           CAST(src.DueDate AS DATETIME2),
@@ -229,19 +242,32 @@ WHEN MATCHED THEN UPDATE SET TotalAmount = src.TotalAmount, Status = src.Status,
 
 -- AP Invoice Lines
 MERGE dbo.APInvoiceLines AS target
-USING (VALUES
-  ('BL001-0000-0000-0000-000000000001', 'AP001-0000-0000-0000-000000000001', 'A5000-0003', 'Electricity – Office Building',       1.0, 85000.00,  85000.00, NULL),
-  ('BL002-0000-0000-0000-000000000001', 'AP002-0000-0000-0000-000000000002', 'A5000-0007', 'Fiber Broadband – Corporate',         1.0, 12000.00,  12000.00, NULL),
-  ('BL003-0000-0000-0000-000000000001', 'AP003-0000-0000-0000-000000000003', 'A5000-0007', 'Mobile Corporate Lines x 5',          1.0,  8500.00,   8500.00, NULL),
-  ('BL004-0000-0000-0000-000000000001', 'AP004-0000-0000-0000-000000000004', 'A5000-0002', 'Office Rent – May',                   1.0, 150000.00, 150000.00, NULL),
-  ('BL005-0000-0000-0000-000000000001', 'AP005-0000-0000-0000-000000000005', 'A5000-0004', 'Office Supplies – Replenishment',     1.0,  6500.00,   6500.00, NULL)
-) AS src (IdStr, InvoiceIdStr, AccountIdStr, Description, Quantity, UnitPrice, Amount, TaxAmount)
-ON target.Id = CAST(src.IdStr AS UNIQUEIDENTIFIER)
+USING (
+  SELECT
+    s.IdStr,
+    inv.Id AS APInvoiceId,
+    coa.Id AS ChartOfAccountId,
+    s.Description,
+    s.Quantity,
+    s.UnitPrice,
+    s.Amount,
+    s.TaxAmount
+  FROM (VALUES
+  ('BL001-0000-0000-0000-000000000001', 'AP-MEQ-2026-001', '5030', 'Electricity – Office Building',       1.0, 85000.00,  85000.00, NULL),
+  ('BL002-0000-0000-0000-000000000001', 'AP-PLT-2026-001', '5070', 'Fiber Broadband – Corporate',         1.0, 12000.00,  12000.00, NULL),
+  ('BL003-0000-0000-0000-000000000001', 'AP-GLB-2026-001', '5070', 'Mobile Corporate Lines x 5',          1.0,  8500.00,   8500.00, NULL),
+  ('BL004-0000-0000-0000-000000000001', 'AP-SMP-2026-001', '5020', 'Office Rent – May',                   1.0, 150000.00, 150000.00, NULL),
+  ('BL005-0000-0000-0000-000000000001', 'AP-NBS-2026-001', '5040', 'Office Supplies – Replenishment',     1.0,  6500.00,   6500.00, NULL)
+  ) AS s (IdStr, InvoiceNumber, AccountCode, Description, Quantity, UnitPrice, Amount, TaxAmount)
+  JOIN dbo.APInvoices inv ON inv.InvoiceNumber = s.InvoiceNumber
+  JOIN dbo.ChartOfAccounts coa ON coa.AccountCode = s.AccountCode
+) AS src
+ON target.Id = CAST(HASHBYTES('MD5', src.IdStr) AS UNIQUEIDENTIFIER)
 WHEN NOT MATCHED THEN INSERT
   (Id, APInvoiceId, ChartOfAccountId, Description, Quantity, UnitPrice, Amount, TaxAmount, CreatedUtc)
-  VALUES (CAST(src.IdStr AS UNIQUEIDENTIFIER),
-          CAST(src.InvoiceIdStr AS UNIQUEIDENTIFIER),
-          CAST(src.AccountIdStr AS UNIQUEIDENTIFIER),
+  VALUES (CAST(HASHBYTES('MD5', src.IdStr) AS UNIQUEIDENTIFIER),
+          src.APInvoiceId,
+          src.ChartOfAccountId,
           src.Description, src.Quantity, src.UnitPrice, src.Amount, src.TaxAmount, @Now)
 WHEN MATCHED THEN UPDATE SET Amount = src.Amount;
 
@@ -277,7 +303,7 @@ USING (VALUES
 ON target.EntryNumber = src.EntryNumber
 WHEN NOT MATCHED THEN INSERT
   (Id, EntryNumber, EntryDate, Description, ReferenceNo, Status, CreatedBy, CreatedUtc, PostedBy, PostedUtc)
-  VALUES (CAST(src.IdStr AS UNIQUEIDENTIFIER), src.EntryNumber, src.EntryDate,
+  VALUES (CAST(HASHBYTES('MD5', src.IdStr) AS UNIQUEIDENTIFIER), src.EntryNumber, src.EntryDate,
           src.Description, src.ReferenceNo, src.Status,
           @SystemUser, @Now, @SystemUser, @Now)
 WHEN MATCHED THEN UPDATE SET Status = src.Status, Description = src.Description;
@@ -303,42 +329,53 @@ WHEN MATCHED THEN UPDATE SET Status = src.Status, Description = src.Description;
 --      Net Income MTD = 509,500
 -- ===========================================================================
 MERGE dbo.JournalEntryLines AS target
-USING (VALUES
+USING (
+  SELECT
+    s.IdStr,
+    je.Id AS JournalEntryId,
+    coa.Id AS AccountId,
+    s.Description,
+    s.Debit,
+    s.Credit
+  FROM (VALUES
   -- JE-001: Service Revenue – 350,000 (Debit A/R, Credit Service Revenue)
-  ('JL001-0001-0000-0000-000000000001', 'JE001-0000-0000-0000-000000000001', 'A1000-0003', 'A/R – Jollibee invoice AR-2026-001',      350000.00,      0.00),
-  ('JL001-0002-0000-0000-000000000002', 'JE001-0000-0000-0000-000000000001', 'A4000-0001', 'Service Revenue – May collection',              0.00, 350000.00),
+  ('JL001-0001-0000-0000-000000000001', 'JE-2026-001', '1030', 'A/R – Jollibee invoice AR-2026-001',      350000.00,      0.00),
+  ('JL001-0002-0000-0000-000000000002', 'JE-2026-001', '4010', 'Service Revenue – May collection',              0.00, 350000.00),
 
   -- JE-002: Consulting Revenue – 520,000
-  ('JL002-0001-0000-0000-000000000003', 'JE002-0000-0000-0000-000000000002', 'A1000-0003', 'A/R – Ayala invoice AR-2026-002',         520000.00,      0.00),
-  ('JL002-0002-0000-0000-000000000004', 'JE002-0000-0000-0000-000000000002', 'A4000-0003', 'Consulting Revenue – Ayala engagement',        0.00, 520000.00),
+  ('JL002-0001-0000-0000-000000000003', 'JE-2026-002', '1030', 'A/R – Ayala invoice AR-2026-002',         520000.00,      0.00),
+  ('JL002-0002-0000-0000-000000000004', 'JE-2026-002', '4030', 'Consulting Revenue – Ayala engagement',        0.00, 520000.00),
 
   -- JE-003: Payroll – 380,000 (Debit Salaries, Credit Cash in Bank)
-  ('JL003-0001-0000-0000-000000000005', 'JE003-0000-0000-0000-000000000003', 'A5000-0001', 'Salaries and Wages – May payroll',        380000.00,      0.00),
-  ('JL003-0002-0000-0000-000000000006', 'JE003-0000-0000-0000-000000000003', 'A1000-0002', 'Cash disbursement – BDO payroll',              0.00, 380000.00),
+  ('JL003-0001-0000-0000-000000000005', 'JE-2026-003', '5010', 'Salaries and Wages – May payroll',        380000.00,      0.00),
+  ('JL003-0002-0000-0000-000000000006', 'JE-2026-003', '1020', 'Cash disbursement – BDO payroll',              0.00, 380000.00),
 
   -- JE-004: Rent – 150,000
-  ('JL004-0001-0000-0000-000000000007', 'JE004-0000-0000-0000-000000000004', 'A5000-0002', 'Rent Expense – May',                     150000.00,      0.00),
-  ('JL004-0002-0000-0000-000000000008', 'JE004-0000-0000-0000-000000000004', 'A2000-0001', 'A/P – SM Prime invoice',                       0.00, 150000.00),
+  ('JL004-0001-0000-0000-000000000007', 'JE-2026-004', '5020', 'Rent Expense – May',                     150000.00,      0.00),
+  ('JL004-0002-0000-0000-000000000008', 'JE-2026-004', '2010', 'A/P – SM Prime invoice',                       0.00, 150000.00),
 
   -- JE-005: Utilities – 85,000
-  ('JL005-0001-0000-0000-000000000009', 'JE005-0000-0000-0000-000000000005', 'A5000-0003', 'Utilities Expense – Meralco May bill',     85000.00,      0.00),
-  ('JL005-0002-0000-0000-000000000010', 'JE005-0000-0000-0000-000000000005', 'A2000-0001', 'A/P – Meralco invoice',                        0.00,  85000.00),
+  ('JL005-0001-0000-0000-000000000009', 'JE-2026-005', '5030', 'Utilities Expense – Meralco May bill',     85000.00,      0.00),
+  ('JL005-0002-0000-0000-000000000010', 'JE-2026-005', '2010', 'A/P – Meralco invoice',                        0.00,  85000.00),
 
   -- JE-006: DMCI managed IT revenue – 275,000
-  ('JL006-0001-0000-0000-000000000011', 'JE006-0000-0000-0000-000000000006', 'A1000-0003', 'A/R – DMCI invoice AR-2026-004',          275000.00,      0.00),
-  ('JL006-0002-0000-0000-000000000012', 'JE006-0000-0000-0000-000000000006', 'A4000-0001', 'Service Revenue – DMCI retainer',              0.00, 275000.00),
+  ('JL006-0001-0000-0000-000000000011', 'JE-2026-006', '1030', 'A/R – DMCI invoice AR-2026-004',          275000.00,      0.00),
+  ('JL006-0002-0000-0000-000000000012', 'JE-2026-006', '4010', 'Service Revenue – DMCI retainer',              0.00, 275000.00),
 
   -- JE-007: Communication – 20,500 (PLDT 12,000 + Globe 8,500)
-  ('JL007-0001-0000-0000-000000000013', 'JE007-0000-0000-0000-000000000007', 'A5000-0007', 'Communication – PLDT fiber broadband',     12000.00,      0.00),
-  ('JL007-0002-0000-0000-000000000014', 'JE007-0000-0000-0000-000000000007', 'A5000-0007', 'Communication – Globe mobile lines',        8500.00,      0.00),
-  ('JL007-0003-0000-0000-000000000015', 'JE007-0000-0000-0000-000000000007', 'A2000-0001', 'A/P – PLDT & Globe invoices',                  0.00,  20500.00)
-) AS src (IdStr, JournalEntryIdStr, AccountIdStr, Description, Debit, Credit)
-ON target.Id = CAST(src.IdStr AS UNIQUEIDENTIFIER)
+  ('JL007-0001-0000-0000-000000000013', 'JE-2026-007', '5070', 'Communication – PLDT fiber broadband',     12000.00,      0.00),
+  ('JL007-0002-0000-0000-000000000014', 'JE-2026-007', '5070', 'Communication – Globe mobile lines',        8500.00,      0.00),
+  ('JL007-0003-0000-0000-000000000015', 'JE-2026-007', '2010', 'A/P – PLDT & Globe invoices',                  0.00,  20500.00)
+  ) AS s (IdStr, EntryNumber, AccountCode, Description, Debit, Credit)
+  JOIN dbo.JournalEntries je ON je.EntryNumber = s.EntryNumber
+  JOIN dbo.ChartOfAccounts coa ON coa.AccountCode = s.AccountCode
+) AS src
+ON target.Id = CAST(HASHBYTES('MD5', src.IdStr) AS UNIQUEIDENTIFIER)
 WHEN NOT MATCHED THEN INSERT
   (Id, JournalEntryId, AccountId, Description, Debit, Credit)
-  VALUES (CAST(src.IdStr AS UNIQUEIDENTIFIER),
-          CAST(src.JournalEntryIdStr AS UNIQUEIDENTIFIER),
-          CAST(src.AccountIdStr AS UNIQUEIDENTIFIER),
+  VALUES (CAST(HASHBYTES('MD5', src.IdStr) AS UNIQUEIDENTIFIER),
+          src.JournalEntryId,
+          src.AccountId,
           src.Description, src.Debit, src.Credit)
 WHEN MATCHED THEN UPDATE SET Debit = src.Debit, Credit = src.Credit;
 
