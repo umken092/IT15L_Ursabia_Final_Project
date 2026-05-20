@@ -16,7 +16,7 @@ namespace CMNetwork.Controllers;
 
 [ApiController]
 [Route("api/reports")]
-[Authorize(Roles = "accountant,cfo,super-admin,authorized-viewer,auditor")]
+[Authorize(Roles = "accountant,cfo,super-admin,authorized-viewer,authorizedviewer,AuthorizedViewer,authorized viewer,auditor,faculty-admin,facultyadmin,FacultyAdmin,faculty admin")]
 public class ReportsController : ControllerBase
 {
     private readonly CMNetworkDbContext _db;
@@ -100,7 +100,7 @@ public class ReportsController : ControllerBase
         var totalExpenses = expenses.Sum(x => x.Amount);
         var netIncome = totalRevenue - totalExpenses;
 
-        if (User.IsInRole("authorized-viewer"))
+        if (IsAuthorizedViewer())
         {
             return Ok(new
             {
@@ -160,7 +160,7 @@ public class ReportsController : ControllerBase
         var totalLiabilities = liabilities.Sum(x => x.Amount);
         var totalEquity = equity.Sum(x => x.Amount) + retainedEarnings;
 
-        if (User.IsInRole("authorized-viewer"))
+        if (IsAuthorizedViewer())
         {
             return Ok(new
             {
@@ -199,7 +199,7 @@ public class ReportsController : ControllerBase
         [FromQuery(Name = "startDate")] DateOnly? startDate = null,
         [FromQuery(Name = "endDate")] DateOnly? endDate = null)
     {
-        if (User.IsInRole("authorized-viewer"))
+        if (IsAuthorizedViewer())
             return Forbid();
 
         var fromDate = from ?? startDate ?? new DateOnly(DateTime.UtcNow.Year, 1, 1);
@@ -251,7 +251,7 @@ public class ReportsController : ControllerBase
         [FromQuery] DateOnly? asOf = null,
         [FromQuery(Name = "asOfDate")] DateOnly? asOfDateFromClient = null)
     {
-        if (User.IsInRole("authorized-viewer"))
+        if (IsAuthorizedViewer())
             return Forbid();
 
         var today = asOf ?? asOfDateFromClient ?? DateOnly.FromDateTime(DateTime.UtcNow);
@@ -298,7 +298,7 @@ public class ReportsController : ControllerBase
         [FromQuery] DateOnly? asOf = null,
         [FromQuery(Name = "asOfDate")] DateOnly? asOfDateFromClient = null)
     {
-        if (User.IsInRole("authorized-viewer"))
+        if (IsAuthorizedViewer())
             return Forbid();
 
         var today = asOf ?? asOfDateFromClient ?? DateOnly.FromDateTime(DateTime.UtcNow);
@@ -343,9 +343,6 @@ public class ReportsController : ControllerBase
     [HttpGet("department-budget")]
     public async Task<IActionResult> GetDepartmentBudget([FromQuery] Guid? periodId = null)
     {
-        if (User.IsInRole("authorized-viewer"))
-            return Forbid();
-
         try
         {
             var departments = await _db.Departments.ToListAsync();
@@ -395,19 +392,19 @@ public class ReportsController : ControllerBase
         var normalizedFormat = (query.Format ?? "excel").Trim().ToLowerInvariant();
         var normalizedType = type.Trim().ToLowerInvariant();
 
-        if (User.IsInRole("authorized-viewer"))
+        if (IsAuthorizedViewer())
         {
-            if (normalizedFormat != "pdf")
+            if (normalizedFormat is not ("pdf" or "csv"))
                 return Forbid();
 
-            if (normalizedType is not ("income-statement" or "balance-sheet"))
+            if (normalizedType is not ("income-statement" or "balance-sheet" or "department-budget"))
                 return Forbid();
         }
 
-        if (normalizedFormat is not ("excel" or "pdf"))
-            return BadRequest(new { message = "Invalid file format. Choose Excel or PDF." });
+        if (normalizedFormat is not ("excel" or "pdf" or "csv"))
+            return BadRequest(new { message = "Invalid file format. Choose Excel, CSV, or PDF." });
 
-        if (normalizedType is not ("income-statement" or "balance-sheet" or "aging-ap" or "aging-ar"))
+        if (normalizedType is not ("income-statement" or "balance-sheet" or "aging-ap" or "aging-ar" or "department-budget"))
             return BadRequest(new { message = "Unsupported report type for export." });
 
         var fromDate = query.From ?? query.StartDate;
@@ -463,6 +460,12 @@ public class ReportsController : ControllerBase
             var bytes = await package.GetAsByteArrayAsync();
             return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{normalizedType}-{toDate:yyyyMM}.xlsx");
         }
+        else if (normalizedFormat == "csv")
+        {
+            var csv = $"Report Type,From,To,Generated UTC{Environment.NewLine}{normalizedType},{fromDate:yyyy-MM-dd},{toDate:yyyy-MM-dd},{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}";
+            var bytes = System.Text.Encoding.UTF8.GetBytes(csv);
+            return File(bytes, "text/csv", $"{normalizedType}-{toDate:yyyyMM}.csv");
+        }
         else
         {
             QuestPDF.Settings.License = LicenseType.Community;
@@ -481,6 +484,12 @@ public class ReportsController : ControllerBase
             return File(pdfBytes, "application/pdf", $"{normalizedType}-{toDate:yyyyMM}.pdf");
         }
     }
+
+    private bool IsAuthorizedViewer() =>
+        User.IsInRole("authorized-viewer") ||
+        User.IsInRole("authorizedviewer") ||
+        User.IsInRole("AuthorizedViewer") ||
+        User.IsInRole("authorized viewer");
 
     // ── Report Templates ─────────────────────────────────────────────────────
 

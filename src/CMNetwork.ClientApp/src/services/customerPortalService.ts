@@ -1,4 +1,5 @@
 import { apiClient } from './apiClient'
+import { isAxiosError } from 'axios'
 
 export interface CustomerInvoice {
   id: string
@@ -281,18 +282,86 @@ export const customerPortalService = {
 
   // Profile operations
   async getMyProfile(): Promise<CustomerProfile> {
-    const response = await apiClient.get<CustomerProfile>('/customer/profile')
-    return response.data
+    try {
+      const response = await apiClient.get<CustomerProfile>('/customer/profile')
+      return response.data
+    } catch (error) {
+      if (!isAxiosError(error) || error.response?.status !== 403) throw error
+
+      const response = await apiClient.get<any>('/profile')
+      const data = response.data ?? {}
+      const names = String(data.fullName ?? '').trim().split(/\s+/)
+      const firstName = String(data.firstName ?? names[0] ?? '')
+      const lastName = String(data.lastName ?? names.slice(1).join(' ') ?? '')
+      return {
+        id: String(data.id ?? ''),
+        firstName,
+        lastName,
+        email: String(data.email ?? ''),
+        phoneNumber: String(data.phone ?? ''),
+        companyName: '',
+        address: String(data.address ?? ''),
+        city: '',
+        state: '',
+        country: '',
+        zipCode: '',
+        birthDate: data.birthDate,
+        age: undefined,
+        gender: data.gender,
+      }
+    }
   },
 
   async updateMyProfile(profile: Partial<CustomerProfile>): Promise<CustomerProfile> {
-    const response = await apiClient.put<CustomerProfile>('/customer/profile', profile)
-    return response.data
+    try {
+      const response = await apiClient.put<CustomerProfile>('/customer/profile', profile)
+      return response.data
+    } catch (error) {
+      if (!isAxiosError(error) || error.response?.status !== 403) throw error
+
+      let fallbackEmail = profile.email
+      if (!fallbackEmail) {
+        const current = await apiClient.get<any>('/profile')
+        fallbackEmail = current.data?.email
+      }
+
+      const payload = {
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        birthDate: profile.birthDate,
+        gender: profile.gender,
+        email: fallbackEmail,
+        phone: profile.phoneNumber,
+        address: profile.address,
+      }
+      const response = await apiClient.put<any>('/profile', payload)
+      const data = response.data ?? {}
+      return {
+        id: String(data.id ?? ''),
+        firstName: String(data.firstName ?? ''),
+        lastName: String(data.lastName ?? ''),
+        email: String(data.email ?? ''),
+        phoneNumber: String(data.phone ?? ''),
+        companyName: '',
+        address: String(data.address ?? ''),
+        city: '',
+        state: '',
+        country: '',
+        zipCode: '',
+        birthDate: data.birthDate,
+        gender: data.gender,
+      }
+    }
   },
 
   async getCustomerBanks(): Promise<CustomerBankDirectoryEntry[]> {
-    const response = await apiClient.get<CustomerBankDirectoryEntry[]>('/customer/banks')
-    return Array.isArray(response.data) ? response.data : []
+    try {
+      const response = await apiClient.get<CustomerBankDirectoryEntry[]>('/customer/banks')
+      return Array.isArray(response.data) ? response.data : []
+    } catch (error) {
+      if (!isAxiosError(error) || error.response?.status !== 403) throw error
+      return []
+    }
   },
 
   async requestBankVerification(): Promise<BankVerificationResponse> {
@@ -326,40 +395,81 @@ export const customerPortalService = {
 
   // Expense Claims operations
   async getMyExpenseClaims(): Promise<ExpenseClaim[]> {
-    const response = await apiClient.get<{ claims: ExpenseClaim[] } | ExpenseClaim[]>('/customer/expense-claims')
-    return Array.isArray(response.data) ? response.data : ((response.data as { claims: ExpenseClaim[] })?.claims ?? [])
+    try {
+      const response = await apiClient.get<{ claims: ExpenseClaim[] } | ExpenseClaim[]>('/customer/expense-claims')
+      const data = response.data
+      return Array.isArray(data) ? data : (data?.claims ?? [])
+    } catch (error) {
+      if (!isAxiosError(error) || error.response?.status !== 403) throw error
+
+      const response = await apiClient.get<any[]>('/expense-claims')
+      const items = Array.isArray(response.data) ? response.data : []
+      return items.map((x) => ({
+        id: String(x.id),
+        claimNumber: String(x.claimNumber ?? ''),
+        description: String(x.description ?? ''),
+        amount: Number(x.amount ?? 0),
+        category: String(x.category ?? ''),
+        submittedDate: String(x.submittedAtUtc ?? x.createdAtUtc ?? new Date().toISOString()),
+        status: String(x.status ?? 'Draft'),
+        approvedDate: x.reviewedAtUtc,
+        rejectReason: x.reviewNotes,
+      }))
+    }
   },
 
   async submitExpenseClaim(claim: SubmitExpenseClaimRequest): Promise<{ message: string; claimId: string }> {
-    const response = await apiClient.post<{ message: string; claimId: string }>('/customer/expense-claims/submit', {
-      description: claim.description,
-      amount: claim.amount,
-      category: claim.category,
-    })
-    return response.data
+    try {
+      const response = await apiClient.post<{ message: string; claimId: string }>('/customer/expense-claims/submit', {
+        description: claim.description,
+        amount: claim.amount,
+        category: claim.category,
+      })
+      return response.data
+    } catch (error) {
+      if (!isAxiosError(error) || error.response?.status !== 403) throw error
+
+      const create = await apiClient.post<any>('/expense-claims', {
+        date: new Date().toISOString().slice(0, 10),
+        category: claim.category,
+        description: claim.description,
+        amount: claim.amount,
+      })
+
+      const claimId = String(create.data?.id ?? create.data?.claimId ?? '')
+      if (claimId) {
+        await apiClient.post(`/expense-claims/${claimId}/submit`)
+      }
+
+      return { message: 'Claim submitted for approval.', claimId }
+    }
   },
 
   // Approvals operations
   async getPendingApprovals(): Promise<Approval[]> {
     const response = await apiClient.get<{ approvals: Approval[] } | Approval[]>('/customer/approvals/pending')
-    return Array.isArray(response.data) ? response.data : ((response.data as { approvals: Approval[] })?.approvals ?? [])
+    const data = response.data
+    return Array.isArray(data) ? data : (data?.approvals ?? [])
   },
 
   async getApprovedRequests(): Promise<Approval[]> {
     const response = await apiClient.get<{ approvals: Approval[] } | Approval[]>('/customer/approvals/approved')
-    return Array.isArray(response.data) ? response.data : ((response.data as { approvals: Approval[] })?.approvals ?? [])
+    const data = response.data
+    return Array.isArray(data) ? data : (data?.approvals ?? [])
   },
 
   // Reports operations
   async getFinancialReports(): Promise<FinancialReport[]> {
     const response = await apiClient.get<{ reports: FinancialReport[] } | FinancialReport[]>('/customer/reports/financial')
-    return Array.isArray(response.data) ? response.data : ((response.data as { reports: FinancialReport[] })?.reports ?? [])
+    const data = response.data
+    return Array.isArray(data) ? data : (data?.reports ?? [])
   },
 
   // Support operations
   async getMyTickets(): Promise<SupportTicket[]> {
     const response = await apiClient.get<{ tickets: SupportTicket[] } | SupportTicket[]>('/customer/support/tickets')
-    return Array.isArray(response.data) ? response.data : ((response.data as { tickets: SupportTicket[] })?.tickets ?? [])
+    const data = response.data
+    return Array.isArray(data) ? data : (data?.tickets ?? [])
   },
 
   async createSupportTicket(subject: string, description: string, priority: string): Promise<{ message: string; ticketId: string }> {
@@ -373,13 +483,24 @@ export const customerPortalService = {
 
   async getFAQs(): Promise<FAQ[]> {
     const response = await apiClient.get<{ faqs: FAQ[] } | FAQ[]>('/customer/support/faqs')
-    return Array.isArray(response.data) ? response.data : ((response.data as { faqs: FAQ[] })?.faqs ?? [])
+    const data = response.data
+    return Array.isArray(data) ? data : (data?.faqs ?? [])
   },
 
   // Loan access check (100% profile + verified bank)
   async checkLoanAccess(): Promise<{ canAccessLoans: boolean; profileCompletionPercentage: number; isBankVerified: boolean; message: string }> {
-    const response = await apiClient.get<{ canAccessLoans: boolean; profileCompletionPercentage: number; isBankVerified: boolean; message: string }>('/customer/loan-access-check')
-    return response.data
+    try {
+      const response = await apiClient.get<{ canAccessLoans: boolean; profileCompletionPercentage: number; isBankVerified: boolean; message: string }>('/customer/loan-access-check')
+      return response.data
+    } catch (error) {
+      if (!isAxiosError(error) || error.response?.status !== 403) throw error
+      return {
+        canAccessLoans: false,
+        profileCompletionPercentage: 0,
+        isBankVerified: false,
+        message: 'Loan access is available for customer accounts only.',
+      }
+    }
   },
 
   async getLoanInterestTiers(): Promise<Array<{ termMonths: number; annualInterestRate: number }>> {
