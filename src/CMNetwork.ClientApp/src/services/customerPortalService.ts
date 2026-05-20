@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient'
-import { isAxiosError } from 'axios'
+import { useAuthStore } from '../store/authStore'
 
 export interface CustomerInvoice {
   id: string
@@ -230,6 +230,12 @@ export interface FAQ {
   category: string
 }
 
+const isEmployeeSession = (): boolean => {
+  const { selectedRole, user } = useAuthStore.getState()
+  const role = (selectedRole ?? user?.role ?? '').toLowerCase()
+  return role === 'employee'
+}
+
 export const customerPortalService = {
   async getMyInvoices(): Promise<CustomerInvoicesResponse> {
     const response = await apiClient.get<CustomerInvoicesResponse>('/customer/invoices')
@@ -282,12 +288,7 @@ export const customerPortalService = {
 
   // Profile operations
   async getMyProfile(): Promise<CustomerProfile> {
-    try {
-      const response = await apiClient.get<CustomerProfile>('/customer/profile')
-      return response.data
-    } catch (error) {
-      if (!isAxiosError(error) || error.response?.status !== 403) throw error
-
+    if (isEmployeeSession()) {
       const response = await apiClient.get<any>('/profile')
       const data = response.data ?? {}
       const names = String(data.fullName ?? '').trim().split(/\s+/)
@@ -310,15 +311,13 @@ export const customerPortalService = {
         gender: data.gender,
       }
     }
+
+    const response = await apiClient.get<CustomerProfile>('/customer/profile')
+    return response.data
   },
 
   async updateMyProfile(profile: Partial<CustomerProfile>): Promise<CustomerProfile> {
-    try {
-      const response = await apiClient.put<CustomerProfile>('/customer/profile', profile)
-      return response.data
-    } catch (error) {
-      if (!isAxiosError(error) || error.response?.status !== 403) throw error
-
+    if (isEmployeeSession()) {
       let fallbackEmail = profile.email
       if (!fallbackEmail) {
         const current = await apiClient.get<any>('/profile')
@@ -352,16 +351,18 @@ export const customerPortalService = {
         gender: data.gender,
       }
     }
+
+    const response = await apiClient.put<CustomerProfile>('/customer/profile', profile)
+    return response.data
   },
 
   async getCustomerBanks(): Promise<CustomerBankDirectoryEntry[]> {
-    try {
-      const response = await apiClient.get<CustomerBankDirectoryEntry[]>('/customer/banks')
-      return Array.isArray(response.data) ? response.data : []
-    } catch (error) {
-      if (!isAxiosError(error) || error.response?.status !== 403) throw error
+    if (isEmployeeSession()) {
       return []
     }
+
+    const response = await apiClient.get<CustomerBankDirectoryEntry[]>('/customer/banks')
+    return Array.isArray(response.data) ? response.data : []
   },
 
   async requestBankVerification(): Promise<BankVerificationResponse> {
@@ -395,13 +396,7 @@ export const customerPortalService = {
 
   // Expense Claims operations
   async getMyExpenseClaims(): Promise<ExpenseClaim[]> {
-    try {
-      const response = await apiClient.get<{ claims: ExpenseClaim[] } | ExpenseClaim[]>('/customer/expense-claims')
-      const data = response.data
-      return Array.isArray(data) ? data : (data?.claims ?? [])
-    } catch (error) {
-      if (!isAxiosError(error) || error.response?.status !== 403) throw error
-
+    if (isEmployeeSession()) {
       const response = await apiClient.get<any[]>('/expense-claims')
       const items = Array.isArray(response.data) ? response.data : []
       return items.map((x) => ({
@@ -416,19 +411,14 @@ export const customerPortalService = {
         rejectReason: x.reviewNotes,
       }))
     }
+
+    const response = await apiClient.get<{ claims: ExpenseClaim[] } | ExpenseClaim[]>('/customer/expense-claims')
+    const data = response.data
+    return Array.isArray(data) ? data : (data?.claims ?? [])
   },
 
   async submitExpenseClaim(claim: SubmitExpenseClaimRequest): Promise<{ message: string; claimId: string }> {
-    try {
-      const response = await apiClient.post<{ message: string; claimId: string }>('/customer/expense-claims/submit', {
-        description: claim.description,
-        amount: claim.amount,
-        category: claim.category,
-      })
-      return response.data
-    } catch (error) {
-      if (!isAxiosError(error) || error.response?.status !== 403) throw error
-
+    if (isEmployeeSession()) {
       const create = await apiClient.post<any>('/expense-claims', {
         date: new Date().toISOString().slice(0, 10),
         category: claim.category,
@@ -443,6 +433,13 @@ export const customerPortalService = {
 
       return { message: 'Claim submitted for approval.', claimId }
     }
+
+    const response = await apiClient.post<{ message: string; claimId: string }>('/customer/expense-claims/submit', {
+      description: claim.description,
+      amount: claim.amount,
+      category: claim.category,
+    })
+    return response.data
   },
 
   // Approvals operations
@@ -489,11 +486,7 @@ export const customerPortalService = {
 
   // Loan access check (100% profile + verified bank)
   async checkLoanAccess(): Promise<{ canAccessLoans: boolean; profileCompletionPercentage: number; isBankVerified: boolean; message: string }> {
-    try {
-      const response = await apiClient.get<{ canAccessLoans: boolean; profileCompletionPercentage: number; isBankVerified: boolean; message: string }>('/customer/loan-access-check')
-      return response.data
-    } catch (error) {
-      if (!isAxiosError(error) || error.response?.status !== 403) throw error
+    if (isEmployeeSession()) {
       return {
         canAccessLoans: false,
         profileCompletionPercentage: 0,
@@ -501,6 +494,9 @@ export const customerPortalService = {
         message: 'Loan access is available for customer accounts only.',
       }
     }
+
+    const response = await apiClient.get<{ canAccessLoans: boolean; profileCompletionPercentage: number; isBankVerified: boolean; message: string }>('/customer/loan-access-check')
+    return response.data
   },
 
   async getLoanInterestTiers(): Promise<Array<{ termMonths: number; annualInterestRate: number }>> {
