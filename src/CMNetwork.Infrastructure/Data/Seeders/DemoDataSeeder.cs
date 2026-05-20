@@ -57,6 +57,11 @@ public class DemoDataSeeder
 
         await _dbContext.SaveChangesAsync();
 
+        // Seed additional demo data for customer features
+        await SeedExpenseClaimsAsync(customers, users);
+        await SeedBudgetAdjustmentRequestsAsync(customers);
+        await SeedApprovalQueueItemsAsync(seededArInvoices, customers, users);
+
         // Post approved/sent invoices so demo GL and AP/AR views are linked by real entries.
         foreach (var invoice in seededApInvoices.Where(x => x.Status == APInvoiceStatus.Approved))
         {
@@ -1143,5 +1148,159 @@ public class DemoDataSeeder
 
         await _dbContext.SaveChangesAsync();
         return invoices;
+    }
+
+    private async Task SeedExpenseClaimsAsync(List<Customer> customers,
+        (ApplicationUser SuperAdmin, ApplicationUser Auditor, ApplicationUser AuthorizedViewer, ApplicationUser Accountant, ApplicationUser FacultyAdmin, ApplicationUser Employee, ApplicationUser Cfo) users)
+    {
+        if (await _dbContext.ExpenseClaims.AnyAsync())
+            return;
+
+        var claims = new List<ExpenseClaim>();
+        var categories = new[] { "Travel", "Meals", "Office Supplies", "Client Entertainment", "Training" };
+        var merchants = new[] { "GCash", "Maya", "BDO", "BPI", "Grab" };
+        var descriptions = new[]
+        {
+            "Business travel to regional office",
+            "Client lunch meeting at Makati",
+            "Office supplies from local vendor",
+            "Team lunch and development",
+            "Professional development course"
+        };
+
+        for (int i = 0; i < 12; i++)
+        {
+            var claimDate = new DateOnly(2026, 3 + (i / 4), (i % 4) * 7 + 1);
+            var amount = (decimal)(5_000 + (i * 1_200) % 15_000);
+            var employeeId = i < 6 ? users.Employee.Id : users.Accountant.Id;
+            var employeeName = i < 6 ? "Employee Demo User" : "Accountant Demo User";
+            var status = i < 3 ? ExpenseClaimStatus.Draft : (i < 8 ? ExpenseClaimStatus.Submitted : ExpenseClaimStatus.Approved);
+
+            claims.Add(new ExpenseClaim
+            {
+                Id = Guid.NewGuid(),
+                ClaimNumber = $"EC-{claimDate:yyyyMMdd}-{Guid.NewGuid().ToString()[..8]}",
+                EmployeeId = employeeId,
+                EmployeeName = employeeName,
+                ClaimDate = claimDate,
+                Category = categories[i % categories.Length],
+                Description = descriptions[i % descriptions.Length],
+                Amount = amount,
+                MerchantName = merchants[i % merchants.Length],
+                ProjectCode = $"PRJ-{(i % 3) + 1:D3}",
+                ReceiptUrl = null,
+                Status = status,
+                ReviewedBy = i < 8 ? null : "Reviewer Demo",
+                ReviewNotes = i < 8 ? null : "Approved as business expense",
+                ReviewedAtUtc = i < 8 ? null : DateTime.UtcNow.AddDays(-(10 - i)),
+                SubmittedAtUtc = i < 3 ? DateTime.UtcNow : DateTime.UtcNow.AddDays(-(10 - i)),
+                CreatedAtUtc = DateTime.UtcNow.AddDays(-(15 - i))
+            });
+        }
+
+        _dbContext.ExpenseClaims.AddRange(claims);
+        await _dbContext.SaveChangesAsync();
+    }
+
+    private async Task SeedBudgetAdjustmentRequestsAsync(List<Customer> customers)
+    {
+        if (await _dbContext.CustomerBudgetAdjustmentRequests.AnyAsync())
+            return;
+
+        var requests = new List<CustomerBudgetAdjustmentRequest>();
+        var reasons = new[]
+        {
+            "Increased business operations requiring higher credit limit",
+            "Seasonal demand surge for Q2 2026",
+            "New product line expansion requiring working capital",
+            "Temporary cash flow assistance for project",
+            "Annual credit review and increase request"
+        };
+
+        int requestIndex = 0;
+        foreach (var customer in customers.Take(8))
+        {
+            var adjustmentDate = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc).AddDays(requestIndex * 3);
+            var requestedAmount = (decimal)((requestIndex + 1) * 250_000);
+
+            requests.Add(new CustomerBudgetAdjustmentRequest
+            {
+                Id = Guid.NewGuid(),
+                RequestNumber = $"BAR-{adjustmentDate:yyyyMMdd}-{Guid.NewGuid().ToString()[..8]}",
+                CustomerId = customer.Id,
+                BudgetId = customer.Id,
+                BudgetName = "Credit Budget",
+                RequestedAmount = requestedAmount,
+                Reason = reasons[requestIndex % reasons.Length],
+                Status = requestIndex < 3 ? BudgetAdjustmentStatus.Pending : BudgetAdjustmentStatus.Approved,
+                RequestedAtUtc = adjustmentDate,
+                ApprovedAtUtc = requestIndex < 3 ? null : adjustmentDate.AddDays(2),
+                ApprovedByUserId = requestIndex < 3 ? null : Guid.NewGuid().ToString(),
+                ApprovedByName = requestIndex < 3 ? null : "Budget Manager",
+                DecisionNotes = requestIndex < 3 ? null : "Approved pending verification"
+            });
+
+            requestIndex++;
+        }
+
+        _dbContext.CustomerBudgetAdjustmentRequests.AddRange(requests);
+        await _dbContext.SaveChangesAsync();
+    }
+
+    private async Task SeedApprovalQueueItemsAsync(List<ARInvoice> arInvoices, List<Customer> customers,
+        (ApplicationUser SuperAdmin, ApplicationUser Auditor, ApplicationUser AuthorizedViewer, ApplicationUser Accountant, ApplicationUser FacultyAdmin, ApplicationUser Employee, ApplicationUser Cfo) users)
+    {
+        if (await _dbContext.ApprovalQueue.AnyAsync())
+            return;
+
+        var approvalItems = new List<ApprovalQueue>();
+        var paidInvoices = arInvoices.Where(x => x.Status == ARInvoiceStatus.Paid).ToList();
+        var sentInvoices = arInvoices.Where(x => x.Status == ARInvoiceStatus.Sent).ToList();
+
+        // Add some invoices needing approval
+        foreach (var invoice in sentInvoices.Take(3))
+        {
+            approvalItems.Add(new ApprovalQueue
+            {
+                Id = Guid.NewGuid(),
+                EntityType = "ARInvoice",
+                EntityId = invoice.Id,
+                EntityDescription = $"Invoice {invoice.InvoiceNumber} from {invoice.Customer?.Name}",
+                Amount = invoice.TotalAmount,
+                RequestedByUserId = users.Accountant.Id.ToString(),
+                RequestedByName = "Accountant Demo User",
+                RequiredApproverRole = "accountant",
+                Status = ApprovalItemStatus.Pending,
+                ProcessedByUserId = null,
+                ProcessedByName = null,
+                Notes = null,
+                CreatedAtUtc = DateTime.UtcNow.AddDays(-3)
+            });
+        }
+
+        // Add some approved invoices in history
+        foreach (var invoice in paidInvoices.Take(2))
+        {
+            approvalItems.Add(new ApprovalQueue
+            {
+                Id = Guid.NewGuid(),
+                EntityType = "ARInvoice",
+                EntityId = invoice.Id,
+                EntityDescription = $"Invoice {invoice.InvoiceNumber} from {invoice.Customer?.Name}",
+                Amount = invoice.TotalAmount,
+                RequestedByUserId = users.Accountant.Id.ToString(),
+                RequestedByName = "Accountant Demo User",
+                RequiredApproverRole = "accountant",
+                Status = ApprovalItemStatus.Approved,
+                ProcessedByUserId = users.Cfo.Id.ToString(),
+                ProcessedByName = "CFO Demo User",
+                Notes = "Approved for payment processing",
+                CreatedAtUtc = DateTime.UtcNow.AddDays(-10),
+                ProcessedAtUtc = DateTime.UtcNow.AddDays(-8)
+            });
+        }
+
+        _dbContext.ApprovalQueue.AddRange(approvalItems);
+        await _dbContext.SaveChangesAsync();
     }
 }
