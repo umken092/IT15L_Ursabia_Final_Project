@@ -4,6 +4,7 @@ using CMNetwork.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CMNetwork.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(CMNetworkDbContext))]
-    partial class CMNetworkDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260520025822_AddEmployeeProfiles")]
+    partial class AddEmployeeProfiles
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2393,6 +2396,11 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
+                    b.Property<string>("BankAccount")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.Property<DateOnly?>("Birthdate")
                         .HasColumnType("date");
 
@@ -2431,6 +2439,10 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
 
+                    b.Property<decimal?>("HourlyRate")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<bool>("InAppNotificationsEnabled")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -2438,6 +2450,9 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
+
+                    b.Property<DateOnly>("JoinDate")
+                        .HasColumnType("date");
 
                     b.Property<DateTime?>("LastLoginUtc")
                         .HasColumnType("datetime2");
@@ -2484,6 +2499,11 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("bit");
 
+                    b.Property<string>("SSS")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
@@ -2491,6 +2511,16 @@ namespace CMNetwork.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
+
+                    b.Property<string>("TIN")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("TinNumber")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("bit");

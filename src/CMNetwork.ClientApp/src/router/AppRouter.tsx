@@ -27,6 +27,10 @@ const PrivateRoute = lazy(() => import('../routes/PrivateRoute').then((m) => ({ 
 const ViewProfilePage = lazy(() =>
   import('../pages/Profile/ViewProfilePage').then((m) => ({ default: m.default })),
 )
+// Employee profile page (staff roles)
+const EmployeeProfilePage = lazy(() =>
+  import('../pages/Profile/EmployeeProfilePage').then((m) => ({ default: m.default })),
+)
 const ViewInvoicesPage = lazy(() =>
   import('../pages/Invoices/ViewInvoicesPage').then((m) => ({ default: m.default })),
 )
@@ -220,6 +224,15 @@ const ReportsRoute = () => {
   return <Navigate to="/" replace />
 }
 
+// Dispatches /module/profile to the appropriate profile page based on role.
+// Customers → ViewProfilePage (loan-centric); all other staff → EmployeeProfilePage.
+const ProfileRoute = () => {
+  const selectedRole = useAuthStore((state) => state.selectedRole)
+  const user = useAuthStore((state) => state.user)
+  const activeRole = selectedRole ?? user?.role
+  return activeRole === 'customer' ? <ViewProfilePage /> : <EmployeeProfilePage />
+}
+
 const RouterFallback = () => (
   <div
     style={{
@@ -253,11 +266,11 @@ export const AppRouter = () => {
             <Route path="/mfa/setup" element={<MfaSetupPage />} />
             <Route path="/settings/mfa" element={<MfaSetupPage />} />
             
-            {/* Customer Profile Routes */}
-            <Route path="/module/profile" element={<ViewProfilePage />} />
-            <Route path="/module/profile/view" element={<ViewProfilePage />} />
-            <Route path="/module/profile/edit" element={<ViewProfilePage />} />
-            <Route path="/module/profile/change-password" element={<ViewProfilePage />} />
+            {/* Profile Routes — role-dispatched: customer → ViewProfilePage, staff → EmployeeProfilePage */}
+            <Route path="/module/profile" element={<ProfileRoute />} />
+            <Route path="/module/profile/view" element={<ProfileRoute />} />
+            <Route path="/module/profile/edit" element={<ProfileRoute />} />
+            <Route path="/module/profile/change-password" element={<ProfileRoute />} />
             
             {/* Customer Invoices Routes */}
             <Route path="/module/invoices" element={<ViewInvoicesPage />} />

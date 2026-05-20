@@ -107,6 +107,8 @@ public class PayrollService : IPayrollService
         var employees = await (
             from user in _db.Users
             join userRole in _db.UserRoles on user.Id equals userRole.UserId
+            join employeeProfile in _db.EmployeeProfiles on user.Id equals employeeProfile.UserId into employeeProfileGroup
+            from employeeProfile in employeeProfileGroup.DefaultIfEmpty()
             where user.IsActive && userRole.RoleId == employeeRoleId
             orderby user.LastName, user.FirstName
             select new EmployeePayrollDto
@@ -114,7 +116,7 @@ public class PayrollService : IPayrollService
                 Id = user.Id,
                 Name = user.FullName,
                 Department = user.DepartmentId.HasValue ? "Assigned" : "Unassigned",
-                HourlyRate = user.HourlyRate ?? 0m,
+                HourlyRate = employeeProfile != null ? (employeeProfile.HourlyRate ?? 0m) : 0m,
                 OvertimeMultiplier = user.OvertimeMultiplier ?? 1.25m,
             })
             .ToListAsync();
@@ -184,6 +186,10 @@ public class PayrollService : IPayrollService
             .Where(x => employeeIds.Contains(x.Id) && x.IsActive)
             .ToDictionaryAsync(x => x.Id);
 
+        var employeeProfiles = await _db.EmployeeProfiles
+            .Where(x => employeeIds.Contains(x.UserId))
+            .ToDictionaryAsync(x => x.UserId);
+
         foreach (var item in request.LineItems)
         {
             if (!users.TryGetValue(item.EmployeeId, out var employee))
@@ -191,7 +197,8 @@ public class PayrollService : IPayrollService
                 throw new InvalidOperationException($"Employee {item.EmployeeId} is not active or does not exist.");
             }
 
-            var regularRate = employee.HourlyRate ?? 0m;
+            var hasEmployeeProfile = employeeProfiles.TryGetValue(employee.Id, out var employeeProfile);
+            var regularRate = hasEmployeeProfile ? (employeeProfile!.HourlyRate ?? 0m) : 0m;
             if (regularRate <= 0)
             {
                 throw new InvalidOperationException($"Employee {employee.FullName} has no valid hourly rate.");

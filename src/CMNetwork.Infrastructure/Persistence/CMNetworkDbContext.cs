@@ -55,6 +55,7 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
     public DbSet<CustomerLoan> CustomerLoans => Set<CustomerLoan>();
     public DbSet<CustomerLoanPayment> CustomerLoanPayments => Set<CustomerLoanPayment>();
     public DbSet<LoanInterestTier> LoanInterestTiers => Set<LoanInterestTier>();
+    public DbSet<EmployeeProfile> EmployeeProfiles => Set<EmployeeProfile>();
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -88,13 +89,8 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
             entity.Property(x => x.MiddleName).HasMaxLength(64);
             entity.Property(x => x.Gender).HasMaxLength(16);
             entity.Property(x => x.Address).HasMaxLength(512);
-            entity.Property(x => x.TIN).HasMaxLength(32);
-            entity.Property(x => x.SSS).HasMaxLength(32);
             entity.Property(x => x.AuthenticatorKey).HasMaxLength(256);
-            entity.Property(x => x.HourlyRate).HasPrecision(18, 2);
             entity.Property(x => x.OvertimeMultiplier).HasPrecision(5, 2).HasDefaultValue(1.25m);
-            entity.Property(x => x.BankAccount).HasMaxLength(128);
-            entity.Property(x => x.TinNumber).HasMaxLength(32);
             entity.Property(x => x.EmailNotificationsEnabled).HasDefaultValue(true);
             entity.Property(x => x.SmsNotificationsEnabled).HasDefaultValue(false);
             entity.Property(x => x.InAppNotificationsEnabled).HasDefaultValue(true);
@@ -104,6 +100,24 @@ public class CMNetworkDbContext : IdentityDbContext<ApplicationUser, IdentityRol
                 .WithMany()
                 .HasForeignKey(x => x.CustomerId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // ── EmployeeProfile ───────────────────────────────────────────────────
+        modelBuilder.Entity<EmployeeProfile>(entity =>
+        {
+            entity.HasKey(x => x.UserId);
+            entity.Property(x => x.TIN).HasMaxLength(32);
+            entity.Property(x => x.SSS).HasMaxLength(32);
+            entity.Property(x => x.BankAccount).HasMaxLength(128);
+            entity.Property(x => x.HourlyRate).HasPrecision(18, 2);
+
+            entity.HasOne<ApplicationUser>()
+                .WithOne()
+                .HasForeignKey<EmployeeProfile>(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(x => x.TIN);
+            entity.HasIndex(x => x.SSS);
         });
 
         // ── RefreshToken ─────────────────────────────────────────────────────────

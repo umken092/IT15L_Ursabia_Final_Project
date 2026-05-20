@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.ComponentModel.DataAnnotations;
+using CMNetwork.Domain.Entities;
 using CMNetwork.Infrastructure.Identity;
 using CMNetwork.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
@@ -30,6 +31,10 @@ public class ProfileController : ControllerBase
         if (user is null)
             return Unauthorized(new { message = "Authenticated user could not be resolved." });
 
+        var employeeProfile = await _db.EmployeeProfiles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.UserId == user.Id);
+
         var departmentName = user.DepartmentId.HasValue
             ? await _db.Departments
                 .Where(x => x.Id == user.DepartmentId.Value)
@@ -37,7 +42,7 @@ public class ProfileController : ControllerBase
                 .FirstOrDefaultAsync()
             : null;
 
-        return Ok(MapProfile(user, departmentName));
+        return Ok(MapProfile(user, employeeProfile, departmentName));
     }
 
     [HttpPut]
@@ -50,33 +55,11 @@ public class ProfileController : ControllerBase
         if (user is null)
             return Unauthorized(new { message = "Authenticated user could not be resolved." });
 
-        // Email update
-        var email = request.Email.Trim();
-        if (!string.Equals(user.Email, email, StringComparison.OrdinalIgnoreCase))
-        {
-            var emailResult = await _userManager.SetEmailAsync(user, email);
-            if (!emailResult.Succeeded)
-                return BadRequest(new { message = string.Join(" ", emailResult.Errors.Select(x => x.Description)) });
+        var emailFailure = await TryUpdateEmailAsync(user, request.Email);
+        if (emailFailure is not null)
+            return emailFailure;
 
-            var userNameResult = await _userManager.SetUserNameAsync(user, email);
-            if (!userNameResult.Succeeded)
-                return BadRequest(new { message = string.Join(" ", userNameResult.Errors.Select(x => x.Description)) });
-        }
-
-        // Update name fields directly or via FullName fallback
-        if (!string.IsNullOrWhiteSpace(request.FirstName) && !string.IsNullOrWhiteSpace(request.LastName))
-        {
-            user.FirstName = request.FirstName.Trim();
-            user.MiddleName = string.IsNullOrWhiteSpace(request.MiddleName) ? string.Empty : request.MiddleName.Trim();
-            user.LastName = request.LastName.Trim();
-        }
-        else if (!string.IsNullOrWhiteSpace(request.FullName))
-        {
-            var nameParts = SplitFullName(request.FullName.Trim());
-            user.FirstName = nameParts.firstName;
-            user.MiddleName = nameParts.middleName;
-            user.LastName = nameParts.lastName;
-        }
+        ApplyNameFields(user, request);
 
         // Contact & address info
         user.PhoneNumber = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
@@ -102,9 +85,15 @@ public class ProfileController : ControllerBase
         user.SmsNotificationsEnabled = request.SmsNotificationsEnabled;
         user.InAppNotificationsEnabled = request.InAppNotificationsEnabled;
 
+        var employeeProfile = await GetOrCreateEmployeeProfileAsync(user);
+
+        ApplyEmployeeFields(employeeProfile, request);
+
         var updateResult = await _userManager.UpdateAsync(user);
         if (!updateResult.Succeeded)
             return BadRequest(new { message = string.Join(" ", updateResult.Errors.Select(x => x.Description)) });
+
+        await _db.SaveChangesAsync();
 
         var departmentName = user.DepartmentId.HasValue
             ? await _db.Departments
@@ -113,7 +102,82 @@ public class ProfileController : ControllerBase
                 .FirstOrDefaultAsync()
             : null;
 
-        return Ok(MapProfile(user, departmentName));
+        return Ok(MapProfile(user, employeeProfile, departmentName));
+    }
+
+    private async Task<IActionResult?> TryUpdateEmailAsync(ApplicationUser user, string rawEmail)
+    {
+        var email = rawEmail.Trim();
+        if (string.Equals(user.Email, email, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var emailResult = await _userManager.SetEmailAsync(user, email);
+        if (!emailResult.Succeeded)
+            return BadRequest(new { message = string.Join(" ", emailResult.Errors.Select(x => x.Description)) });
+
+        var userNameResult = await _userManager.SetUserNameAsync(user, email);
+        if (!userNameResult.Succeeded)
+            return BadRequest(new { message = string.Join(" ", userNameResult.Errors.Select(x => x.Description)) });
+
+        return null;
+    }
+
+    private static void ApplyNameFields(ApplicationUser user, UpdateProfileRequest request)
+    {
+        if (!string.IsNullOrWhiteSpace(request.FirstName) && !string.IsNullOrWhiteSpace(request.LastName))
+        {
+            user.FirstName = request.FirstName.Trim();
+            user.MiddleName = string.IsNullOrWhiteSpace(request.MiddleName) ? string.Empty : request.MiddleName.Trim();
+            user.LastName = request.LastName.Trim();
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(request.FullName))
+            return;
+
+        var nameParts = SplitFullName(request.FullName.Trim());
+        user.FirstName = nameParts.firstName;
+        user.MiddleName = nameParts.middleName;
+        user.LastName = nameParts.lastName;
+    }
+
+    private static void ApplyEmployeeFields(EmployeeProfile employeeProfile, UpdateProfileRequest request)
+    {
+        if (request.Tin is not null)
+        {
+            employeeProfile.TIN = request.Tin.Trim();
+        }
+
+        if (request.Sss is not null)
+        {
+            employeeProfile.SSS = request.Sss.Trim();
+        }
+
+        if (request.BankAccount is null)
+            return;
+
+        employeeProfile.BankAccount = request.BankAccount.Trim();
+    }
+
+    private async Task<EmployeeProfile> GetOrCreateEmployeeProfileAsync(ApplicationUser user)
+    {
+        var profile = await _db.EmployeeProfiles.FirstOrDefaultAsync(x => x.UserId == user.Id);
+        if (profile is not null)
+            return profile;
+
+        profile = new EmployeeProfile
+        {
+            UserId = user.Id,
+            TIN = string.Empty,
+            SSS = string.Empty,
+            BankAccount = string.Empty,
+            JoinDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            HourlyRate = null,
+            LastLoginUtc = user.LastLoginUtc
+        };
+
+        _db.EmployeeProfiles.Add(profile);
+        return profile;
     }
 
     private async Task<ApplicationUser?> GetCurrentUserAsync()
@@ -142,7 +206,7 @@ public class ProfileController : ControllerBase
         return (true, match.Id, null);
     }
 
-    private static object MapProfile(ApplicationUser user, string? departmentName) => new
+    private static object MapProfile(ApplicationUser user, EmployeeProfile? employeeProfile, string? departmentName) => new
     {
         user.Id,
         fullName = user.FullName,
@@ -156,6 +220,13 @@ public class ProfileController : ControllerBase
         address = user.Address ?? string.Empty,
         department = departmentName ?? string.Empty,
         departmentId = user.DepartmentId,
+        // Employee statutory / payroll fields
+        tin = employeeProfile?.TIN ?? string.Empty,
+        sss = employeeProfile?.SSS ?? string.Empty,
+        bankAccount = employeeProfile?.BankAccount ?? string.Empty,
+        joinDate = employeeProfile?.JoinDate,
+        lastLoginUtc = employeeProfile?.LastLoginUtc ?? user.LastLoginUtc,
+        hourlyRate = employeeProfile?.HourlyRate,
         emailNotificationsEnabled = user.EmailNotificationsEnabled,
         smsNotificationsEnabled = user.SmsNotificationsEnabled,
         inAppNotificationsEnabled = user.InAppNotificationsEnabled,
@@ -213,4 +284,16 @@ public sealed class UpdateProfileRequest
     public bool SmsNotificationsEnabled { get; init; }
 
     public bool InAppNotificationsEnabled { get; init; }
+
+    /// <summary>BIR Tax Identification Number (employee statutory).</summary>
+    [StringLength(20)]
+    public string? Tin { get; init; }
+
+    /// <summary>SSS membership number (employee statutory).</summary>
+    [StringLength(20)]
+    public string? Sss { get; init; }
+
+    /// <summary>Bank account number for salary crediting.</summary>
+    [StringLength(64)]
+    public string? BankAccount { get; init; }
 }

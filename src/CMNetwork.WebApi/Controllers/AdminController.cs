@@ -1,6 +1,7 @@
 using CMNetwork.Infrastructure.Identity;
 using CMNetwork.Infrastructure.Persistence;
 using CMNetwork.Infrastructure.Services;
+using CMNetwork.Domain.Entities;
 using CMNetwork.Models;
 using CMNetwork.Services;
 using Hangfire;
@@ -185,10 +186,7 @@ public class AdminController : ControllerBase
                 out var birthdate) ? birthdate : null,
             Gender = request.Gender,
             Address = request.Address,
-            TIN = request.TinNumber,
-            SSS = request.SssNumber,
             DepartmentId = departmentId,
-            JoinDate = DateOnly.FromDateTime(DateTime.UtcNow),
             CreatedUtc = DateTime.UtcNow,
         };
 
@@ -209,6 +207,22 @@ public class AdminController : ControllerBase
         {
             await EnsureRoleExistsAsync(request.Role);
             await _userManager.AddToRoleAsync(user, request.Role);
+        }
+
+        if (!IsCustomerRole(request.Role))
+        {
+            _dbContext.EmployeeProfiles.Add(new EmployeeProfile
+            {
+                UserId = user.Id,
+                TIN = request.TinNumber?.Trim() ?? string.Empty,
+                SSS = request.SssNumber?.Trim() ?? string.Empty,
+                BankAccount = string.Empty,
+                JoinDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                HourlyRate = null,
+                LastLoginUtc = null
+            });
+
+            await _dbContext.SaveChangesAsync();
         }
 
         await _audit.LogAsync(
@@ -235,16 +249,37 @@ public class AdminController : ControllerBase
         user.LastName = request.LastName;
         user.IsActive = request.Status != "inactive";
         user.DepartmentId = await ResolveDepartmentIdAsync(request.Department);
-        if (request.HourlyRate.HasValue)
-            user.HourlyRate = request.HourlyRate.Value;
         if (request.OvertimeMultiplier.HasValue)
             user.OvertimeMultiplier = request.OvertimeMultiplier.Value;
+
+        if (request.HourlyRate.HasValue)
+        {
+            var employeeProfile = await _dbContext.EmployeeProfiles.FirstOrDefaultAsync(x => x.UserId == user.Id);
+            if (employeeProfile is null)
+            {
+                employeeProfile = new EmployeeProfile
+                {
+                    UserId = user.Id,
+                    TIN = string.Empty,
+                    SSS = string.Empty,
+                    BankAccount = string.Empty,
+                    JoinDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    LastLoginUtc = user.LastLoginUtc
+                };
+
+                _dbContext.EmployeeProfiles.Add(employeeProfile);
+            }
+
+            employeeProfile.HourlyRate = request.HourlyRate.Value;
+        }
 
         var updateResult = await _userManager.UpdateAsync(user);
         if (!updateResult.Succeeded)
         {
             return BadRequest(new { message = string.Join("; ", updateResult.Errors.Select(x => x.Description)) });
         }
+
+        await _dbContext.SaveChangesAsync();
 
         var previousRoles = await _userManager.GetRolesAsync(user);
         if (!string.IsNullOrWhiteSpace(request.Role))
@@ -2023,6 +2058,9 @@ public class AdminController : ControllerBase
     {
         var departments = await _dbContext.Departments.ToDictionaryAsync(x => x.Id, x => x.Name);
         var users = await _dbContext.Users.OrderByDescending(x => x.CreatedUtc).ToListAsync();
+        var employeeProfiles = await _dbContext.EmployeeProfiles
+            .Where(x => users.Select(u => u.Id).Contains(x.UserId))
+            .ToDictionaryAsync(x => x.UserId);
 
         var result = new List<AdminUserDto>();
         foreach (var user in users)
@@ -2043,12 +2081,19 @@ public class AdminController : ControllerBase
                     : "Unassigned",
                 Role = primaryRole,
                 Status = user.IsActive ? "active" : "inactive",
-                JoinDate = user.JoinDate.ToString("yyyy-MM-dd"),
-                HourlyRate = user.HourlyRate,
+                JoinDate = employeeProfiles.TryGetValue(user.Id, out var employeeProfile)
+                    ? employeeProfile.JoinDate.ToString("yyyy-MM-dd")
+                    : string.Empty,
+                HourlyRate = employeeProfile?.HourlyRate,
                 OvertimeMultiplier = user.OvertimeMultiplier,
             });
         }
 
         return result;
+    }
+
+    private static bool IsCustomerRole(string? role)
+    {
+        return string.Equals(role?.Trim(), "customer", StringComparison.OrdinalIgnoreCase);
     }
 }

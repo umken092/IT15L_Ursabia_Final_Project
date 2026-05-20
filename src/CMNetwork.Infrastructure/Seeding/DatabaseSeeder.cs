@@ -116,7 +116,6 @@ public class DatabaseSeeder
                 LastName = lastName,
                 IsActive = true,
                 EmailConfirmed = true,
-                JoinDate = DateOnly.FromDateTime(DateTime.UtcNow),
             };
 
             var createResult = await _userManager.CreateAsync(bootstrapUser, password);
@@ -128,6 +127,7 @@ public class DatabaseSeeder
             }
 
             await _userManager.AddToRoleAsync(bootstrapUser, "super-admin");
+            await EnsureEmployeeProfileAsync(bootstrapUser.Id, DateOnly.FromDateTime(DateTime.UtcNow));
             logger.LogInformation("Created bootstrap admin account {Email}.", email);
             return;
         }
@@ -137,6 +137,8 @@ public class DatabaseSeeder
             await _userManager.AddToRoleAsync(existingUser, "super-admin");
             logger.LogInformation("Assigned super-admin role to bootstrap account {Email}.", email);
         }
+
+        await EnsureEmployeeProfileAsync(existingUser.Id, DateOnly.FromDateTime(DateTime.UtcNow));
     }
 
     private async Task SeedChartOfAccountsAsync()
@@ -318,7 +320,12 @@ public class DatabaseSeeder
         string password, string role, Guid? departmentId)
     {
         if (await _userManager.FindByEmailAsync(email) is not null)
+        {
+            var existingUser = await _userManager.FindByEmailAsync(email);
+            if (existingUser is not null)
+                await EnsureEmployeeProfileAsync(existingUser.Id, DateOnly.FromDateTime(DateTime.UtcNow));
             return;
+        }
 
         var user = new ApplicationUser
         {
@@ -330,11 +337,33 @@ public class DatabaseSeeder
             DepartmentId  = departmentId,
             IsActive      = true,
             EmailConfirmed = true,
-            JoinDate      = DateOnly.FromDateTime(DateTime.UtcNow),
         };
 
         var result = await _userManager.CreateAsync(user, password);
         if (result.Succeeded)
+        {
             await _userManager.AddToRoleAsync(user, role);
+            await EnsureEmployeeProfileAsync(user.Id, DateOnly.FromDateTime(DateTime.UtcNow));
+        }
+    }
+
+    private async Task EnsureEmployeeProfileAsync(Guid userId, DateOnly joinDate)
+    {
+        var exists = await _dbContext.EmployeeProfiles.AnyAsync(x => x.UserId == userId);
+        if (exists)
+            return;
+
+        _dbContext.EmployeeProfiles.Add(new EmployeeProfile
+        {
+            UserId = userId,
+            TIN = string.Empty,
+            SSS = string.Empty,
+            BankAccount = string.Empty,
+            JoinDate = joinDate,
+            HourlyRate = null,
+            LastLoginUtc = null,
+        });
+
+        await _dbContext.SaveChangesAsync();
     }
 }

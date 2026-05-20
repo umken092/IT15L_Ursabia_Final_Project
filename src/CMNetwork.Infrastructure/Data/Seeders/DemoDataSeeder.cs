@@ -476,10 +476,7 @@ public class DemoDataSeeder
             Birthdate = birthdate,
             Gender = gender,
             Address = address,
-            TIN = tin,
-            SSS = sss,
             DepartmentId = departmentId,
-            JoinDate = new DateOnly(2025, 12, 1),
             CreatedUtc = DateTime.UtcNow,
         };
 
@@ -494,6 +491,19 @@ public class DemoDataSeeder
         {
             await _userManager.AddToRoleAsync(user, secondaryRole);
         }
+
+        _dbContext.EmployeeProfiles.Add(new EmployeeProfile
+        {
+            UserId = user.Id,
+            TIN = tin,
+            SSS = sss,
+            BankAccount = string.Empty,
+            JoinDate = new DateOnly(2025, 12, 1),
+            HourlyRate = null,
+            LastLoginUtc = null,
+        });
+
+        await _dbContext.SaveChangesAsync();
 
         return user;
     }

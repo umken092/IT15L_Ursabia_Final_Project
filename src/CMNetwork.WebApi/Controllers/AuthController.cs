@@ -275,6 +275,25 @@ public class AuthController : ControllerBase
         return Ok(new { message = "Two-factor authentication disabled." });
     }
 
+    [HttpPost("password/change")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        if (!Guid.TryParse(userId, out var parsedId))
+            return Unauthorized(new { message = "Authenticated user could not be resolved." });
+
+        var user = await _userManager.Users.FirstOrDefaultAsync(x => x.Id == parsedId);
+        if (user is null || !user.IsActive)
+            return Unauthorized(new { message = "User not found." });
+
+        var result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+        if (!result.Succeeded)
+            return BadRequest(new { message = string.Join(" ", result.Errors.Select(e => e.Description)) });
+
+        return Ok(new { message = "Password changed successfully." });
+    }
+
     [HttpPost("password/forgot")]
     [EnableRateLimiting("login")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
