@@ -15,9 +15,6 @@ public sealed class PayMongoService : IPayMongoService
     private const string MethodPaymaya = "paymaya";
     private const string MethodGrabPay = "grab_pay";
     private const string MethodBillease = "billease";
-    private const string MethodBpi = "bpi";
-    private const string MethodBdo = "bdo";
-    private const string MethodPaymongo = "paymongo";
     
     private readonly HttpClient _httpClient;
     private readonly IIntegrationCredentialService _credentialService;
@@ -52,9 +49,9 @@ public sealed class PayMongoService : IPayMongoService
         var paymentMethodCandidates = new[]
         {
             // Preferred full PH payment mix.
-            FilterCandidate(enabledMethods, MethodCard, MethodGcash, MethodMaya, MethodGrabPay, MethodBillease, MethodBpi, MethodBdo, MethodPaymongo),
+            FilterCandidate(enabledMethods, MethodCard, MethodGcash, MethodMaya, MethodGrabPay, MethodBillease),
             // Some PayMongo accounts still expose paymaya instead of maya.
-            FilterCandidate(enabledMethods, MethodCard, MethodGcash, MethodPaymaya, MethodGrabPay, MethodBillease, MethodBpi, MethodBdo, MethodPaymongo),
+            FilterCandidate(enabledMethods, MethodCard, MethodGcash, MethodPaymaya, MethodGrabPay, MethodBillease),
             // Fallback sets for accounts without all methods enabled.
             FilterCandidate(enabledMethods, MethodCard, MethodGcash, MethodMaya, MethodGrabPay, MethodBillease),
             FilterCandidate(enabledMethods, MethodCard, MethodGcash, MethodMaya, MethodGrabPay),
