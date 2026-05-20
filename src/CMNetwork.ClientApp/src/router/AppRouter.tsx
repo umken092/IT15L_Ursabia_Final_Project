@@ -282,7 +282,7 @@ export const AppRouter = () => {
             <Route path="/module/budgets/view" element={<ViewBudgetsPage />} />
             <Route path="/module/budgets/request-adjustment" element={<ViewBudgetsPage />} />
             
-            {/* Customer Expense Claims Routes */}
+            {/* Expense Claims Routes — Employee role only; customers do not have access */}
             <Route path="/module/expense-claims" element={<ViewExpenseClaimsPage />} />
             <Route path="/module/expense-claims/submit" element={<ViewExpenseClaimsPage />} />
             <Route path="/module/expense-claims/view" element={<ViewExpenseClaimsPage />} />

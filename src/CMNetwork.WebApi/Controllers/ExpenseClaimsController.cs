@@ -9,7 +9,7 @@ namespace CMNetwork.Controllers;
 
 [ApiController]
 [Route("api/expense-claims")]
-[Authorize]
+[Authorize(Roles = "employee,faculty-admin,cfo,super-admin,accountant")]
 public class ExpenseClaimsController : ControllerBase
 {
     private readonly CMNetworkDbContext _db;

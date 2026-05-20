@@ -155,7 +155,6 @@ export const menuByRole: Record<Role, SidebarMenuItem[]> = {
     { label: 'Loans', path: '/module/loans' },
     { label: 'Invoices', path: '/module/invoices' },
     { label: 'Budgets', path: '/module/budgets' },
-    { label: 'Expense Claims', path: '/module/expense-claims' },
     { label: 'Approvals', path: '/module/approvals' },
     { label: 'Statements', path: '/module/reports/statements' },
     { label: 'Support', path: '/module/support' },
